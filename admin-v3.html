@@ -1125,17 +1125,17 @@ input[type="checkbox"] {
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Role určuje, co v systému uvidíte a můžete měnit.</div>
     <div class="login-field">
       <label>E-mail</label>
-      <input type="email" id="loginEmail" value="admin@event.cz" placeholder="admin@event.cz">
+      <input type="email" id="loginEmail" value="admin@autorion.net" placeholder="admin@autorion.net">
     </div>
     <div class="login-field">
       <label>Heslo</label>
-      <input type="password" id="loginPass" value="heslo123" placeholder="••••••••">
+      <input type="password" id="loginPass" value="" placeholder="••••••••">
     </div>
     <button class="login-btn" id="loginBtn">Přihlásit se</button>
     <div class="login-error" id="loginError">Nesprávný e-mail nebo heslo.</div>
     <div style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.8;">
       <div style="font-weight:500;margin-bottom:4px;color:var(--text)">Demo přihlášení:</div>
-      <div>🔑 <strong>Super Admin:</strong> admin@event.cz / heslo123</div>
+      <div>🔑 <strong>Přihlaste se</strong> svými přihlašovacími údaji</div>
       <div>🔑 <strong>Správce:</strong> manager@event.cz / spravce1</div>
       <div>🔑 <strong>Nahlížení:</strong> viewer@event.cz / nahled1</div>
     </div>
@@ -1361,6 +1361,9 @@ input[type="checkbox"] {
 //   super_admin  — plný přístup + správa uživatelů
 //   manager      — správce: vše kromě správy uživatelů
 //   viewer       — nahlížení: dashboard, hosté (read-only), rozpis jízd
+
+const API_URL = 'https://autorion.net/api';
+let authToken = localStorage.getItem('authToken') || null;
 
 const USERS = [
   { id:1, email:'admin@event.cz',    pass:'heslo123', name:'Jan Novák',        initials:'JN', role:'super_admin', checkin_access:true  },
@@ -1615,21 +1618,58 @@ let filterCompanion = '';
 // AUTH
 // ═══════════════════════════════════════════════════════
 
-function doLogin() {
+async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('loginPass').value;
-  const user  = USERS.find(u => u.email === email && u.pass === pass);
-  if (user) {
-    currentUser = user;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  try {
+    const res = await fetch(API_URL + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.style.display = 'block';
+      errEl.textContent = data.detail || 'Nesprávný e-mail nebo heslo.';
+      return;
+    }
+    authToken = data.token;
+    localStorage.setItem('authToken', authToken);
+    currentUser = {
+      id:             data.user.id,
+      email:          data.user.email,
+      name:           data.user.name,
+      initials:       data.user.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+      role:           data.user.role,
+      checkin_access: data.user.checkin_access,
+      event_access:   null,
+    };
     document.getElementById('loginScreen').classList.add('hidden');
     setTimeout(() => {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appShell').style.display = 'flex';
       initApp();
     }, 400);
-  } else {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('loginError').textContent = 'Nesprávný e-mail nebo heslo.';
+  } catch(e) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Chyba připojení k serveru.';
+  }
+}
+
+async function apiCall(endpoint, method='GET', body=null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(API_URL + endpoint, opts);
+    if (res.status === 401) { doLogout(); return null; }
+    return await res.json();
+  } catch(e) {
+    showToast('Chyba připojení k serveru', 'error');
+    return null;
   }
 }
 
