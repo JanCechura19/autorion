@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Editor — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f3ef;
+  --surface: #ffffff;
+  --surface2: #f0ede8;
+  --border: #e2ddd6;
+  --border2: #cdc7be;
+  --text: #1a1816;
+  --muted: #8a8278;
+  --accent: #1a1816;
+  --accent2: #c8622a;
+  --green: #2d6a4f;
+  --red: #c0392b;
+  --panel-w: 340px;
+  --topbar-h: 56px;
+}
+
+body {
+  font-family: 'Instrument Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 300;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  height: var(--topbar-h);
+  background: var(--text);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.topbar-logo .sep {
+  width: 1px; height: 18px;
+  background: rgba(255,255,255,0.2);
+}
+.topbar-section {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.05em;
+}
+.topbar-spacer { flex: 1; }
+
+.topbar-viewport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 4px;
+}
+.vp-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.vp-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.vp-btn.active { background: rgba(255,255,255,0.18); color: #fff; }
+
+.topbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+.btn-ghost { background: rgba(255,255,255,0.1); color: #fff; }
+.btn-ghost:hover { background: rgba(255,255,255,0.18); }
+.btn-save { background: var(--accent2); color: #fff; }
+.btn-save:hover { opacity: 0.9; }
+
+.unsaved-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #f0c060;
+  display: none;
+}
+.unsaved-dot.visible { display: block; }
+
+/* ── MAIN LAYOUT ── */
+.editor-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── LEFT PANEL ── */
+.left-panel {
+  width: var(--panel-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* Panel tabs */
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 4px;
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+.panel-tab {
+  flex: 1;
+  padding: 10px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.panel-tab:hover { color: var(--text); }
+.panel-tab.active { color: var(--text); border-bottom-color: var(--text); background: var(--surface); }
+.panel-tab-icon { font-size: 14px; }
+
+/* Panel content */
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+.panel-content::-webkit-scrollbar { width: 4px; }
+.panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Section in panel */
+.ctrl-section {
+  border-bottom: 1px solid var(--border);
+}
+.ctrl-section-head {
+  padding: 14px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.ctrl-section-head:hover { background: var(--surface2); }
+.ctrl-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ctrl-section-title .icon { font-size: 13px; }
+.ctrl-section-arrow {
+  color: var(--muted);
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.ctrl-section.collapsed .ctrl-section-arrow { transform: rotate(-90deg); }
+.ctrl-section-body {
+  padding: 4px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ctrl-section.collapsed .ctrl-section-body { display: none; }
+
+/* Controls */
+.ctrl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ctrl-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ctrl-value-display {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Color picker */
+.color-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-swatch {
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.color-swatch:hover { transform: scale(1.1); }
+.color-swatch input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  opacity: 0;
+  cursor: pointer;
+  width: 200%;
+  height: 200%;
+}
+.color-hex {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  text-transform: uppercase;
+  transition: border-color 0.15s;
+}
+.color-hex:focus { border-color: var(--text); }
+
+/* Slider */
+.slider-ctrl input[type="range"] {
+  width: 100%;
+  accent-color: var(--text);
+  height: 4px;
+  cursor: pointer;
+}
+
+/* Select */
+.ctrl-select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.ctrl-select:focus { border-color: var(--text); }
+
+/* Text input */
+.ctrl-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.ctrl-input:focus { border-color: var(--text); }
+
+/* Toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.toggle input { display: none; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle input:checked + .toggle-track { background: var(--text); }
+.toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 14px; height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+.toggle input:checked ~ .toggle-thumb { transform: translateX(16px); }
+
+/* Image upload */
+.img-upload-wrap {
+  border: 1px dashed var(--border2);
+  border-radius: 6px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.img-upload-wrap:hover { border-color: var(--text); background: var(--surface2); }
+.img-upload-wrap.has-image {
+  border-style: solid;
+  padding: 0;
+  border-color: var(--border);
+}
+.img-preview {
+  width: 100%;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: none;
+  background: var(--surface2);
+  padding: 8px;
+}
+.img-preview.visible { display: block; }
+.img-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.img-placeholder-icon { font-size: 22px; opacity: 0.4; }
+.img-placeholder-text { font-size: 11px; color: var(--muted); }
+.img-upload-input { display: none; }
+.img-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.img-action-btn {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: all 0.15s;
+}
+.img-action-btn:hover { border-color: var(--text); }
+.img-action-btn.danger:hover { background: #fdf0ee; border-color: var(--red); color: var(--red); }
+
+/* Font preview */
+.font-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-size: 18px;
+  color: var(--text);
+  line-height: 1.3;
+  transition: font-family 0.3s;
+}
+
+/* Preset themes */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.theme-card {
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  overflow: hidden;
+}
+.theme-card:hover { border-color: var(--text); transform: translateY(-2px); }
+.theme-card.active { border-color: var(--accent2); }
+.theme-swatch {
+  height: 36px;
+  display: flex;
+}
+.theme-swatch-half { flex: 1; }
+.theme-name {
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Layer list */
+.layers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+}
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+.layer-item:hover { background: var(--surface2); }
+.layer-item.selected { background: var(--surface2); border-color: var(--border); }
+.layer-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+.layer-name { flex: 1; font-weight: 400; }
+.layer-eye { color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px; transition: color 0.15s; }
+.layer-eye:hover { color: var(--text); }
+.layer-eye.hidden { opacity: 0.3; }
+
+/* ── RIGHT: PREVIEW ── */
+.preview-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #2a2a2a;
+  position: relative;
+}
+
+.preview-toolbar {
+  height: 36px;
+  background: #1e1e1e;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #333;
+}
+.preview-url {
+  flex: 1;
+  background: #2e2e2e;
+  border: 1px solid #3e3e3e;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+}
+.preview-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.preview-frame-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 24px;
+  position: relative;
+}
+
+.preview-frame-outer {
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  transition: width 0.3s ease, height 0.3s ease;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.preview-frame-outer.desktop { width: 100%; max-width: 1100px; min-height: calc(100vh - 180px); }
+.preview-frame-outer.tablet  { width: 768px;  min-height: 900px; }
+.preview-frame-outer.mobile  { width: 390px;  min-height: 844px; border-radius: 16px; }
+
+iframe#previewFrame {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  border: none;
+  display: block;
+}
+
+/* ── TOAST ── */
+.toast-container {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 9999;
+}
+.toast {
+  background: var(--text);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  animation: toastIn 0.3s ease;
+  display: flex; align-items: center; gap: 8px;
+}
+.toast.success { background: var(--green); }
+.toast.error { background: var(--red); }
+
+@keyframes toastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <span>EventAdmin</span>
+    <span class="sep"></span>
+    <span class="topbar-section" style="color:rgba(255,255,255,0.7)">Visual Editor</span>
+  </div>
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-viewport">
+    <button class="vp-btn active" id="vpDesktop" onclick="setViewport('desktop')">🖥 Desktop</button>
+    <button class="vp-btn" id="vpTablet"  onclick="setViewport('tablet')">⬜ Tablet</button>
+    <button class="vp-btn" id="vpMobile"  onclick="setViewport('mobile')">📱 Mobil</button>
+  </div>
+
+  <div class="unsaved-dot" id="unsavedDot" title="Neuložené změny"></div>
+  <button class="topbar-btn btn-ghost" onclick="resetToDefaults()">↺ Reset</button>
+  <button class="topbar-btn btn-ghost" onclick="copyCSS()">{ } Export CSS</button>
+  <button class="topbar-btn btn-save" onclick="saveTheme()">💾 Uložit téma</button>
+</div>
+
+<!-- EDITOR LAYOUT -->
+<div class="editor-layout">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchTab('design', this)"><span class="panel-tab-icon">🎨</span>Design</div>
+      <div class="panel-tab" onclick="switchTab('typography', this)"><span class="panel-tab-icon">T</span>Písmo</div>
+      <div class="panel-tab" onclick="switchTab('media', this)"><span class="panel-tab-icon">🖼</span>Média</div>
+      <div class="panel-tab" onclick="switchTab('layout', this)"><span class="panel-tab-icon">⬛</span>Layout</div>
+    </div>
+
+    <div class="panel-content">
+
+      <!-- ── DESIGN TAB ── -->
+      <div class="tab-pane active" id="tab-design">
+
+        <!-- Přednastavená témata -->
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">✦</span>Přednastavená témata</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="theme-grid" id="themeGrid"></div>
+          </div>
+        </div>
+
+        <!-- Pozadí -->
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">◻</span>Pozadí stránky</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Typ pozadí</div>
+              <select class="ctrl-select" id="bgType" onchange="onBgTypeChange()">
+                <option value="color">Plná barva</option>
+                <option value="gradient">Přechod (gradient)</option>
+                <option value="image">Obrázek</option>
+              </select>
+            </div>
+
+            <div id="bgColorCtrl" class="ctrl-row">
+              <div class="ctrl-label">Barva pozadí</div>
+              <div class="color-ctrl">
+                <div class="color-swatch" id="swBg">
+                  <input type="color" id="bgColor" value="#f7f4ef" oninput="syncColor('bgColor','hexBg'); applyTheme()">
+                </div>
+                <input class="color-hex" id="hexBg" value="#F7F4EF" maxlength="7" oninput="syncHex('hexBg','bgColor'); applyTheme()">
+              </div>
+            </div>
+
+            <div id="bgGradientCtrl" style="display:none;" class="ctrl-row">
+              <div class="ctrl-label">Barva 1</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="grad1" value="#f7f4ef" oninput="applyTheme()"></div>
+                <input class="color-hex" id="hexGrad1" value="#F7F4EF" maxlength="7" oninput="syncHex('hexGrad1','grad1'); applyTheme()">
+              </div>
+              <div class="ctrl-label" style="margin-top:6px">Barva 2</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="grad2" value="#ede9e1" oninput="applyTheme()"></div>
+                <input class="color-hex" id="hexGrad2" value="#EDE9E1" maxlength="7" oninput="syncHex('hexGrad2','grad2'); applyTheme()">
+              </div>
+              <div class="ctrl-label" style="margin-top:6px">Úhel</div>
+              <div class="slider-ctrl">
+                <input type="range" id="gradAngle" min="0" max="360" value="135" oninput="applyTheme()">
+              </div>
+            </div>
+
+            <div id="bgImageCtrl" style="display:none;" class="ctrl-row">
+              <div class="ctrl-label">Obrázek pozadí</div>
+              <div class="img-upload-wrap" id="bgImgWrap" onclick="document.getElementById('bgImgInput').click()">
+                <img class="img-preview" id="bgImgPreview" src="" alt="">
+                <div class="img-placeholder" id="bgImgPlaceholder">
+                  <span class="img-placeholder-icon">🖼</span>
+                  <span class="img-placeholder-text">Klikněte nebo přetáhněte obrázek</span>
+                </div>
+                <input class="img-upload-input" type="file" id="bgImgInput" accept="image/*" onchange="handleImageUpload('bg', this)">
+              </div>
+              <div class="img-actions">
+                <button class="img-action-btn" onclick="event.stopPropagation(); document.getElementById('bgImgInput').click()">Změnit</button>
+                <button class="img-action-btn danger" onclick="event.stopPropagation(); clearImage('bg')">Odstranit</button>
+              </div>
+              <div class="ctrl-label" style="margin-top:8px">Překrytí (overlay)</div>
+              <div class="slider-ctrl">
+                <input type="range" id="bgOverlay" min="0" max="80" value="0" oninput="updateLabel('bgOverlayVal', this.value + '%'); applyTheme()">
+                <span id="bgOverlayVal" style="font-size:11px;color:var(--muted)">0%</span>
+              </div>
+            </div>
+
+            <div class="ctrl-row">
+              <div class="ctrl-label">
+                Textura (noise)
+                <div class="toggle">
+                  <input type="checkbox" id="noiseToggle" checked onchange="applyTheme()">
+                  <div class="toggle-track" onclick="document.getElementById('noiseToggle').click()"></div>
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barvy -->
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">🎨</span>Barvy</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Primární (text, tlačítka)</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorPrimary" value="#0e0d0b" oninput="syncColor('colorPrimary','hexPrimary'); applyTheme()"></div>
+                <input class="color-hex" id="hexPrimary" value="#0E0D0B" maxlength="7" oninput="syncHex('hexPrimary','colorPrimary'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Akcent (zvýraznění, zlato)</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorAccent" value="#b8924a" oninput="syncColor('colorAccent','hexAccent'); applyTheme()"></div>
+                <input class="color-hex" id="hexAccent" value="#B8924A" maxlength="7" oninput="syncHex('hexAccent','colorAccent'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Povrch (karty, pole)</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorSurface" value="#ede9e1" oninput="syncColor('colorSurface','hexSurface'); applyTheme()"></div>
+                <input class="color-hex" id="hexSurface" value="#EDE9E1" maxlength="7" oninput="syncHex('hexSurface','colorSurface'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Muted (popisky, rámečky)</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorMuted" value="#8a8070" oninput="syncColor('colorMuted','hexMuted'); applyTheme()"></div>
+                <input class="color-hex" id="hexMuted" value="#8A8070" maxlength="7" oninput="syncHex('hexMuted','colorMuted'); applyTheme()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rámečky a zaoblení -->
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">◻</span>Rámečky & zaoblení</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">
+                Barva rámečků
+              </div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorBorder" value="#d6cfc3" oninput="syncColor('colorBorder','hexBorder'); applyTheme()"></div>
+                <input class="color-hex" id="hexBorder" value="#D6CFC3" maxlength="7" oninput="syncHex('hexBorder','colorBorder'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Zaoblení rohů <span class="ctrl-value-display" id="radiusVal">2px</span></div>
+              <input type="range" id="borderRadius" min="0" max="24" value="2" oninput="updateLabel('radiusVal', this.value+'px'); applyTheme()">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── TYPOGRAPHY TAB ── -->
+      <div class="tab-pane" id="tab-typography">
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">T</span>Nadpisové písmo</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Rodina písma</div>
+              <select class="ctrl-select" id="fontDisplay" onchange="applyTheme()">
+                <option value="'Cormorant Garamond', Georgia, serif">Cormorant Garamond (výchozí)</option>
+                <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
+                <option value="'DM Serif Display', Georgia, serif">DM Serif Display</option>
+                <option value="'Libre Baskerville', Georgia, serif">Libre Baskerville</option>
+                <option value="'Syne', sans-serif">Syne</option>
+                <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                <option value="'Josefin Sans', sans-serif">Josefin Sans</option>
+                <option value="'Raleway', sans-serif">Raleway</option>
+                <option value="'Lora', serif">Lora</option>
+                <option value="Georgia, serif">Georgia</option>
+              </select>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Velikost (desktop) <span class="ctrl-value-display" id="titleSizeVal">72px</span></div>
+              <input type="range" id="titleSize" min="32" max="120" value="72" oninput="updateLabel('titleSizeVal', this.value+'px'); applyTheme()">
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Tloušťka <span class="ctrl-value-display" id="titleWeightVal">300</span></div>
+              <input type="range" id="titleWeight" min="100" max="900" step="100" value="300" oninput="updateLabel('titleWeightVal', this.value); applyTheme()">
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Náhled</div>
+              <div class="font-preview" id="displayFontPreview">PPF Automotive Experience</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">t</span>Textové písmo</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Rodina písma</div>
+              <select class="ctrl-select" id="fontBody" onchange="applyTheme()">
+                <option value="'Cormorant Garamond', Georgia, serif">Cormorant Garamond (výchozí)</option>
+                <option value="'Lora', serif">Lora</option>
+                <option value="'Source Serif 4', serif">Source Serif 4</option>
+                <option value="'DM Sans', sans-serif">DM Sans</option>
+                <option value="'Instrument Sans', sans-serif">Instrument Sans</option>
+                <option value="'Geist Mono', monospace">Geist Mono</option>
+                <option value="Georgia, serif">Georgia</option>
+              </select>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Velikost <span class="ctrl-value-display" id="bodySizeVal">18px</span></div>
+              <input type="range" id="bodySize" min="12" max="24" value="18" oninput="updateLabel('bodySizeVal', this.value+'px'); applyTheme()">
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Řádkování <span class="ctrl-value-display" id="lineHeightVal">1.6</span></div>
+              <input type="range" id="lineHeight" min="1.2" max="2.2" step="0.05" value="1.6" oninput="updateLabel('lineHeightVal', parseFloat(this.value).toFixed(2)); applyTheme()">
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Náhled</div>
+              <div class="font-preview" id="bodyFontPreview" style="font-size:14px;line-height:1.6">Vítejte na exkluzivní akci PPF Automotive Experience 2025.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">⎯</span>Monospacové písmo</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Rodina písma (popisky, kód)</div>
+              <select class="ctrl-select" id="fontMono" onchange="applyTheme()">
+                <option value="'Geist Mono', monospace">Geist Mono (výchozí)</option>
+                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                <option value="'Fira Code', monospace">Fira Code</option>
+                <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
+                <option value="monospace">Systémové</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">↔</span>Rozestupy</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Mezery stránky (padding) <span class="ctrl-value-display" id="pagePaddingVal">40px</span></div>
+              <input type="range" id="pagePadding" min="16" max="100" value="40" oninput="updateLabel('pagePaddingVal', this.value+'px'); applyTheme()">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── MEDIA TAB ── -->
+      <div class="tab-pane" id="tab-media">
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">◉</span>Logo</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Soubor loga</div>
+              <div class="img-upload-wrap" id="logoWrap" onclick="document.getElementById('logoInput').click()">
+                <img class="img-preview" id="logoPreview" src="" alt="">
+                <div class="img-placeholder" id="logoPlaceholder">
+                  <span class="img-placeholder-icon">◉</span>
+                  <span class="img-placeholder-text">Nahrát logo (PNG, SVG)</span>
+                </div>
+                <input class="img-upload-input" type="file" id="logoInput" accept="image/*,.svg" onchange="handleImageUpload('logo', this)">
+              </div>
+              <div class="img-actions">
+                <button class="img-action-btn" onclick="event.stopPropagation(); document.getElementById('logoInput').click()">Změnit</button>
+                <button class="img-action-btn danger" onclick="event.stopPropagation(); clearImage('logo')">Odstranit</button>
+              </div>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Výška loga <span class="ctrl-value-display" id="logoHeightVal">48px</span></div>
+              <input type="range" id="logoHeight" min="24" max="120" value="48" oninput="updateLabel('logoHeightVal', this.value+'px'); applyTheme()">
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Pozice loga</div>
+              <select class="ctrl-select" id="logoPosition" onchange="applyTheme()">
+                <option value="left">Vlevo</option>
+                <option value="center">Na střed</option>
+                <option value="right">Vpravo</option>
+              </select>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">
+                Zobrazit logo
+                <div class="toggle">
+                  <input type="checkbox" id="logoVisible" checked onchange="applyTheme()">
+                  <div class="toggle-track" onclick="document.getElementById('logoVisible').click()"></div>
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">🖼</span>Hero obrázek</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Obrázek v záhlaví</div>
+              <div class="img-upload-wrap" id="heroWrap" onclick="document.getElementById('heroInput').click()">
+                <img class="img-preview" id="heroPreview" src="" alt="">
+                <div class="img-placeholder" id="heroPlaceholder">
+                  <span class="img-placeholder-icon">🌄</span>
+                  <span class="img-placeholder-text">Nahrát hero obrázek</span>
+                </div>
+                <input class="img-upload-input" type="file" id="heroInput" accept="image/*" onchange="handleImageUpload('hero', this)">
+              </div>
+              <div class="img-actions">
+                <button class="img-action-btn" onclick="event.stopPropagation(); document.getElementById('heroInput').click()">Změnit</button>
+                <button class="img-action-btn danger" onclick="event.stopPropagation(); clearImage('hero')">Odstranit</button>
+              </div>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Výška hero sekce <span class="ctrl-value-display" id="heroHeightVal">320px</span></div>
+              <input type="range" id="heroHeight" min="120" max="600" value="320" oninput="updateLabel('heroHeightVal', this.value+'px'); applyTheme()">
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Přizpůsobení obrázku</div>
+              <select class="ctrl-select" id="heroFit" onchange="applyTheme()">
+                <option value="cover">Cover (vyplnit)</option>
+                <option value="contain">Contain (celý)</option>
+                <option value="fill">Fill (roztáhnout)</option>
+              </select>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Tmavé překrytí <span class="ctrl-value-display" id="heroOverlayVal">20%</span></div>
+              <input type="range" id="heroOverlay" min="0" max="90" value="20" oninput="updateLabel('heroOverlayVal', this.value+'%'); applyTheme()">
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">🚗</span>Fotky vozidel</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div style="font-size:11px;color:var(--muted);line-height:1.6;padding:4px 0">
+              Nahraje fotografie k jednotlivým vozidlům. Zobrazují se při výběru vozu v registračním formuláři.
+            </div>
+            <div id="vehicleImgList" style="display:flex;flex-direction:column;gap:12px;margin-top:4px;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── LAYOUT TAB ── -->
+      <div class="tab-pane" id="tab-layout">
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">⊞</span>Struktura stránky</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Max. šířka obsahu <span class="ctrl-value-display" id="maxWidthVal">720px</span></div>
+              <input type="range" id="maxWidth" min="480" max="1200" step="40" value="720" oninput="updateLabel('maxWidthVal', this.value+'px'); applyTheme()">
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Zarovnání obsahu</div>
+              <select class="ctrl-select" id="contentAlign" onchange="applyTheme()">
+                <option value="center">Na střed</option>
+                <option value="left">Vlevo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">▣</span>Viditelnost sekcí</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="layers-list" id="layersList">
+              <div class="layer-item selected" data-layer="header">
+                <span class="layer-icon">📌</span>
+                <span class="layer-name">Záhlaví & název</span>
+                <span class="layer-eye" onclick="toggleLayer(this, 'header')">👁</span>
+              </div>
+              <div class="layer-item" data-layer="personal">
+                <span class="layer-icon">👤</span>
+                <span class="layer-name">Osobní údaje</span>
+                <span class="layer-eye" onclick="toggleLayer(this, 'personal')">👁</span>
+              </div>
+              <div class="layer-item" data-layer="slots">
+                <span class="layer-icon">🚗</span>
+                <span class="layer-name">Testovací jízdy</span>
+                <span class="layer-eye" onclick="toggleLayer(this, 'slots')">👁</span>
+              </div>
+              <div class="layer-item" data-layer="gdpr">
+                <span class="layer-icon">✅</span>
+                <span class="layer-name">GDPR souhlas</span>
+                <span class="layer-eye" onclick="toggleLayer(this, 'gdpr')">👁</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">✦</span>Animace</div>
+            <span class="ctrl-section-arrow">▾</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label toggle-row">
+                Fade-in animace
+                <div class="toggle">
+                  <input type="checkbox" id="animToggle" checked onchange="applyTheme()">
+                  <div class="toggle-track" onclick="document.getElementById('animToggle').click()"></div>
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            </div>
+            <div class="ctrl-row slider-ctrl">
+              <div class="ctrl-label">Rychlost animace <span class="ctrl-value-display" id="animSpeedVal">0.8s</span></div>
+              <input type="range" id="animSpeed" min="0.2" max="2" step="0.1" value="0.8" oninput="updateLabel('animSpeedVal', parseFloat(this.value).toFixed(1)+'s'); applyTheme()">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- end panel-content -->
+  </div><!-- end left-panel -->
+
+  <!-- RIGHT: PREVIEW -->
+  <div class="preview-area">
+    <div class="preview-toolbar">
+      <div class="preview-dot" style="background:#ff5f57"></div>
+      <div class="preview-dot" style="background:#febc2e"></div>
+      <div class="preview-dot" style="background:#28c840"></div>
+      <div class="preview-url" id="previewUrl">registrace.ppf-event.cz</div>
+    </div>
+    <div class="preview-frame-wrap">
+      <div class="preview-frame-outer desktop" id="previewOuter">
+        <iframe id="previewFrame" title="Preview"></iframe>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ════════════════════════════════════════════════
+// PRESET THEMES
+// ════════════════════════════════════════════════
+
+const THEMES = [
+  {
+    id: 'classic',
+    name: 'Klasický',
+    bg: '#f7f4ef', primary: '#0e0d0b', accent: '#b8924a',
+    surface: '#ede9e1', muted: '#8a8070', border: '#d6cfc3',
+    fontDisplay: "'Cormorant Garamond', Georgia, serif",
+    fontBody: "'Cormorant Garamond', Georgia, serif",
+    swatch: ['#f7f4ef', '#0e0d0b'],
+  },
+  {
+    id: 'noir',
+    name: 'Noir',
+    bg: '#0a0a0a', primary: '#f0f0f0', accent: '#e8ff00',
+    surface: '#1a1a1a', muted: '#666666', border: '#2a2a2a',
+    fontDisplay: "'Bebas Neue', sans-serif",
+    fontBody: "'DM Sans', sans-serif",
+    swatch: ['#0a0a0a', '#e8ff00'],
+  },
+  {
+    id: 'racing',
+    name: 'Racing',
+    bg: '#f5f5f5', primary: '#cc0000', accent: '#cc0000',
+    surface: '#ffffff', muted: '#888888', border: '#dddddd',
+    fontDisplay: "'Syne', sans-serif",
+    fontBody: "'Instrument Sans', sans-serif",
+    swatch: ['#f5f5f5', '#cc0000'],
+  },
+  {
+    id: 'luxe',
+    name: 'Luxe',
+    bg: '#1c1a18', primary: '#e8dcc8', accent: '#c9a84c',
+    surface: '#252320', muted: '#7a7268', border: '#3a3630',
+    fontDisplay: "'Playfair Display', Georgia, serif",
+    fontBody: "'Lora', serif",
+    swatch: ['#1c1a18', '#c9a84c'],
+  },
+  {
+    id: 'clean',
+    name: 'Clean',
+    bg: '#ffffff', primary: '#111111', accent: '#2563eb',
+    surface: '#f4f4f5', muted: '#71717a', border: '#e4e4e7',
+    fontDisplay: "'Josefin Sans', sans-serif",
+    fontBody: "'DM Sans', sans-serif",
+    swatch: ['#ffffff', '#2563eb'],
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    bg: '#f0f4ee', primary: '#1a3a2a', accent: '#4a8c5c',
+    surface: '#e4ede0', muted: '#6a8070', border: '#c4d4c0',
+    fontDisplay: "'DM Serif Display', Georgia, serif",
+    fontBody: "'Source Serif 4', serif",
+    swatch: ['#f0f4ee', '#4a8c5c'],
+  },
+];
+
+let activeTheme = 'classic';
+let hiddenLayers = new Set();
+let currentViewport = 'desktop';
+let imageData = { logo: null, hero: null, bg: null };
+let isDirty = false;
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+
+function init() {
+  renderThemeGrid();
+  renderVehicleImages();
+  loadPreview();
+
+  // Load saved theme from localStorage
+  try {
+    const saved = localStorage.getItem('eventTheme');
+    if (saved) {
+      restoreTheme(JSON.parse(saved));
+      showToast('Téma načteno z lokálního úložiště', '');
+    } else {
+      applyTheme();
+    }
+  } catch(e) {
+    applyTheme();
+  }
+
+}
+
+function restoreTheme(saved) {
+  // Background
+  if (saved.bg) {
+    const bg = saved.bg;
+    const bgTypeEl = document.getElementById('bgType');
+    if (bgTypeEl) { bgTypeEl.value = bg.type || 'color'; onBgTypeChange(); }
+    if (bg.color) { setColor('bgColor','hexBg', bg.color); }
+    if (bg.grad1) document.getElementById('grad1').value = bg.grad1;
+    if (bg.grad2) document.getElementById('grad2').value = bg.grad2;
+    if (bg.gradAngle) document.getElementById('gradAngle').value = bg.gradAngle;
+  }
+  // Colors
+  if (saved.colors) {
+    const c = saved.colors;
+    if (c.primary) setColor('colorPrimary','hexPrimary', c.primary);
+    if (c.accent)  setColor('colorAccent', 'hexAccent',  c.accent);
+    if (c.surface) setColor('colorSurface','hexSurface', c.surface);
+    if (c.muted)   setColor('colorMuted',  'hexMuted',   c.muted);
+    if (c.border)  setColor('colorBorder', 'hexBorder',  c.border);
+  }
+  // Typography
+  if (saved.typography) {
+    const t = saved.typography;
+    if (t.fontDisplay) document.getElementById('fontDisplay').value = t.fontDisplay;
+    if (t.fontBody)    document.getElementById('fontBody').value    = t.fontBody;
+    if (t.fontMono)    document.getElementById('fontMono').value    = t.fontMono;
+    if (t.titleSize)   { document.getElementById('titleSize').value  = t.titleSize;  updateLabel('titleSizeVal', t.titleSize+'px'); }
+    if (t.titleWeight) { document.getElementById('titleWeight').value= t.titleWeight; updateLabel('titleWeightVal', t.titleWeight); }
+    if (t.bodySize)    { document.getElementById('bodySize').value   = t.bodySize;   updateLabel('bodySizeVal', t.bodySize+'px'); }
+    if (t.lineHeight)  { document.getElementById('lineHeight').value = t.lineHeight; updateLabel('lineHeightVal', parseFloat(t.lineHeight).toFixed(2)); }
+  }
+  // Layout
+  if (saved.layout) {
+    const l = saved.layout;
+    if (l.maxWidth)    { document.getElementById('maxWidth').value    = l.maxWidth;    updateLabel('maxWidthVal', l.maxWidth+'px'); }
+    if (l.pagePadding) { document.getElementById('pagePadding').value = l.pagePadding; updateLabel('pagePaddingVal', l.pagePadding+'px'); }
+    if (l.borderRadius){ document.getElementById('borderRadius').value= l.borderRadius;updateLabel('radiusVal', l.borderRadius+'px'); }
+    if (l.noiseTexture !== undefined) document.getElementById('noiseToggle').checked = l.noiseTexture;
+    if (l.animations   !== undefined) document.getElementById('animToggle').checked  = l.animations;
+    if (l.animSpeed)   { document.getElementById('animSpeed').value   = l.animSpeed;  updateLabel('animSpeedVal', parseFloat(l.animSpeed).toFixed(1)+'s'); }
+  }
+  // Logo
+  if (saved.logo) {
+    const lo = saved.logo;
+    if (lo.visible  !== undefined) document.getElementById('logoVisible').checked  = lo.visible;
+    if (lo.height)  { document.getElementById('logoHeight').value   = lo.height;   updateLabel('logoHeightVal', lo.height+'px'); }
+    if (lo.position) document.getElementById('logoPosition').value  = lo.position;
+  }
+  // Hero
+  if (saved.hero) {
+    const h = saved.hero;
+    if (h.height) { document.getElementById('heroHeight').value  = h.height;  updateLabel('heroHeightVal', h.height+'px'); }
+    if (h.fit)      document.getElementById('heroFit').value     = h.fit;
+    if (h.overlay) { document.getElementById('heroOverlay').value= h.overlay; updateLabel('heroOverlayVal', h.overlay+'%'); }
+  }
+  applyTheme();
+}
+
+function renderThemeGrid() {
+  const grid = document.getElementById('themeGrid');
+  grid.innerHTML = THEMES.map(t => `
+    <div class="theme-card ${t.id === activeTheme ? 'active' : ''}" onclick="applyPreset('${t.id}')" title="${t.name}">
+      <div class="theme-swatch">
+        <div class="theme-swatch-half" style="background:${t.swatch[0]}"></div>
+        <div class="theme-swatch-half" style="background:${t.swatch[1]}"></div>
+      </div>
+      <div class="theme-name">${t.name}</div>
+    </div>
+  `).join('');
+}
+
+function renderVehicleImages() {
+  const vehicles = ['Tesla Model S Plaid', 'Porsche Taycan Turbo S', 'Mercedes EQS 580', 'BMW iX M60'];
+  const list = document.getElementById('vehicleImgList');
+  list.innerHTML = vehicles.map((v, i) => `
+    <div>
+      <div class="ctrl-label" style="margin-bottom:6px">${v}</div>
+      <div class="img-upload-wrap" style="height:60px" onclick="document.getElementById('vehicleImg${i}').click()">
+        <img class="img-preview" id="vehicleImgPreview${i}" src="" alt="" style="height:60px;object-fit:cover">
+        <div class="img-placeholder" id="vehicleImgPlaceholder${i}">
+          <span class="img-placeholder-text" style="font-size:10px">Přidat foto</span>
+        </div>
+        <input class="img-upload-input" type="file" id="vehicleImg${i}" accept="image/*" onchange="handleVehicleImage(${i}, this)">
+      </div>
+    </div>
+  `).join('');
+}
+
+// ════════════════════════════════════════════════
+// IFRAME PREVIEW
+// ════════════════════════════════════════════════
+
+const REGISTRATION_HTML = `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link id="gfonts" rel="stylesheet" href="">
+<style id="themeStyle"></style>
+<style id="baseStyle">
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--color-primary);
+  min-height: 100vh;
+  font-size: var(--body-size);
+  font-weight: 300;
+  line-height: var(--line-height);
+  position: relative;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--noise-opacity, 0.6);
+  display: var(--noise-display, block);
+}
+.page-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 80px var(--page-padding) 120px;
+}
+
+/* LOGO */
+.site-logo-wrap {
+  margin-bottom: 32px;
+  display: var(--logo-display, none);
+  justify-content: var(--logo-position, left);
+}
+.site-logo { height: var(--logo-height, 48px); object-fit: contain; }
+
+/* HERO */
+.hero-image {
+  width: 100%;
+  height: var(--hero-height, 320px);
+  object-fit: var(--hero-fit, cover);
+  border-radius: var(--radius);
+  margin-bottom: 40px;
+  display: var(--hero-display, none);
+  position: relative;
+}
+.hero-wrap {
+  position: relative;
+  margin-bottom: 40px;
+  display: var(--hero-display, none);
+  border-radius: var(--radius);
+  overflow: hidden;
+  height: var(--hero-height, 320px);
+}
+.hero-wrap img { width: 100%; height: 100%; object-fit: var(--hero-fit, cover); display: block; }
+.hero-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,var(--hero-overlay, 0.2));
+}
+
+/* HEADER */
+.header { margin-bottom: 72px; animation: var(--anim-header); }
+.header-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.header-eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-accent);
+  max-width: 80px;
+  opacity: 0.3;
+}
+.header-title {
+  font-family: var(--font-display);
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin-bottom: 24px;
+  color: var(--color-primary);
+}
+.header-title em { font-style: italic; color: var(--color-accent); }
+
+.header-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: 16px 0;
+  margin-top: 32px;
+}
+.meta-item { padding: 4px 0; }
+.meta-item:first-child { border-right: 1px solid var(--color-border); padding-right: 24px; }
+.meta-item:last-child { padding-left: 24px; }
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+.meta-value { font-size: 16px; font-weight: 400; color: var(--color-primary); }
+
+/* DIVIDER */
+.divider { display: flex; align-items: center; gap: 16px; margin: 48px 0 36px; color: var(--color-muted); }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
+.divider-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; }
+
+/* FORM */
+.form { display: flex; flex-direction: column; gap: 0; animation: var(--anim-form); }
+.form-section { margin-bottom: 52px; }
+.form-section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.form-section-title .num {
+  width: 20px; height: 20px;
+  border: 1px solid var(--color-accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  color: var(--color-accent);
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.field { position: relative; margin-bottom: 32px; }
+.field:last-child { margin-bottom: 0; }
+.field-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: 10px;
+}
+.field-input, .field-select {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 0 12px;
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--color-primary);
+  outline: none;
+  appearance: none;
+}
+.field-input::placeholder { color: var(--color-border); font-style: italic; }
+
+.salutation-group {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.salutation-pill input[type="radio"] { display: none; }
+.salutation-pill-label {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--color-border);
+  cursor: pointer;
+  padding: 2px 14px;
+  border: 1px solid transparent;
+  border-radius: 40px;
+  line-height: 1.3;
+}
+.salutation-pill input:checked + .salutation-pill-label {
+  color: var(--color-primary);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+
+/* Slots */
+.slot-entry {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-bottom: 12px;
+}
+.slot-entry-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.slot-entry-num { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--color-muted); }
+.slot-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.slot-field { display: flex; flex-direction: column; gap: 8px; }
+.slot-field label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-muted); }
+.slot-field select {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 0 10px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--color-primary);
+  outline: none;
+  appearance: none;
+  width: 100%;
+}
+
+.add-slot-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px 22px;
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-style: italic;
+  color: var(--color-muted);
+  cursor: pointer;
+  width: 100%;
+}
+.add-slot-btn .plus {
+  width: 22px; height: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* GDPR */
+.gdpr-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.gdpr-custom-cb {
+  width: 20px; height: 20px;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.gdpr-text { font-size: 14px; line-height: 1.7; color: var(--color-muted); }
+.gdpr-text a { color: var(--color-accent); text-decoration: underline; }
+
+/* SUBMIT */
+.submit-btn {
+  background: var(--color-primary);
+  color: var(--bg);
+  border: none;
+  padding: 18px 52px;
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border-radius: var(--radius);
+  margin-top: 52px;
+}
+.submit-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-top: 12px;
+  display: block;
+}
+
+/* Sections hidden */
+.section-header.hidden,
+.section-personal.hidden,
+.section-slots.hidden,
+.section-gdpr.hidden { display: none !important; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- LOGO -->
+  <div class="site-logo-wrap section-header" id="logoWrap">
+    <img class="site-logo" id="siteLogo" src="" alt="Logo">
+  </div>
+
+  <!-- HERO -->
+  <div class="hero-wrap section-header" id="heroWrap">
+    <img id="heroImg" src="" alt="">
+  </div>
+
+  <!-- HEADER -->
+  <header class="header section-header">
+    <div class="header-eyebrow">Registrace</div>
+    <h1 class="header-title">PPF Automotive<br><em>Experience 2025</em></h1>
+    <div class="header-meta">
+      <div class="meta-item">
+        <span class="meta-label">Datum</span>
+        <span class="meta-value">14.–15. června 2025</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Místo</span>
+        <span class="meta-value">Polygon Sosnová</span>
+      </div>
+    </div>
+  </header>
+
+  <form class="form">
+    <!-- OSOBNÍ ÚDAJE -->
+    <div class="form-section section-personal">
+      <div class="form-section-title"><span class="num">1</span>Osobní údaje</div>
+      <div class="field">
+        <span class="field-label">Oslovení</span>
+        <div class="salutation-group">
+          <label class="salutation-pill"><input type="radio" name="sal" value="pan" checked><span class="salutation-pill-label">Pan</span></label>
+          <label class="salutation-pill"><input type="radio" name="sal" value="pani"><span class="salutation-pill-label">Paní</span></label>
+          <label class="salutation-pill"><input type="radio" name="sal" value="slecna"><span class="salutation-pill-label">Slečna</span></label>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">Jméno</label>
+          <input class="field-input" type="text" placeholder="Jan">
+        </div>
+        <div class="field">
+          <label class="field-label">Příjmení</label>
+          <input class="field-input" type="text" placeholder="Novák">
+        </div>
+      </div>
+    </div>
+
+    <div class="divider section-slots"><span class="divider-label">Testovací jízdy</span></div>
+
+    <!-- JÍZDY -->
+    <div class="form-section section-slots">
+      <div class="form-section-title"><span class="num">2</span>Rezervace jízd</div>
+      <div class="slot-entry">
+        <div class="slot-entry-head">
+          <span class="slot-entry-num">První jízda</span>
+        </div>
+        <div class="slot-fields">
+          <div class="slot-field">
+            <label>Vozidlo</label>
+            <select><option>— vyberte vozidlo —</option><option>Tesla Model S Plaid</option><option>Porsche Taycan Turbo S</option></select>
+          </div>
+          <div class="slot-field">
+            <label>Časový slot</label>
+            <select><option>— vyberte čas —</option><option>10:00–10:15</option><option>10:15–10:30</option></select>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="add-slot-btn"><span class="plus">+</span> Přidat testovací jízdu</button>
+    </div>
+
+    <div class="divider section-gdpr"><span class="divider-label">Souhlas</span></div>
+
+    <!-- GDPR -->
+    <div class="form-section section-gdpr">
+      <div class="form-section-title"><span class="num">3</span>Ochrana osobních údajů</div>
+      <div class="gdpr-wrap">
+        <div class="gdpr-custom-cb"></div>
+        <div>
+          <div class="gdpr-text">Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce. <a href="#">Zásady ochrany osobních údajů.</a></div>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="submit-btn">Odeslat registraci</button>
+    <span class="submit-note">Po odeslání obdržíte potvrzení e-mailem</span>
+  </form>
+</div>
+</body>
+</html>`;
+
+function loadPreview() {
+  const frame = document.getElementById('previewFrame');
+  frame.srcdoc = REGISTRATION_HTML;
+}
+
+// ════════════════════════════════════════════════
+// APPLY THEME TO IFRAME
+// ════════════════════════════════════════════════
+
+function applyTheme() {
+  markDirty();
+  const frame = document.getElementById('previewFrame');
+  const doc = frame.contentDocument || frame.contentWindow?.document;
+  if (!doc || !doc.getElementById('themeStyle')) {
+    setTimeout(applyTheme, 100);
+    return;
+  }
+
+  const bgType   = document.getElementById('bgType').value;
+  const bgColor  = document.getElementById('bgColor').value;
+  const grad1    = document.getElementById('grad1').value;
+  const grad2    = document.getElementById('grad2').value;
+  const gradAng  = document.getElementById('gradAngle').value;
+  const primary  = document.getElementById('colorPrimary').value;
+  const accent   = document.getElementById('colorAccent').value;
+  const surface  = document.getElementById('colorSurface').value;
+  const muted    = document.getElementById('colorMuted').value;
+  const border   = document.getElementById('colorBorder').value;
+  const radius   = document.getElementById('borderRadius').value;
+  const fontDisp = document.getElementById('fontDisplay').value;
+  const fontBd   = document.getElementById('fontBody').value;
+  const fontMono = document.getElementById('fontMono').value;
+  const titleSz  = document.getElementById('titleSize').value;
+  const titleW   = document.getElementById('titleWeight').value;
+  const bodySz   = document.getElementById('bodySize').value;
+  const lineH    = document.getElementById('lineHeight').value;
+  const pagePad  = document.getElementById('pagePadding').value;
+  const maxW     = document.getElementById('maxWidth').value;
+  const noise    = document.getElementById('noiseToggle').checked;
+  const anim     = document.getElementById('animToggle').checked;
+  const animSpd  = document.getElementById('animSpeed').value;
+  const logoH    = document.getElementById('logoHeight').value;
+  const logoPos  = document.getElementById('logoPosition').value;
+  const logoVis  = document.getElementById('logoVisible').checked;
+  const heroH    = document.getElementById('heroHeight').value;
+  const heroFit  = document.getElementById('heroFit').value;
+  const heroOv   = parseFloat(document.getElementById('heroOverlay').value) / 100;
+  const bgOv     = parseFloat(document.getElementById('bgOverlay').value) / 100;
+
+  // Background
+  let bgValue = bgColor;
+  if (bgType === 'gradient') bgValue = `linear-gradient(${gradAng}deg, ${grad1}, ${grad2})`;
+  if (bgType === 'image' && imageData.bg) bgValue = `url(${imageData.bg})`;
+
+  // Fonts for Google Fonts link
+  const gfontLink = doc.getElementById('gfonts');
+  const fontFamilies = [fontDisp, fontBd, fontMono]
+    .map(f => f.match(/'([^']+)'/)?.[1])
+    .filter(Boolean)
+    .filter(f => !['Georgia', 'serif', 'sans-serif', 'monospace'].includes(f));
+  const uniqueFonts = [...new Set(fontFamilies)];
+  if (uniqueFonts.length) {
+    gfontLink.href = `https://fonts.googleapis.com/css2?${uniqueFonts.map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;600;700;800`).join('&')}&display=swap`;
+  }
+
+  // Update font previews in editor
+  document.getElementById('displayFontPreview').style.fontFamily = fontDisp;
+  document.getElementById('displayFontPreview').style.fontWeight = titleW;
+  document.getElementById('bodyFontPreview').style.fontFamily = fontBd;
+
+  const css = `
+    :root {
+      --bg: ${bgType === 'color' ? bgColor : 'transparent'};
+      --color-primary: ${primary};
+      --color-accent: ${accent};
+      --color-surface: ${surface};
+      --color-muted: ${muted};
+      --color-border: ${border};
+      --radius: ${radius}px;
+      --font-display: ${fontDisp};
+      --font-body: ${fontBd};
+      --font-mono: ${fontMono};
+      --title-size: clamp(32px, 5vw, ${titleSz}px);
+      --title-weight: ${titleW};
+      --body-size: ${bodySz}px;
+      --line-height: ${lineH};
+      --page-padding: ${pagePad}px;
+      --max-width: ${maxW}px;
+      --noise-opacity: ${noise ? 0.6 : 0};
+      --noise-display: ${noise ? 'block' : 'none'};
+      --anim-header: ${anim ? `fadeUp ${animSpd}s ease both` : 'none'};
+      --anim-form: ${anim ? `fadeUp ${animSpd}s 0.15s ease both` : 'none'};
+      --logo-display: ${logoVis && imageData.logo ? 'flex' : 'none'};
+      --logo-height: ${logoH}px;
+      --logo-position: ${logoPos};
+      --hero-display: ${imageData.hero ? 'block' : 'none'};
+      --hero-height: ${heroH}px;
+      --hero-fit: ${heroFit};
+      --hero-overlay: ${heroOv};
+    }
+    body {
+      background: ${bgType === 'image' && imageData.bg
+        ? `rgba(0,0,0,${bgOv}) url(${imageData.bg}) center/cover fixed`
+        : bgType === 'gradient'
+        ? `linear-gradient(${gradAng}deg, ${grad1}, ${grad2})`
+        : bgColor};
+    }
+    ${hiddenLayers.has('header') ? '.section-header { display: none !important; }' : ''}
+    ${hiddenLayers.has('personal') ? '.section-personal { display: none !important; }' : ''}
+    ${hiddenLayers.has('slots') ? '.section-slots { display: none !important; }' : ''}
+    ${hiddenLayers.has('gdpr') ? '.section-gdpr { display: none !important; }' : ''}
+  `;
+
+  doc.getElementById('themeStyle').textContent = css;
+
+  // Update images
+  const logoEl = doc.getElementById('siteLogo');
+  if (logoEl) logoEl.src = imageData.logo || '';
+
+  const heroEl = doc.getElementById('heroImg');
+  if (heroEl) {
+    heroEl.src = imageData.hero || '';
+    const heroWrap = doc.getElementById('heroWrap');
+    if (heroWrap) heroWrap.style.display = imageData.hero ? 'block' : 'none';
+  }
+
+  // Sync color swatches background
+  syncSwatches();
+}
+
+function syncSwatches() {
+  document.querySelectorAll('.color-swatch').forEach(sw => {
+    const inp = sw.querySelector('input[type="color"]');
+    if (inp) sw.style.background = inp.value;
+  });
+}
+
+// ════════════════════════════════════════════════
+// PRESET APPLICATION
+// ════════════════════════════════════════════════
+
+function applyPreset(id) {
+  const t = THEMES.find(th => th.id === id);
+  if (!t) return;
+  activeTheme = id;
+
+  // Apply colors
+  setColor('bgColor', 'hexBg', t.bg);
+  setColor('colorPrimary', 'hexPrimary', t.primary);
+  setColor('colorAccent', 'hexAccent', t.accent);
+  setColor('colorSurface', 'hexSurface', t.surface);
+  setColor('colorMuted', 'hexMuted', t.muted);
+  setColor('colorBorder', 'hexBorder', t.border);
+
+  // Fonts
+  document.getElementById('fontDisplay').value = t.fontDisplay;
+  document.getElementById('fontBody').value = t.fontBody;
+
+  // Reset bg type to color
+  document.getElementById('bgType').value = 'color';
+  onBgTypeChange();
+
+  renderThemeGrid();
+  applyTheme();
+  showToast(`Téma „${t.name}" aplikováno`, 'success');
+}
+
+function setColor(colorId, hexId, value) {
+  document.getElementById(colorId).value = value;
+  document.getElementById(hexId).value = value.toUpperCase();
+  const sw = document.getElementById(colorId)?.closest('.color-swatch');
+  if (sw) sw.style.background = value;
+}
+
+// ════════════════════════════════════════════════
+// COLOR SYNC
+// ════════════════════════════════════════════════
+
+function syncColor(colorId, hexId) {
+  const val = document.getElementById(colorId).value;
+  document.getElementById(hexId).value = val.toUpperCase();
+  const sw = document.getElementById(colorId)?.closest('.color-swatch');
+  if (sw) sw.style.background = val;
+}
+
+function syncHex(hexId, colorId) {
+  let val = document.getElementById(hexId).value;
+  if (!val.startsWith('#')) val = '#' + val;
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+    document.getElementById(colorId).value = val;
+    const sw = document.getElementById(colorId)?.closest('.color-swatch');
+    if (sw) sw.style.background = val;
+  }
+}
+
+// ════════════════════════════════════════════════
+// BACKGROUND TYPE
+// ════════════════════════════════════════════════
+
+function onBgTypeChange() {
+  const type = document.getElementById('bgType').value;
+  document.getElementById('bgColorCtrl').style.display    = type === 'color'    ? '' : 'none';
+  document.getElementById('bgGradientCtrl').style.display = type === 'gradient' ? '' : 'none';
+  document.getElementById('bgImageCtrl').style.display    = type === 'image'    ? '' : 'none';
+  applyTheme();
+}
+
+// ════════════════════════════════════════════════
+// IMAGE UPLOAD
+// ════════════════════════════════════════════════
+
+function handleImageUpload(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    imageData[key] = e.target.result;
+    const preview = document.getElementById(key + 'ImgPreview') || document.getElementById(key + 'Preview');
+    const placeholder = document.getElementById(key + 'ImgPlaceholder') || document.getElementById(key + 'Placeholder');
+    const wrap = document.getElementById(key + 'Wrap') || document.getElementById(key + 'ImgWrap');
+    if (preview) { preview.src = e.target.result; preview.classList.add('visible'); }
+    if (placeholder) placeholder.style.display = 'none';
+    if (wrap) wrap.classList.add('has-image');
+    applyTheme();
+    showToast('Obrázek nahrán', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleVehicleImage(idx, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById(`vehicleImgPreview${idx}`);
+    const placeholder = document.getElementById(`vehicleImgPlaceholder${idx}`);
+    if (preview) { preview.src = e.target.result; preview.classList.add('visible'); preview.style.display = 'block'; }
+    if (placeholder) placeholder.style.display = 'none';
+    showToast('Fotografie vozu nahrána', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImage(key) {
+  imageData[key] = null;
+  const preview = document.getElementById(key + 'ImgPreview') || document.getElementById(key + 'Preview');
+  const placeholder = document.getElementById(key + 'ImgPlaceholder') || document.getElementById(key + 'Placeholder');
+  const wrap = document.getElementById(key + 'Wrap') || document.getElementById(key + 'ImgWrap');
+  if (preview) { preview.src = ''; preview.classList.remove('visible'); }
+  if (placeholder) placeholder.style.display = '';
+  if (wrap) wrap.classList.remove('has-image');
+  applyTheme();
+}
+
+// ════════════════════════════════════════════════
+// VIEWPORT
+// ════════════════════════════════════════════════
+
+function setViewport(vp) {
+  currentViewport = vp;
+  const outer = document.getElementById('previewOuter');
+  outer.className = 'preview-frame-outer ' + vp;
+  document.querySelectorAll('.vp-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('vp' + vp.charAt(0).toUpperCase() + vp.slice(1)).classList.add('active');
+
+  // Resize iframe
+  const frame = document.getElementById('previewFrame');
+  frame.style.height = outer.offsetHeight + 'px';
+}
+
+// ════════════════════════════════════════════════
+// LAYERS / SECTIONS TOGGLE
+// ════════════════════════════════════════════════
+
+function toggleLayer(eyeEl, layer) {
+  event.stopPropagation();
+  const item = eyeEl.closest('.layer-item');
+  if (hiddenLayers.has(layer)) {
+    hiddenLayers.delete(layer);
+    eyeEl.classList.remove('hidden');
+    item.style.opacity = '';
+  } else {
+    hiddenLayers.add(layer);
+    eyeEl.classList.add('hidden');
+    item.style.opacity = '0.5';
+  }
+  applyTheme();
+}
+
+// ════════════════════════════════════════════════
+// TABS & SECTIONS
+// ════════════════════════════════════════════════
+
+function switchTab(name, el) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function toggleSection(head) {
+  head.closest('.ctrl-section').classList.toggle('collapsed');
+}
+
+// ════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════
+
+function updateLabel(id, val) {
+  document.getElementById(id).textContent = val;
+}
+
+function markDirty() {
+  isDirty = true;
+  document.getElementById('unsavedDot').classList.add('visible');
+}
+
+function saveTheme() {
+  const theme = collectTheme();
+  // Save to localStorage
+  localStorage.setItem('eventTheme', JSON.stringify(theme));
+  // Also download as JSON backup
+  const blob = new Blob([JSON.stringify(theme, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `theme-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  isDirty = false;
+  document.getElementById('unsavedDot').classList.remove('visible');
+  showToast('Téma uloženo ✓ (localStorage + JSON soubor)', 'success');
+}
+
+function collectTheme() {
+  return {
+    version: '1.0',
+    savedAt: new Date().toISOString(),
+    bg: {
+      type: document.getElementById('bgType').value,
+      color: document.getElementById('bgColor').value,
+      grad1: document.getElementById('grad1').value,
+      grad2: document.getElementById('grad2').value,
+      gradAngle: document.getElementById('gradAngle').value,
+      overlayOpacity: document.getElementById('bgOverlay').value,
+    },
+    colors: {
+      primary: document.getElementById('colorPrimary').value,
+      accent: document.getElementById('colorAccent').value,
+      surface: document.getElementById('colorSurface').value,
+      muted: document.getElementById('colorMuted').value,
+      border: document.getElementById('colorBorder').value,
+    },
+    typography: {
+      fontDisplay: document.getElementById('fontDisplay').value,
+      fontBody: document.getElementById('fontBody').value,
+      fontMono: document.getElementById('fontMono').value,
+      titleSize: document.getElementById('titleSize').value,
+      titleWeight: document.getElementById('titleWeight').value,
+      bodySize: document.getElementById('bodySize').value,
+      lineHeight: document.getElementById('lineHeight').value,
+    },
+    layout: {
+      maxWidth: document.getElementById('maxWidth').value,
+      pagePadding: document.getElementById('pagePadding').value,
+      borderRadius: document.getElementById('borderRadius').value,
+      noiseTexture: document.getElementById('noiseToggle').checked,
+      animations: document.getElementById('animToggle').checked,
+      animSpeed: document.getElementById('animSpeed').value,
+    },
+    logo: {
+      visible: document.getElementById('logoVisible').checked,
+      height: document.getElementById('logoHeight').value,
+      position: document.getElementById('logoPosition').value,
+    },
+    hero: {
+      height: document.getElementById('heroHeight').value,
+      fit: document.getElementById('heroFit').value,
+      overlay: document.getElementById('heroOverlay').value,
+    },
+    hiddenSections: [...hiddenLayers],
+  };
+}
+
+function resetToDefaults() {
+  if (!confirm('Resetovat vše na výchozí hodnoty?')) return;
+  applyPreset('classic');
+  showToast('Resetováno na výchozí hodnoty', '');
+}
+
+function copyCSS() {
+  const theme = collectTheme();
+  const css = `:root {
+  /* Barvy */
+  --bg: ${theme.bg.color};
+  --color-primary: ${theme.colors.primary};
+  --color-accent: ${theme.colors.accent};
+  --color-surface: ${theme.colors.surface};
+  --color-muted: ${theme.colors.muted};
+  --color-border: ${theme.colors.border};
+  /* Písma */
+  --font-display: ${theme.typography.fontDisplay};
+  --font-body: ${theme.typography.fontBody};
+  --font-mono: ${theme.typography.fontMono};
+  --title-size: ${theme.typography.titleSize}px;
+  --title-weight: ${theme.typography.titleWeight};
+  --body-size: ${theme.typography.bodySize}px;
+  --line-height: ${theme.typography.lineHeight};
+  /* Layout */
+  --max-width: ${theme.layout.maxWidth}px;
+  --page-padding: ${theme.layout.pagePadding}px;
+  --radius: ${theme.layout.borderRadius}px;
+}`;
+  navigator.clipboard.writeText(css).then(() => showToast('CSS zkopírováno do schránky', 'success'));
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+// ════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════
+
+window.addEventListener('DOMContentLoaded', () => {
+  init();
+  // After iframe loads, apply theme
+  document.getElementById('previewFrame').addEventListener('load', () => {
+    applyTheme();
+  });
+});
+
+window.addEventListener('beforeunload', e => {
+  if (isDirty) e.returnValue = 'Máte neuložené změny.';
+});
+</script>
+</body>
+</html>

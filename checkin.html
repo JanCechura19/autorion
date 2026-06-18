@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Check-in</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #f4f2ee;
+  --surface:  #ffffff;
+  --surface2: #eeebe5;
+  --border:   #ddd9d0;
+  --ink:      #181612;
+  --muted:    #8c8577;
+  --accent:   #181612;
+  --gold:     #b07c35;
+  --green:    #2a5e3f;
+  --green-bg: #e6f2eb;
+  --red:      #b83232;
+  --red-bg:   #fceaea;
+  --blue:     #1e4fa0;
+  --blue-bg:  #e8effe;
+  --radius:   10px;
+  --radius-lg:16px;
+  --shadow:   0 2px 16px rgba(24,22,18,0.08);
+  --shadow-lg:0 8px 40px rgba(24,22,18,0.14);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 300;
+  overscroll-behavior: none;
+}
+
+/* ── SCREENS ── */
+.screen { display: none; min-height: 100vh; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* ── TOPBAR ── */
+.topbar {
+  background: var(--ink);
+  color: #fff;
+  padding: 0 20px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-back {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #fff;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.topbar-back:hover { background: rgba(255,255,255,0.2); }
+.topbar-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-badge {
+  background: var(--gold);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+/* ── SCROLL AREA ── */
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px 40px;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-area::-webkit-scrollbar { width: 4px; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── EVENT CARDS ── */
+.screen-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.screen-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+
+.event-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+.event-card:active { transform: scale(0.98); box-shadow: none; }
+.event-card-icon {
+  width: 52px; height: 52px;
+  background: var(--ink);
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  color: #fff;
+}
+.event-card-info { flex: 1; min-width: 0; }
+.event-card-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.event-card-meta { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.event-card-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.event-card-count {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1;
+}
+.event-card-count-label { font-size: 11px; color: var(--muted); }
+.event-card-progress {
+  width: 60px;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.event-card-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* ── SEARCH ── */
+.search-bar {
+  position: relative;
+  margin-bottom: 16px;
+}
+.search-bar input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  padding: 12px 16px 12px 44px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+  box-shadow: var(--shadow);
+}
+.search-bar input:focus { border-color: var(--ink); }
+.search-bar input::placeholder { color: var(--muted); }
+.search-icon {
+  position: absolute;
+  left: 14px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* ── FILTER TABS ── */
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.filter-tabs::-webkit-scrollbar { display: none; }
+.filter-tab {
+  flex-shrink: 0;
+  padding: 7px 16px;
+  border-radius: 40px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.filter-tab.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/* ── GUEST LIST ── */
+.guest-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 0.12s;
+  box-shadow: 0 1px 4px rgba(24,22,18,0.05);
+  user-select: none;
+}
+.guest-row:active { transform: scale(0.99); }
+.guest-row.checked-in { background: var(--green-bg); border-color: #b0d8be; }
+
+.guest-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.guest-row.checked-in .guest-avatar {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.guest-info { flex: 1; min-width: 0; }
+.guest-name {
+  font-weight: 500;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guest-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.guest-status { flex-shrink: 0; }
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.chip-green  { background: var(--green-bg);  color: var(--green); }
+.chip-red    { background: var(--red-bg);    color: var(--red);   }
+.chip-yellow { background: #fdf5e6;          color: #8a5f10;      }
+.chip-gray   { background: var(--surface2);  color: var(--muted); border: 1px solid var(--border); }
+.chip-blue   { background: var(--blue-bg);   color: var(--blue);  }
+
+/* ── GUEST DETAIL ── */
+.detail-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.detail-section-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  gap: 12px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-row-label { color: var(--muted); font-size: 13px; flex-shrink: 0; padding-top: 1px; }
+.detail-row-value { font-weight: 500; text-align: right; }
+
+.ride-item {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.ride-item:last-child { border-bottom: none; }
+.ride-icon {
+  width: 32px; height: 32px;
+  background: var(--surface2);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.ride-info { flex: 1; }
+.ride-vehicle { font-weight: 500; font-size: 14px; }
+.ride-time { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* ── CONSENT SECTION ── */
+.consent-box {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s;
+}
+.consent-box.consented { border-color: var(--green); }
+.consent-box.paper-only { border-color: var(--gold); }
+
+.consent-header {
+  padding: 16px 18px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.consent-header-icon { font-size: 20px; }
+.consent-header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+.consent-header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.consent-status-row {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.consent-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Paper checkbox */
+.paper-check-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  background: var(--bg);
+}
+.paper-check-wrap.active {
+  background: #fdf8ef;
+  border-color: var(--gold);
+}
+.paper-check-wrap input[type="checkbox"] { display: none; }
+.paper-check-box {
+  width: 22px; height: 22px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.paper-check-wrap.active .paper-check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #fff;
+}
+.paper-check-label { font-size: 14px; font-weight: 400; }
+
+/* ── CONFIRM BUTTON ── */
+.confirm-btn-wrap {
+  padding: 0 0 8px;
+}
+.confirm-btn {
+  width: 100%;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 18px;
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(42,94,63,0.3);
+}
+.confirm-btn:disabled {
+  background: var(--surface2);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.confirm-btn:not(:disabled):active { transform: scale(0.98); }
+.confirm-lock { font-size: 16px; }
+
+.already-checked {
+  width: 100%;
+  background: var(--green-bg);
+  border: 2px solid var(--green);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+/* ── CONSENT FORM SCREEN ── */
+.consent-form-wrap {
+  padding: 20px 16px 40px;
+}
+.consent-form-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.consent-form-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.consent-form-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.consent-form-guest {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.form-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.form-card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.form-field { margin-bottom: 16px; }
+.form-field:last-child { margin-bottom: 0; }
+.form-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.form-field input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-field input:focus { border-color: var(--ink); }
+.form-field input[readonly] { background: var(--surface2); color: var(--muted); }
+
+.consent-text-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink);
+  margin-bottom: 0;
+}
+
+/* Canvas signature */
+.signature-wrap {
+  position: relative;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.signature-wrap.has-sig { border-color: var(--green); }
+.signature-label {
+  position: absolute;
+  top: 10px; left: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--border);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.signature-wrap.has-sig .signature-label { opacity: 0; }
+canvas#sigCanvas {
+  display: block;
+  width: 100%;
+  height: 180px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.sig-controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.sig-clear-btn {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.sig-clear-btn:hover { color: var(--red); }
+
+/* Consent checkbox */
+.consent-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 14px;
+}
+.consent-check-row.active {
+  background: var(--green-bg);
+  border-color: var(--green);
+}
+.consent-custom-cb {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all 0.15s;
+  color: transparent;
+}
+.consent-check-row.active .consent-custom-cb {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.consent-check-text { font-size: 14px; line-height: 1.6; }
+
+.submit-consent-btn {
+  width: 100%;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-consent-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.submit-consent-btn:not(:disabled):active { opacity: 0.85; }
+
+/* ── SUCCESS OVERLAY ── */
+.checkin-success {
+  position: fixed;
+  inset: 0;
+  background: var(--green);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.checkin-success.show { opacity: 1; pointer-events: all; }
+.checkin-success-icon { font-size: 64px; margin-bottom: 20px; animation: bounceIn 0.5s ease; }
+.checkin-success-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.checkin-success-sub { font-size: 16px; color: rgba(255,255,255,0.75); text-align: center; }
+
+@keyframes bounceIn {
+  0%   { transform: scale(0.3); }
+  60%  { transform: scale(1.1); }
+  80%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+.empty-text { font-size: 15px; }
+
+/* ── LANG SWITCHER (consent topbar) ── */
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.lang-toggle-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.lang-toggle-btn.active {
+  background: rgba(255,255,255,0.22);
+  color: #fff;
+}
+
+/* ── LOGIN SCREEN ── */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  padding: 24px;
+}
+.login-box {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: var(--shadow-lg);
+}
+.login-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.login-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.login-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 32px;
+}
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.login-field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.login-field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.login-field input:focus { border-color: var(--ink); }
+.login-btn {
+  width: 100%;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 15px;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.15s;
+}
+.login-btn:active { opacity: 0.85; }
+.login-error {
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 10px;
+  text-align: center;
+  min-height: 20px;
+}
+.login-demo {
+  margin-top: 20px;
+  padding: 14px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.login-demo strong { color: var(--ink); }
+
+/* ── STATS ROW ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.stat-mini {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  text-align: center;
+}
+.stat-mini-val {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+.stat-mini-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">PPF Automotive</div>
+    <div class="login-title">Check-in</div>
+    <div class="login-sub">Přihlaste se pro přístup</div>
+    <div class="login-field">
+      <label>E-mail</label>
+      <input type="email" id="loginEmail" placeholder="vas@email.cz" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label>Heslo</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="loginBtn">Přihlásit se</button>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-demo">
+      <strong>Demo přihlášení:</strong><br>
+      hostess@event.cz / checkin1<br>
+      admin@event.cz / heslo123
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 1: EVENT LIST ══ -->
+<div class="screen active" id="screenEvents">
+  <div class="topbar">
+    <div class="topbar-title">🎫 Check-in</div>
+  </div>
+  <div class="scroll-area">
+    <div class="screen-title">Vyberte akci</div>
+    <div class="screen-sub">Vyberte akci, na které dnes probíhá check-in.</div>
+    <div id="eventList"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: GUEST LIST ══ -->
+<div class="screen" id="screenGuests">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goToEvents()">←</button>
+    <div class="topbar-title" id="guestListTitle">Hosté</div>
+    <div class="topbar-badge" id="checkinBadge">0 / 0</div>
+  </div>
+  <div class="scroll-area">
+    <div class="stats-row" id="guestStats"></div>
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="guestSearch" placeholder="Hledat hosta…" oninput="filterGuests()" autocomplete="off">
+    </div>
+    <div class="filter-tabs" id="filterTabs">
+      <button class="filter-tab active" onclick="setFilter('all',this)">Všichni</button>
+      <button class="filter-tab" onclick="setFilter('pending',this)">Čekají</button>
+      <button class="filter-tab" onclick="setFilter('checked',this)">Odbavení</button>
+      <button class="filter-tab" onclick="setFilter('rides',this)">S jízdami</button>
+    </div>
+    <div id="guestList"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: GUEST DETAIL ══ -->
+<div class="screen" id="screenDetail">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goToGuests()">←</button>
+    <div class="topbar-title" id="detailTopTitle">Detail hosta</div>
+  </div>
+  <div class="scroll-area" id="detailScrollArea">
+    <div id="guestDetailContent"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 4: CONSENT FORM ══ -->
+<div class="screen" id="screenConsent">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goToDetail()">←</button>
+    <div class="topbar-title" id="consentTopbarTitle">Souhlas s jízdou</div>
+    <div class="lang-toggle">
+      <button class="lang-toggle-btn active" id="consentBtnCS" onclick="setConsentLang('cs')">CZE</button>
+      <button class="lang-toggle-btn"        id="consentBtnEN" onclick="setConsentLang('en')">ENG</button>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div class="consent-form-wrap" id="consentFormContent"></div>
+  </div>
+</div>
+
+<!-- ══ CHECK-IN SUCCESS OVERLAY ══ -->
+<div class="checkin-success" id="checkinSuccess">
+  <div class="checkin-success-icon">✅</div>
+  <div class="checkin-success-name" id="successGuestName"></div>
+  <div class="checkin-success-sub" id="successGuestSub"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// MOCK DATA
+// ══════════════════════════════════════════════════════
+
+const EVENTS = [
+  {
+    id: 1,
+    name: 'PPF Automotive Experience 2025',
+    date: '14.–15. 6. 2025',
+    location: 'Polygon Sosnová, Česká Lípa',
+    icon: '🏎',
+    vehicles: [
+      { id:1, name:'Tesla Model S Plaid' },
+      { id:2, name:'Porsche Taycan Turbo S' },
+      { id:3, name:'Mercedes EQS 580 4MATIC' },
+      { id:4, name:'BMW iX M60' },
+    ],
+  },
+  {
+    id: 2,
+    name: 'FBW Drive Day 2025',
+    date: '10. 9. 2025',
+    location: 'Autodrom Most',
+    icon: '🚗',
+    vehicles: [
+      { id:5, name:'BMW M3 Competition' },
+      { id:6, name:'BMW M5 CS' },
+      { id:7, name:'BMW iX M60' },
+    ],
+  },
+];
+
+function makeGuests(eventId) {
+  const data = [
+    { fn:'Petr',    ln:'Novák',      status:'confirmed', companion:true,  cName:'Jana Nováková', rides:[{vid:1,time:'10:00–10:15',day:'14. 6.'},{vid:2,time:'11:30–11:45',day:'14. 6.'},{vid:3,time:'14:00–14:15',day:'15. 6.'}] },
+    { fn:'Eva',     ln:'Svobodová',  status:'confirmed', companion:false, cName:'',              rides:[{vid:1,time:'10:15–10:30',day:'14. 6.'},{vid:4,time:'13:00–13:15',day:'14. 6.'}] },
+    { fn:'Martin',  ln:'Dvořák',     status:'confirmed', companion:true,  cName:'Lucie Dvořák',  rides:[] },
+    { fn:'Jana',    ln:'Procházková',status:'confirmed', companion:false, cName:'',              rides:[{vid:2,time:'10:00–10:15',day:'14. 6.'}] },
+    { fn:'Tomáš',   ln:'Kučera',     status:'confirmed', companion:true,  cName:'Marta Kučerová',rides:[{vid:3,time:'10:30–10:45',day:'14. 6.'},{vid:1,time:'15:00–15:15',day:'15. 6.'}] },
+    { fn:'Lucie',   ln:'Horáčková',  status:'confirmed', companion:false, cName:'',              rides:[{vid:4,time:'11:00–11:15',day:'14. 6.'}] },
+    { fn:'Pavel',   ln:'Veselý',     status:'confirmed', companion:true,  cName:'Petra Veselá',  rides:[] },
+    { fn:'Alena',   ln:'Marková',    status:'confirmed', companion:false, cName:'',              rides:[{vid:2,time:'12:00–12:15',day:'14. 6.'},{vid:3,time:'16:00–16:15',day:'15. 6.'}] },
+    { fn:'Jiří',    ln:'Blažek',     status:'confirmed', companion:false, cName:'',              rides:[{vid:1,time:'13:30–13:45',day:'14. 6.'}] },
+    { fn:'Kateřina',ln:'Pospíšilová',status:'confirmed', companion:true,  cName:'Roman Pospíšil',rides:[] },
+    { fn:'Ondřej',  ln:'Fiala',      status:'confirmed', companion:false, cName:'',              rides:[{vid:4,time:'14:30–14:45',day:'15. 6.'}] },
+    { fn:'Monika',  ln:'Kratochvílová',status:'confirmed',companion:true, cName:'Radek Kratochvíl',rides:[{vid:2,time:'15:30–15:45',day:'15. 6.'}] },
+  ];
+  return data.map((g, i) => ({
+    id: eventId * 1000 + i + 1,
+    event_id: eventId,
+    first_name: g.fn,
+    last_name: g.ln,
+    status: g.status,
+    companion: g.companion,
+    companion_name: g.cName,
+    rides: g.rides.map(r => ({
+      vehicle_id: r.vid,
+      vehicle_name: EVENTS.find(e=>e.id===eventId)?.vehicles.find(v=>v.id===r.vid)?.name || 'Vůz',
+      time_slot: r.time,
+      day_label: r.day,
+    })),
+    checked_in: false,
+    consent_signed: false,
+    consent_paper: false,
+    consent_license: '',
+  }));
+}
+
+let ALL_GUESTS = {};
+EVENTS.forEach(e => { ALL_GUESTS[e.id] = makeGuests(e.id); });
+
+// ── STATE ──
+let currentEvent  = null;
+let currentGuest  = null;
+let guestFilter   = 'all';
+let sigHasContent = false;
+let sigConsented  = false;
+
+// ══════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goToEvents() {
+  currentEvent = null;
+  showScreen('screenEvents');
+}
+
+function goToGuests() {
+  currentGuest = null;
+  renderGuestList();
+  showScreen('screenGuests');
+}
+
+function goToDetail() {
+  renderGuestDetail();
+  showScreen('screenDetail');
+}
+
+// ══════════════════════════════════════════════════════
+// SCREEN 1 — EVENTS
+// ══════════════════════════════════════════════════════
+
+function renderEventList() {
+  const el = document.getElementById('eventList');
+  el.innerHTML = EVENTS.map(ev => {
+    const guests  = ALL_GUESTS[ev.id] || [];
+    const checked = guests.filter(g => g.checked_in).length;
+    const pct = guests.length ? Math.round(checked / guests.length * 100) : 0;
+    return `
+      <div class="event-card" onclick="selectEvent(${ev.id})">
+        <div class="event-card-icon">${ev.icon}</div>
+        <div class="event-card-info">
+          <div class="event-card-name">${ev.name}</div>
+          <div class="event-card-meta">📅 ${ev.date}<br>📍 ${ev.location}</div>
+        </div>
+        <div class="event-card-stats">
+          <div class="event-card-count">${checked}<span style="font-size:14px;font-weight:400;color:var(--muted)">/${guests.length}</span></div>
+          <div class="event-card-count-label">check-in</div>
+          <div class="event-card-progress">
+            <div class="event-card-progress-fill" style="width:${pct}%"></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectEvent(id) {
+  currentEvent = EVENTS.find(e => e.id === id);
+  guestFilter = 'all';
+  document.getElementById('guestSearch').value = '';
+  renderGuestList();
+  showScreen('screenGuests');
+}
+
+// ══════════════════════════════════════════════════════
+// SCREEN 2 — GUEST LIST
+// ══════════════════════════════════════════════════════
+
+function renderGuestList() {
+  if (!currentEvent) return;
+  const guests = ALL_GUESTS[currentEvent.id] || [];
+  const checked = guests.filter(g => g.checked_in).length;
+
+  document.getElementById('guestListTitle').textContent = currentEvent.name;
+  document.getElementById('checkinBadge').textContent   = `${checked} / ${guests.length}`;
+
+  // Stats
+  document.getElementById('guestStats').innerHTML = `
+    <div class="stat-mini">
+      <div class="stat-mini-val" style="color:var(--green)">${checked}</div>
+      <div class="stat-mini-label">Odbaveno</div>
+    </div>
+    <div class="stat-mini">
+      <div class="stat-mini-val">${guests.length - checked}</div>
+      <div class="stat-mini-label">Čeká</div>
+    </div>
+    <div class="stat-mini">
+      <div class="stat-mini-val" style="color:var(--gold)">${guests.filter(g=>g.companion).length}</div>
+      <div class="stat-mini-label">Doprovodů</div>
+    </div>
+  `;
+
+  filterGuests();
+}
+
+function setFilter(f, btn) {
+  guestFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  filterGuests();
+}
+
+function filterGuests() {
+  if (!currentEvent) return;
+  const q = document.getElementById('guestSearch').value.toLowerCase();
+  let guests = ALL_GUESTS[currentEvent.id] || [];
+
+  if (guestFilter === 'pending')  guests = guests.filter(g => !g.checked_in);
+  if (guestFilter === 'checked')  guests = guests.filter(g =>  g.checked_in);
+  if (guestFilter === 'rides')    guests = guests.filter(g =>  g.rides.length > 0);
+  if (q) guests = guests.filter(g =>
+    `${g.first_name} ${g.last_name}`.toLowerCase().includes(q) ||
+    `${g.last_name} ${g.first_name}`.toLowerCase().includes(q)
+  );
+
+  // Sort: not checked-in first, then alphabetically
+  guests = [...guests].sort((a, b) => {
+    if (a.checked_in !== b.checked_in) return a.checked_in ? 1 : -1;
+    return a.last_name.localeCompare(b.last_name);
+  });
+
+  const el = document.getElementById('guestList');
+  if (!guests.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Žádný host nevyhovuje hledání</div></div>`;
+    return;
+  }
+
+  el.innerHTML = guests.map(g => {
+    const initials = (g.first_name[0] + g.last_name[0]).toUpperCase();
+    const consentOk = g.consent_signed || g.consent_paper;
+    let chip = '';
+    if (g.checked_in)      chip = '<span class="status-chip chip-green">✓ Odbaven</span>';
+    else if (consentOk)    chip = '<span class="status-chip chip-blue">Souhlas ✓</span>';
+    else                   chip = '<span class="status-chip chip-gray">Čeká</span>';
+
+    return `
+      <div class="guest-row ${g.checked_in ? 'checked-in' : ''}" onclick="selectGuest(${g.id})">
+        <div class="guest-avatar">${g.checked_in ? '✓' : initials}</div>
+        <div class="guest-info">
+          <div class="guest-name">${g.last_name} ${g.first_name}</div>
+          <div class="guest-meta">
+            ${g.companion ? `👥 s doprovodem` : '👤 bez doprovodu'}
+            ${g.rides.length ? ` · 🚗 ${g.rides.length} jízd${g.rides.length > 1 ? 'y' : 'a'}` : ''}
+          </div>
+        </div>
+        <div class="guest-status">${chip}</div>
+      </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// SCREEN 3 — GUEST DETAIL
+// ══════════════════════════════════════════════════════
+
+function selectGuest(id) {
+  const guests = ALL_GUESTS[currentEvent.id] || [];
+  currentGuest = guests.find(g => g.id === id);
+  if (!currentGuest) return;
+  renderGuestDetail();
+  showScreen('screenDetail');
+}
+
+function renderGuestDetail() {
+  if (!currentGuest || !currentEvent) return;
+  const g = currentGuest;
+  document.getElementById('detailTopTitle').textContent = `${g.last_name} ${g.first_name}`;
+
+  const consentOk = g.consent_signed || g.consent_paper;
+  const canCheckin = consentOk && !g.checked_in;
+
+  // Status badge
+  let statusChip = '';
+  if (g.checked_in)       statusChip = '<span class="status-chip chip-green" style="font-size:14px;padding:6px 14px">✅ Odbaven</span>';
+  else if (consentOk)     statusChip = '<span class="status-chip chip-blue"  style="font-size:14px;padding:6px 14px">📋 Souhlas podepsán</span>';
+  else                    statusChip = '<span class="status-chip chip-gray"  style="font-size:14px;padding:6px 14px">⏳ Čeká na souhlas</span>';
+
+  // Rides
+  const ridesHtml = g.rides.length
+    ? g.rides.map(r => `
+        <div class="ride-item">
+          <div class="ride-icon">🚗</div>
+          <div class="ride-info">
+            <div class="ride-vehicle">${r.vehicle_name}</div>
+            <div class="ride-time">${r.day_label} · ${r.time_slot}</div>
+          </div>
+        </div>`).join('')
+    : `<div style="padding:14px 18px;font-size:14px;color:var(--muted)">Žádné testovací jízdy</div>`;
+
+  // Consent section
+  const consentSectionClass = g.consent_signed ? 'consented' : (g.consent_paper ? 'paper-only' : '');
+  const paperActiveClass    = g.consent_paper ? 'active' : '';
+
+  const consentStatusHtml = (g.consent_signed || g.consent_paper)
+    ? `<span class="status-chip ${g.consent_paper ? 'chip-yellow' : 'chip-green'}" style="font-size:13px">
+        ${g.consent_paper ? '📄 Papírový souhlas' : '✅ Digitální souhlas'}
+      </span>`
+    : `<span class="status-chip chip-gray" style="font-size:13px">⚠ Souhlas chybí</span>`;
+
+  document.getElementById('guestDetailContent').innerHTML = `
+    <!-- Status -->
+    <div style="display:flex;justify-content:center;margin-bottom:20px;">
+      ${statusChip}
+    </div>
+
+    <!-- Basic info -->
+    <div class="detail-section">
+      <div class="detail-section-head">Registrace</div>
+      <div class="detail-row">
+        <span class="detail-row-label">Jméno</span>
+        <span class="detail-row-value">${g.first_name} ${g.last_name}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-row-label">Odpověď</span>
+        <span class="detail-row-value">${statusChipSmall(g.status)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-row-label">Doprovod</span>
+        <span class="detail-row-value">${g.companion ? `Ano — ${g.companion_name || '—'}` : 'Ne'}</span>
+      </div>
+    </div>
+
+    <!-- Rides -->
+    <div class="detail-section">
+      <div class="detail-section-head">Testovací jízdy (${g.rides.length})</div>
+      ${ridesHtml}
+    </div>
+
+    <!-- Consent -->
+    <div class="consent-box ${consentSectionClass}">
+      <div class="consent-header">
+        <span class="consent-header-icon">📋</span>
+        <div>
+          <div class="consent-header-title">Souhlas s účastí</div>
+          <div class="consent-header-sub">Vyžadováno před potvrzením příchodu</div>
+        </div>
+      </div>
+      <div class="consent-status-row">
+        ${consentStatusHtml}
+        <div class="consent-actions">
+          ${!g.consent_signed ? `
+            <button class="btn-consent-digital" onclick="openConsentForm()"
+              style="background:var(--ink);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;">
+              ✍️ Podepsat digitálně
+            </button>` : ''}
+          <label class="paper-check-wrap ${paperActiveClass}" id="paperCheckWrap" onclick="togglePaperConsent()">
+            <div class="paper-check-box">${g.consent_paper ? '✓' : ''}</div>
+            <span class="paper-check-label">Souhlas v papírové podobě</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm button -->
+    <div class="confirm-btn-wrap">
+      ${g.checked_in
+        ? `<div class="already-checked">✅ Host byl úspěšně odbaven</div>`
+        : `<button class="confirm-btn" id="confirmBtn" onclick="confirmCheckin()"
+            ${!consentOk ? 'disabled' : ''}>
+            <span class="confirm-lock">${consentOk ? '✓' : '🔒'}</span>
+            ${consentOk ? 'Potvrdit příchod' : 'Nejprve vyžadován souhlas'}
+          </button>`
+      }
+    </div>
+  `;
+}
+
+function statusChipSmall(status) {
+  const map = {
+    confirmed: '<span class="status-chip chip-green">✓ Potvrzena</span>',
+    declined:  '<span class="status-chip chip-red">✕ Odmítl</span>',
+    pending:   '<span class="status-chip chip-yellow">⏳ Bez odpovědi</span>',
+  };
+  return map[status] || status;
+}
+
+function togglePaperConsent() {
+  if (!currentGuest || currentGuest.checked_in) return;
+  currentGuest.consent_paper = !currentGuest.consent_paper;
+  // If paper consent checked, clear digital if any
+  if (currentGuest.consent_paper) {
+    // keep digital too if already signed
+  }
+  renderGuestDetail();
+}
+
+// ══════════════════════════════════════════════════════
+// CONSENT FORM — TRANSLATIONS
+// ══════════════════════════════════════════════════════
+
+let consentLang = 'cs';
+
+const CT = {
+  cs: {
+    topbarTitle:   'Souhlas s jízdou',
+    sectionEvent:  'Údaje o akci',
+    labelEvent:    'Název akce',
+    labelDate:     'Datum',
+    sectionGuest:  'Účastník',
+    labelName:     'Jméno a příjmení',
+    labelLicense:  'Číslo řidičského průkazu',
+    licensePh:     'např. EU123456',
+    sectionConsent:'Text souhlasu',
+    consentBody:   (name, eventName, date, location) =>
+      `Tímto potvrzuji, že jsem byl(a) řádně seznámen(a) s podmínkami účasti na testovacích jízdách v rámci akce <strong>${eventName}</strong> (${date}), konané v ${location}.<br><br>
+       Prohlašuji, že jsem držitelem platného řidičského oprávnění, jsem způsobilý(á) k řízení motorového vozidla a nejsem pod vlivem alkoholu, omamných nebo psychotropních látek.<br><br>
+       Beru na vědomí, že testovací jízdy se účastním na vlastní riziko a organizátor nenese odpovědnost za škody způsobené mým zaviněním. Souhlasím s pořizováním fotografií a videozáznamů pro propagační účely pořadatele.`,
+    consentAgree:  'Souhlasím s výše uvedenými podmínkami účasti na testovacích jízdách.',
+    sectionSig:    'Podpis',
+    sigPrompt:     'Podepište se prstem nebo stylusem',
+    sigClear:      'Vymazat podpis',
+    submitBtn:     '✅ Potvrdit souhlas',
+  },
+  en: {
+    topbarTitle:   'Driving consent',
+    sectionEvent:  'Event details',
+    labelEvent:    'Event name',
+    labelDate:     'Date',
+    sectionGuest:  'Participant',
+    labelName:     'Full name',
+    labelLicense:  'Driving licence number',
+    licensePh:     'e.g. EU123456',
+    sectionConsent:'Consent text',
+    consentBody:   (name, eventName, date, location) =>
+      `I hereby confirm that I have been duly informed of the terms and conditions for participating in test drives at the event <strong>${eventName}</strong> (${date}), held at ${location}.<br><br>
+       I declare that I hold a valid driving licence, am fit to drive a motor vehicle and am not under the influence of alcohol, narcotics or psychotropic substances.<br><br>
+       I acknowledge that I participate in the test drives at my own risk and the organiser accepts no liability for damage caused by my actions. I consent to photographs and video recordings being taken for the organiser's promotional purposes.`,
+    consentAgree:  'I agree to the above terms and conditions for participation in test drives.',
+    sectionSig:    'Signature',
+    sigPrompt:     'Sign with your finger or stylus',
+    sigClear:      'Clear signature',
+    submitBtn:     '✅ Confirm consent',
+  },
+};
+
+function ct(key) { return CT[consentLang][key] ?? CT['cs'][key] ?? key; }
+
+function setConsentLang(lang) {
+  consentLang = lang;
+  document.getElementById('consentBtnCS').classList.toggle('active', lang === 'cs');
+  document.getElementById('consentBtnEN').classList.toggle('active', lang === 'en');
+  document.getElementById('consentTopbarTitle').textContent = ct('topbarTitle');
+  // Re-render form content (preserves license input value + signature)
+  const licenseVal  = document.getElementById('licenseInput')?.value || '';
+  const wasConsented = sigConsented;
+  const wasSigned   = sigHasContent;
+  renderConsentForm();
+  // Restore state
+  if (licenseVal) {
+    const inp = document.getElementById('licenseInput');
+    if (inp) { inp.value = licenseVal; updateSubmitBtn(); }
+  }
+  if (wasConsented) {
+    sigConsented = true;
+    const row = document.getElementById('consentCheckRow');
+    const cb  = document.getElementById('consentCb');
+    row?.classList.add('active');
+    if (cb) cb.textContent = '✓';
+  }
+  if (wasSigned) {
+    // Signature is lost on re-render by design (canvas reset) — that's OK
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// SCREEN 4 — CONSENT FORM
+// ══════════════════════════════════════════════════════
+
+function openConsentForm() {
+  if (!currentGuest || !currentEvent) return;
+  sigHasContent = false;
+  sigConsented  = false;
+  consentLang   = 'cs';
+  // Reset topbar lang buttons
+  document.getElementById('consentBtnCS').classList.add('active');
+  document.getElementById('consentBtnEN').classList.remove('active');
+  document.getElementById('consentTopbarTitle').textContent = ct('topbarTitle');
+  renderConsentForm();
+  showScreen('screenConsent');
+}
+
+function renderConsentForm() {
+  const g  = currentGuest;
+  const ev = currentEvent;
+
+  document.getElementById('consentFormContent').innerHTML = `
+    <div class="consent-form-header">
+      <div class="consent-form-logo">PPF Automotive</div>
+      <div class="consent-form-title">${ev.name}</div>
+      <div class="consent-form-guest">${g.first_name} ${g.last_name}</div>
+    </div>
+
+    <!-- Event details -->
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionEvent')}</div>
+      <div class="form-field">
+        <label>${ct('labelEvent')}</label>
+        <input type="text" value="${ev.name}" readonly>
+      </div>
+      <div class="form-field">
+        <label>${ct('labelDate')}</label>
+        <input type="text" value="${ev.date}" readonly>
+      </div>
+    </div>
+
+    <!-- Participant -->
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionGuest')}</div>
+      <div class="form-field">
+        <label>${ct('labelName')}</label>
+        <input type="text" value="${g.first_name} ${g.last_name}" readonly>
+      </div>
+      <div class="form-field">
+        <label>${ct('labelLicense')}</label>
+        <input type="text" id="licenseInput" placeholder="${ct('licensePh')}" value="${g.consent_license || ''}"
+          oninput="updateSubmitBtn()" inputmode="text" autocomplete="off">
+      </div>
+    </div>
+
+    <!-- Consent text -->
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionConsent')}</div>
+      <div class="consent-text-box">
+        ${ct('consentBody')(g.first_name + ' ' + g.last_name, ev.name, ev.date, ev.location)}
+      </div>
+      <div class="consent-check-row" id="consentCheckRow" onclick="toggleConsentCheck()">
+        <div class="consent-custom-cb" id="consentCb"></div>
+        <span class="consent-check-text">${ct('consentAgree')}</span>
+      </div>
+    </div>
+
+    <!-- Signature -->
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionSig')}</div>
+      <div class="signature-wrap" id="sigWrap">
+        <span class="signature-label">${ct('sigPrompt')}</span>
+        <canvas id="sigCanvas"></canvas>
+        <div class="sig-controls">
+          <button class="sig-clear-btn" onclick="clearSignature()">${ct('sigClear')}</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-consent-btn" id="submitConsentBtn" onclick="submitConsent()" disabled>
+      ${ct('submitBtn')}
+    </button>
+  `;
+
+  initSignaturePad();
+}
+
+// ── SIGNATURE PAD ──
+let sigCanvas, sigCtx, isDrawing = false, lastX = 0, lastY = 0;
+
+function initSignaturePad() {
+  sigCanvas = document.getElementById('sigCanvas');
+  if (!sigCanvas) return;
+  sigCtx = sigCanvas.getContext('2d');
+
+  // Set canvas resolution
+  const rect = sigCanvas.getBoundingClientRect();
+  sigCanvas.width  = sigCanvas.offsetWidth * window.devicePixelRatio;
+  sigCanvas.height = sigCanvas.offsetHeight * window.devicePixelRatio;
+  sigCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  sigCtx.strokeStyle = '#181612';
+  sigCtx.lineWidth = 2.5;
+  sigCtx.lineCap   = 'round';
+  sigCtx.lineJoin  = 'round';
+
+  // Touch events
+  sigCanvas.addEventListener('touchstart',  onSigStart, { passive: false });
+  sigCanvas.addEventListener('touchmove',   onSigMove,  { passive: false });
+  sigCanvas.addEventListener('touchend',    onSigEnd);
+  sigCanvas.addEventListener('mousedown',   onSigStart);
+  sigCanvas.addEventListener('mousemove',   onSigMove);
+  sigCanvas.addEventListener('mouseup',     onSigEnd);
+  sigCanvas.addEventListener('mouseleave',  onSigEnd);
+}
+
+function getPos(e) {
+  const rect = sigCanvas.getBoundingClientRect();
+  const src  = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+}
+
+function onSigStart(e) {
+  e.preventDefault();
+  isDrawing = true;
+  const pos = getPos(e);
+  lastX = pos.x; lastY = pos.y;
+  sigCtx.beginPath();
+  sigCtx.moveTo(lastX, lastY);
+}
+
+function onSigMove(e) {
+  e.preventDefault();
+  if (!isDrawing) return;
+  const pos = getPos(e);
+  sigCtx.lineTo(pos.x, pos.y);
+  sigCtx.stroke();
+  lastX = pos.x; lastY = pos.y;
+  sigHasContent = true;
+  document.getElementById('sigWrap')?.classList.add('has-sig');
+  updateSubmitBtn();
+}
+
+function onSigEnd(e) { isDrawing = false; }
+
+function clearSignature() {
+  if (!sigCanvas) return;
+  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+  sigHasContent = false;
+  document.getElementById('sigWrap')?.classList.remove('has-sig');
+  updateSubmitBtn();
+}
+
+function toggleConsentCheck() {
+  sigConsented = !sigConsented;
+  const row = document.getElementById('consentCheckRow');
+  const cb  = document.getElementById('consentCb');
+  row?.classList.toggle('active', sigConsented);
+  if (cb) cb.textContent = sigConsented ? '✓' : '';
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submitConsentBtn');
+  if (!btn) return;
+  const license = document.getElementById('licenseInput')?.value.trim();
+  const ok = sigHasContent && sigConsented && license;
+  btn.disabled = !ok;
+}
+
+function submitConsent() {
+  if (!currentGuest) return;
+  const license = document.getElementById('licenseInput')?.value.trim();
+  currentGuest.consent_signed  = true;
+  currentGuest.consent_paper   = false;
+  currentGuest.consent_license = license;
+  showToast('Souhlas byl podepsán ✓');
+  goToDetail();
+}
+
+// ══════════════════════════════════════════════════════
+// CHECK-IN CONFIRM
+// ══════════════════════════════════════════════════════
+
+function confirmCheckin() {
+  if (!currentGuest || currentGuest.checked_in) return;
+  if (!currentGuest.consent_signed && !currentGuest.consent_paper) return;
+
+  currentGuest.checked_in = true;
+
+  // Flash success overlay
+  const overlay = document.getElementById('checkinSuccess');
+  document.getElementById('successGuestName').textContent =
+    `${currentGuest.first_name} ${currentGuest.last_name}`;
+  document.getElementById('successGuestSub').textContent =
+    currentGuest.companion
+      ? `Přišel(a) s doprovodem · ${currentGuest.rides.length} jízd${currentGuest.rides.length !== 1 ? (currentGuest.rides.length > 1 ? 'y':'') : 'a'}`
+      : `Bez doprovodu · ${currentGuest.rides.length} jízd${currentGuest.rides.length > 1 ? 'y' : currentGuest.rides.length === 1 ? 'a' : ''}`;
+
+  overlay.classList.add('show');
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    renderGuestDetail();
+    renderEventList();  // update progress bar
+    // Also update badge
+    const guests  = ALL_GUESTS[currentEvent.id] || [];
+    const checked = guests.filter(g => g.checked_in).length;
+    document.getElementById('checkinBadge').textContent = `${checked} / ${guests.length}`;
+  }, 2200);
+}
+
+// ══════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = `
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:12px 22px;border-radius:40px;
+    font-size:14px;font-weight:500;z-index:300;
+    animation:toastIn 0.3s ease;white-space:nowrap;
+    box-shadow:0 4px 20px rgba(24,22,18,0.25);
+  `;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  const style = document.createElement('style');
+  style.textContent = '@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+  document.head.appendChild(style);
+  setTimeout(() => t.remove(), 2800);
+}
+
+// ══════════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════════
+
+let checkinUser = null;
+
+function loadUsers() {
+  // Try localStorage first (synced from admin.html)
+  try {
+    const stored = localStorage.getItem('eventUsers');
+    if (stored) return JSON.parse(stored);
+  } catch(e) {}
+  // Fallback: built-in defaults (same as admin.html)
+  return [
+    { id:1, email:'admin@event.cz',   pass:'heslo123', name:'Jan Novák',       initials:'JN', role:'super_admin', checkin_access:true  },
+    { id:2, email:'manager@event.cz', pass:'spravce1', name:'Eva Procházková', initials:'EP', role:'manager',     checkin_access:true  },
+    { id:3, email:'viewer@event.cz',  pass:'nahled1',  name:'Tomáš Blažek',   initials:'TB', role:'viewer',      checkin_access:false },
+    { id:4, email:'hostess@event.cz', pass:'checkin1', name:'Petra Hosteska', initials:'PH', role:'viewer',      checkin_access:true  },
+  ];
+}
+
+function doCheckinLogin() {
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  const users = loadUsers();
+  const user  = users.find(u => u.email === email && u.pass === pass);
+
+  if (!user) {
+    errEl.textContent = 'Nesprávný e-mail nebo heslo.';
+    return;
+  }
+  if (!user.checkin_access) {
+    errEl.textContent = 'Váš účet nemá přístup do Check-in aplikace.';
+    return;
+  }
+
+  checkinUser = user;
+  document.getElementById('loginScreen').style.display = 'none';
+  renderEventList();
+}
+
+function doCheckinLogout() {
+  checkinUser = null;
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPass').value  = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginScreen').style.display = 'flex';
+  // Reset to event list
+  showScreen('screenEvents');
+}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+
+// Show logout button in event list topbar
+document.addEventListener('DOMContentLoaded', () => {
+  // Login handlers
+  document.getElementById('loginBtn').addEventListener('click', doCheckinLogin);
+  document.getElementById('loginPass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doCheckinLogin();
+  });
+
+  // Add logout to event list topbar
+  const topbar = document.querySelector('#screenEvents .topbar');
+  if (topbar) {
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'topbar-back';
+    logoutBtn.title = 'Odhlásit se';
+    logoutBtn.textContent = '↩';
+    logoutBtn.style.marginLeft = 'auto';
+    logoutBtn.addEventListener('click', doCheckinLogout);
+    topbar.appendChild(logoutBtn);
+  }
+});
+</script>
+</body>
+</html>

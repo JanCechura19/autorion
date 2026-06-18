@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registrace — PPF Automotive Experience 2025</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0e0d0b;
+    --paper: #f7f4ef;
+    --cream: #ede9e1;
+    --warm: #d6cfc3;
+    --gold: #b8924a;
+    --gold-light: #e8d9bc;
+    --muted: #8a8070;
+    --red: #9b3a2a;
+    --green: #2d5a3d;
+    --green-bg: #eaf2ec;
+    --radius: 2px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE TEXTURE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ── LAYOUT ── */
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 80px 40px 120px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    margin-bottom: 72px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .header-eyebrow {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header-eyebrow::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gold-light);
+    max-width: 80px;
+  }
+
+  .header-title {
+    font-size: clamp(42px, 7vw, 72px);
+    font-weight: 300;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    color: var(--ink);
+  }
+  .header-title em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .header-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid var(--warm);
+    border-bottom: 1px solid var(--warm);
+    padding: 16px 0;
+    margin-top: 32px;
+  }
+  .meta-item {
+    padding: 4px 0;
+  }
+  .meta-item:first-child {
+    border-right: 1px solid var(--warm);
+    padding-right: 24px;
+  }
+  .meta-item:last-child {
+    padding-left: 24px;
+  }
+  .meta-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .meta-value {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--ink);
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 48px 0 36px;
+    color: var(--muted);
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--warm);
+  }
+  .divider-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* ── FORM ── */
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    animation: fadeUp 0.9s 0.15s ease both;
+  }
+
+  .form-section {
+    margin-bottom: 52px;
+  }
+
+  .form-section-title {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .form-section-title .num {
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--gold-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+
+  /* Field */
+  .field {
+    position: relative;
+    margin-bottom: 32px;
+  }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-label {
+    display: block;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    transition: color 0.2s;
+  }
+  .field:focus-within .field-label { color: var(--ink); }
+
+  .field-input,
+  .field-select {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--warm);
+    border-radius: 0;
+    padding: 10px 0 12px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.25s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .field-input::placeholder {
+    color: var(--warm);
+    font-style: italic;
+  }
+  .field-input:focus,
+  .field-select:focus { border-bottom-color: var(--ink); }
+  .field-input.error,
+  .field-select.error { border-bottom-color: var(--red); }
+
+  /* Underline animation */
+  .field-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: var(--ink);
+    width: 0;
+    transition: width 0.3s ease;
+  }
+  .field:focus-within .field-line { width: 100%; }
+
+  /* Select arrow */
+  .select-wrap {
+    position: relative;
+  }
+  .select-wrap::after {
+    content: '↓';
+    position: absolute;
+    right: 0;
+    bottom: 14px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    pointer-events: none;
+    transition: color 0.2s, transform 0.2s;
+  }
+  .select-wrap:focus-within::after {
+    color: var(--ink);
+    transform: rotate(180deg);
+  }
+
+  /* Salutation pills */
+  .salutation-group {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0 12px;
+    border-bottom: 1px solid var(--warm);
+    position: relative;
+  }
+  .salutation-label {
+    display: none;
+  }
+  .salutation-pill {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .salutation-pill input[type="radio"] {
+    display: none;
+  }
+  .salutation-pill-label {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--warm);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 2px 14px;
+    border: 1px solid transparent;
+    border-radius: 40px;
+    line-height: 1.3;
+  }
+  .salutation-pill input:checked + .salutation-pill-label {
+    color: var(--ink);
+    border-color: var(--warm);
+    background: var(--cream);
+  }
+  .salutation-pill:hover .salutation-pill-label { color: var(--ink); }
+
+  /* Grid 2col */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  /* ── SLOT SECTION ── */
+  .slot-builder {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .slot-entry {
+    background: var(--cream);
+    border: 1px solid var(--warm);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    position: relative;
+    animation: fadeUp 0.3s ease both;
+  }
+  .slot-entry-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .slot-entry-num {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .slot-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 4px 8px;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .slot-remove:hover { color: var(--red); }
+
+  .slot-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .slot-field { display: flex; flex-direction: column; gap: 8px; }
+  .slot-field label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .slot-field select {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--warm);
+    padding: 8px 24px 10px 0;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--ink);
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    width: 100%;
+    position: relative;
+  }
+  .slot-field select:focus { border-bottom-color: var(--ink); }
+  .slot-field select:disabled { color: var(--warm); cursor: not-allowed; }
+  .slot-select-wrap { position: relative; }
+  .slot-select-wrap::after {
+    content: '↓';
+    position: absolute;
+    right: 0;
+    bottom: 12px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .slot-conflict {
+    margin-top: 10px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    display: none;
+  }
+  .slot-conflict.visible { display: block; }
+
+  .add-slot-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: 1px dashed var(--warm);
+    border-radius: var(--radius);
+    padding: 16px 22px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 17px;
+    font-style: italic;
+    color: var(--muted);
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s;
+  }
+  .add-slot-btn:hover { border-color: var(--gold-light); color: var(--ink); }
+  .add-slot-btn .plus {
+    width: 22px; height: 22px;
+    border: 1px solid var(--warm);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+  .add-slot-btn:hover .plus { border-color: var(--gold); color: var(--gold); }
+  .add-slot-btn.hidden { display: none; }
+
+  .slots-note {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* ── GDPR ── */
+  .gdpr-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 24px;
+    background: var(--cream);
+    border: 1px solid var(--warm);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .gdpr-wrap:hover { border-color: var(--gold-light); }
+  .gdpr-cb-wrap {
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .gdpr-cb {
+    display: none;
+  }
+  .gdpr-custom-cb {
+    width: 20px; height: 20px;
+    border: 1px solid var(--warm);
+    background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .gdpr-cb:checked ~ * .gdpr-custom-cb,
+  .gdpr-custom-cb.checked {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .gdpr-check-icon {
+    color: var(--paper);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    font-family: 'Geist Mono', monospace;
+  }
+  .gdpr-custom-cb.checked .gdpr-check-icon { opacity: 1; }
+  .gdpr-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .gdpr-text a {
+    color: var(--gold);
+    text-decoration: underline;
+    text-decoration-color: var(--gold-light);
+    text-underline-offset: 3px;
+  }
+  .gdpr-error {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    margin-top: 8px;
+    display: none;
+  }
+  .gdpr-error.visible { display: block; }
+
+  /* ── SUBMIT BUTTON ── */
+  .submit-wrap {
+    margin-top: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .submit-btn {
+    position: relative;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 18px 52px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    overflow: hidden;
+    transition: opacity 0.2s;
+    border-radius: var(--radius);
+  }
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gold);
+    transform: translateX(-101%);
+    transition: transform 0.4s cubic-bezier(0.77, 0, 0.18, 1);
+  }
+  .submit-btn:hover::before { transform: translateX(0); }
+  .submit-btn span { position: relative; z-index: 1; }
+  .submit-note {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── SUCCESS STATE ── */
+  .success-screen {
+    display: none;
+    text-align: center;
+    padding: 80px 0;
+    animation: fadeUp 0.6s ease both;
+  }
+  .success-screen.visible { display: block; }
+  .success-icon {
+    width: 64px; height: 64px;
+    border: 1px solid var(--gold-light);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 32px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 24px;
+    color: var(--gold);
+  }
+  .success-title {
+    font-size: 42px;
+    font-weight: 300;
+    margin-bottom: 16px;
+  }
+  .success-title em { font-style: italic; color: var(--gold); }
+  .success-text {
+    font-size: 18px;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 440px;
+    margin: 0 auto 40px;
+  }
+  .success-summary {
+    background: var(--cream);
+    border: 1px solid var(--warm);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    text-align: left;
+    max-width: 440px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--warm);
+  }
+  .summary-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .summary-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+    padding-top: 2px;
+  }
+  .summary-value { text-align: right; font-weight: 400; }
+
+  /* ── ERROR MSG ── */
+  .field-error {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    margin-top: 6px;
+    display: none;
+  }
+  .field-error.visible { display: block; }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    .page-wrap { padding: 48px 24px 80px; }
+    .field-row { grid-template-columns: 1fr; gap: 0; }
+    .slot-fields { grid-template-columns: 1fr; gap: 16px; }
+    .header-meta { grid-template-columns: 1fr; }
+    .meta-item:first-child { border-right: none; border-bottom: 1px solid var(--warm); padding-right: 0; padding-bottom: 12px; margin-bottom: 12px; }
+    .meta-item:last-child { padding-left: 0; }
+  }
+</style>
+
+<style>
+  /* ── LANGUAGE SWITCHER ── */
+  .lang-switcher {
+    position: fixed;
+    top: 24px;
+    right: 32px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--cream);
+    border: 1px solid var(--warm);
+    border-radius: 40px;
+    padding: 3px;
+    box-shadow: 0 2px 12px rgba(14,13,11,0.08);
+  }
+  .lang-btn {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 5px 14px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 40px;
+    transition: all 0.2s;
+  }
+  .lang-btn.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .lang-btn:not(.active):hover {
+    color: var(--ink);
+  }
+
+  @media (max-width: 600px) {
+    .lang-switcher { top: 16px; right: 16px; }
+  }
+</style>
+
+</head>
+<body>
+
+<!-- LANGUAGE SWITCHER -->
+<div class="lang-switcher">
+  <button class="lang-btn active" id="btnCZ" onclick="setLang('cs')">CZE</button>
+  <button class="lang-btn"        id="btnEN" onclick="setLang('en')">ENG</button>
+</div>
+
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-eyebrow" data-i18n="eyebrow">Registrace</div>
+    <h1 class="header-title">PPF Automotive<br><em>Experience 2025</em></h1>
+    <div class="header-meta">
+      <div class="meta-item">
+        <span class="meta-label" data-i18n="metaDate">Datum</span>
+        <span class="meta-value">14.–15. června 2025</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label" data-i18n="metaLocation">Místo</span>
+        <span class="meta-value">Polygon Sosnová, Česká Lípa</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- FORM -->
+  <form class="form" id="regForm" onsubmit="handleSubmit(event)" novalidate>
+
+    <!-- 1. PERSONAL INFO -->
+    <div class="form-section">
+      <div class="form-section-title">
+        <span class="num">1</span>
+        <span data-i18n="sectionPersonal">Osobní údaje</span>
+      </div>
+
+      <!-- Salutation -->
+      <div class="field">
+        <span class="field-label" data-i18n="labelSalutation">Oslovení</span>
+        <div class="salutation-group" id="salutationGroup">
+          <label class="salutation-pill">
+            <input type="radio" name="salutation" value="pan" required>
+            <span class="salutation-pill-label" data-i18n="salMr">Pan</span>
+          </label>
+          <label class="salutation-pill">
+            <input type="radio" name="salutation" value="pani">
+            <span class="salutation-pill-label" data-i18n="salMrs">Paní</span>
+          </label>
+          <label class="salutation-pill">
+            <input type="radio" name="salutation" value="slecna">
+            <span class="salutation-pill-label" data-i18n="salMs">Slečna</span>
+          </label>
+        </div>
+        <div class="field-error" id="salutationError" data-i18n="errSalutation">Vyberte prosím oslovení.</div>
+      </div>
+
+      <!-- First + Last name -->
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="firstName" data-i18n="labelFirstName">Jméno</label>
+          <input class="field-input" id="firstName" type="text"
+            data-placeholder-cs="Jan" data-placeholder-en="John"
+            placeholder="Jan" autocomplete="given-name">
+          <div class="field-line"></div>
+          <div class="field-error" id="firstNameError" data-i18n="errFirstName">Zadejte prosím jméno.</div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="lastName" data-i18n="labelLastName">Příjmení</label>
+          <input class="field-input" id="lastName" type="text"
+            data-placeholder-cs="Novák" data-placeholder-en="Smith"
+            placeholder="Novák" autocomplete="family-name">
+          <div class="field-line"></div>
+          <div class="field-error" id="lastNameError" data-i18n="errLastName">Zadejte prosím příjmení.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="divider">
+      <span class="divider-label" data-i18n="dividerRides">Testovací jízdy</span>
+    </div>
+
+    <!-- 2. JÍZDY / ČASOVÉ OKNO -->
+    <div class="form-section" id="section-rides">
+      <div class="form-section-title">
+        <span class="num">2</span>
+        <span data-i18n="sectionRides">Rezervace jízd</span>
+        <span style="font-weight:300;color:var(--muted);font-size:9px;letter-spacing:0.1em;margin-left:4px;" data-i18n="optional">— VOLITELNÉ</span>
+      </div>
+
+      <!-- DRIVES mode -->
+      <div id="drivesSection">
+        <div class="slot-builder" id="slotBuilder"></div>
+        <button type="button" class="add-slot-btn" id="addSlotBtn" onclick="addSlot()">
+          <span class="plus">+</span>
+          <span data-i18n="addRideBtn">Přidat testovací jízdu</span>
+        </button>
+        <div class="slots-note" id="slotsNote" data-i18n="slotsNote">Můžete rezervovat až 3 jízdy.</div>
+      </div>
+
+      <!-- WINDOWS mode -->
+      <div id="windowsSection" style="display:none;">
+        <div class="field">
+          <label class="field-label" id="windowLabel">Čas příchodu</label>
+          <div class="select-wrap">
+            <select class="field-select" id="selectedWindow">
+              <option value="">— vyberte časový blok —</option>
+            </select>
+          </div>
+          <div class="field-error" id="windowError">Vyberte prosím čas příchodu.</div>
+        </div>
+        <div id="windowCapacityNote" style="font-family:'Geist Mono',monospace;font-size:10px;color:var(--muted);margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="divider">
+      <span class="divider-label" data-i18n="dividerConsent">Souhlas</span>
+    </div>
+
+    <!-- 3. GDPR -->
+    <div class="form-section">
+      <div class="form-section-title">
+        <span class="num">3</span>
+        <span data-i18n="sectionGdpr">Ochrana osobních údajů</span>
+      </div>
+
+      <div class="gdpr-wrap" onclick="toggleGdpr()">
+        <div class="gdpr-cb-wrap">
+          <div class="gdpr-custom-cb" id="gdprCb">
+            <span class="gdpr-check-icon">✓</span>
+          </div>
+        </div>
+        <div>
+          <div class="gdpr-text" id="gdprText">
+            Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce PPF Automotive Experience 2025. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" data-i18n="gdprLink">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.
+          </div>
+          <div class="gdpr-error" id="gdprError" data-i18n="errGdpr">Souhlas se zpracováním osobních údajů je povinný.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBMIT -->
+    <div class="submit-wrap">
+      <button type="submit" class="submit-btn">
+        <span data-i18n="submitBtn">Odeslat registraci</span>
+      </button>
+      <div class="submit-note" data-i18n="submitNote">Po odeslání obdržíte potvrzení e-mailem</div>
+    </div>
+
+  </form>
+
+  <!-- SUCCESS -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">✓</div>
+    <div class="success-title" id="successTitle">Registrace<br><em>přijata</em></div>
+    <p class="success-text" id="successText">Děkujeme, <span id="successName"></span>. Potvrzení registrace jsme odeslali na Váš e-mail. Těšíme se na setkání.</p>
+    <div class="success-summary" id="successSummary"></div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════════════════════
+
+let currentLang = 'cs';
+
+const T = {
+  cs: {
+    // Page title
+    pageTitle:       'Registrace — PPF Automotive Experience 2025',
+    // Header
+    eyebrow:         'Registrace',
+    metaDate:        'Datum',
+    metaLocation:    'Místo',
+    // Section titles
+    sectionPersonal: 'Osobní údaje',
+    sectionRides:    'Rezervace jízd',
+    sectionGdpr:     'Ochrana osobních údajů',
+    optional:        '— VOLITELNÉ',
+    // Field labels
+    labelSalutation: 'Oslovení',
+    labelFirstName:  'Jméno',
+    labelLastName:   'Příjmení',
+    // Salutation options
+    salMr:   'Pan',
+    salMrs:  'Paní',
+    salMs:   'Slečna',
+    // Dividers
+    dividerRides:    'Testovací jízdy',
+    dividerConsent:  'Souhlas',
+    // Slot section
+    addRideBtn: 'Přidat testovací jízdu',
+    slotsNote:  'Můžete rezervovat až 3 jízdy.',
+    slotsMax:   'Dosáhli jste maximálního počtu jízd (3).',
+    slotRemain1:'Můžete přidat 1 další jízdu.',
+    slotRemain: (n) => `Můžete přidat ${n} další jízdy.`,
+    slotOrdinal: ['První','Druhá','Třetí'],
+    slotRemove:  'Odebrat',
+    slotVehicleLabel: 'Vozidlo',
+    slotTimeLabel:    'Časový slot',
+    slotVehiclePh:    '— vyberte vozidlo —',
+    slotTimePh:       '— vyberte čas —',
+    slotBooked:       '(obsazeno)',
+    slotConflict:     '(koliduje)',
+    slotConflictMsg:  '⚠ Tento čas koliduje s jinou Vaší rezervací.',
+    // GDPR
+    gdprText:   'Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce PPF Automotive Experience 2025. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.',
+    gdprLink:   'Zásadami ochrany osobních údajů',
+    // Validation errors
+    errSalutation: 'Vyberte prosím oslovení.',
+    errFirstName:  'Zadejte prosím jméno.',
+    errLastName:   'Zadejte prosím příjmení.',
+    errGdpr:       'Souhlas se zpracováním osobních údajů je povinný.',
+    // Submit
+    submitBtn:  'Odeslat registraci',
+    submitNote: 'Po odeslání obdržíte potvrzení e-mailem',
+    // Success
+    successTitle:   'Registrace<br><em>přijata</em>',
+    successText:    (name) => `Děkujeme, ${name}. Potvrzení registrace jsme odeslali na Váš e-mail. Těšíme se na setkání.`,
+    // Summary labels
+    summaryName:    'Jméno',
+    summaryRides:   'Jízdy',
+    summaryEvent:   'Akce',
+    summaryNoRides: 'Bez rezervace',
+    // Salutation labels in summary
+    salLabels: { pan:'Pan', pani:'Paní', slecna:'Slečna' },
+  },
+
+  en: {
+    pageTitle:       'Registration — PPF Automotive Experience 2025',
+    eyebrow:         'Registration',
+    metaDate:        'Date',
+    metaLocation:    'Venue',
+    sectionPersonal: 'Personal details',
+    sectionRides:    'Test drive booking',
+    sectionGdpr:     'Data protection',
+    optional:        '— OPTIONAL',
+    labelSalutation: 'Title',
+    labelFirstName:  'First name',
+    labelLastName:   'Last name',
+    salMr:   'Mr.',
+    salMrs:  'Mrs.',
+    salMs:   'Ms.',
+    dividerRides:    'Test drives',
+    dividerConsent:  'Consent',
+    addRideBtn: 'Add a test drive',
+    slotsNote:  'You may book up to 3 drives.',
+    slotsMax:   'You have reached the maximum number of drives (3).',
+    slotRemain1:'You may add 1 more drive.',
+    slotRemain: (n) => `You may add ${n} more drives.`,
+    slotOrdinal: ['First','Second','Third'],
+    slotRemove:  'Remove',
+    slotVehicleLabel: 'Vehicle',
+    slotTimeLabel:    'Time slot',
+    slotVehiclePh:    '— select a vehicle —',
+    slotTimePh:       '— select a time —',
+    slotBooked:       '(unavailable)',
+    slotConflict:     '(conflict)',
+    slotConflictMsg:  '⚠ This time slot conflicts with another booking.',
+    gdprText:   'I consent to the processing of my personal data by PPF Group N.V. for the purpose of organising and running the PPF Automotive Experience 2025 event. I acknowledge that my personal data (name, contact information) will be processed in accordance with the <a href="#" onclick="event.stopPropagation()">Privacy Policy</a> and will not be shared with third parties without my consent. I give this consent voluntarily and may withdraw it at any time.',
+    gdprLink:   'Privacy Policy',
+    errSalutation: 'Please select a title.',
+    errFirstName:  'Please enter your first name.',
+    errLastName:   'Please enter your last name.',
+    errGdpr:       'Consent to data processing is required.',
+    submitBtn:  'Submit registration',
+    submitNote: 'You will receive a confirmation by email',
+    successTitle:   'Registration<br><em>confirmed</em>',
+    successText:    (name) => `Thank you, ${name}. We have sent your registration confirmation to your email. We look forward to seeing you.`,
+    summaryName:    'Name',
+    summaryRides:   'Drives',
+    summaryEvent:   'Event',
+    summaryNoRides: 'No booking',
+    salLabels: { pan:'Mr.', pani:'Mrs.', slecna:'Ms.' },
+  },
+};
+
+function t(key) { return T[currentLang][key] ?? T['cs'][key] ?? key; }
+
+function setLang(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.title = t('pageTitle');
+
+  // Toggle active button
+  document.getElementById('btnCZ').classList.toggle('active', lang === 'cs');
+  document.getElementById('btnEN').classList.toggle('active', lang === 'en');
+
+  // Update all data-i18n elements
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (typeof val === 'string') el.innerHTML = val;
+  });
+
+  // Update placeholders
+  document.querySelectorAll('[data-placeholder-cs]').forEach(el => {
+    el.placeholder = lang === 'cs'
+      ? el.getAttribute('data-placeholder-cs')
+      : el.getAttribute('data-placeholder-en');
+  });
+
+  // Update GDPR text block (has HTML inside)
+  const gdprEl = document.getElementById('gdprText');
+  if (gdprEl) gdprEl.innerHTML = t('gdprText');
+
+  // Re-render dynamic parts
+  renderSlots();
+
+  // Update slots note
+  updateSlotsNote();
+}
+
+function updateSlotsNote() {
+  const note = document.getElementById('slotsNote');
+  if (!note) return;
+  const rem = MAX_SLOTS - slots.length;
+  if (slots.length >= MAX_SLOTS) {
+    note.textContent = t('slotsMax');
+  } else if (rem === 1) {
+    note.textContent = t('slotRemain1');
+  } else {
+    note.textContent = t('slotRemain')(rem);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MOCK CONFIG
+// ═══════════════════════════════════════════════════════
+
+// Registration type: 'drives' | 'windows'
+// In production this comes from the API based on the event
+const REGISTRATION_TYPE = 'drives'; // change to 'windows' to test time windows mode
+
+// ── DRIVES config ──
+const VEHICLES = [
+  { id: 1, name: 'Tesla Model S Plaid' },
+  { id: 2, name: 'Porsche Taycan Turbo S' },
+  { id: 3, name: 'Mercedes EQS 580 4MATIC' },
+  { id: 4, name: 'BMW iX M60' },
+];
+const SLOT_START = '10:00';
+const SLOT_END   = '19:00';
+const SLOT_STEP  = 15;
+const MAX_SLOTS  = 3;
+const BOOKED = {
+  1: new Set(['10:00–10:15','10:15–10:30','11:00–11:15']),
+  2: new Set(['10:00–10:15','12:30–12:45']),
+  3: new Set(['14:00–14:15','16:00–16:15']),
+  4: new Set(['10:00–10:15','18:00–18:15']),
+};
+
+// ── WINDOWS config ──
+const TIME_WINDOWS = [
+  { id: 1, label: 'Dopolední blok', from: '09:00', to: '12:00', capacity: 30, booked: 8 },
+  { id: 2, label: 'Odpolední blok', from: '13:00', to: '16:00', capacity: 30, booked: 15 },
+  { id: 3, label: 'Večerní blok',   from: '17:00', to: '19:00', capacity: 20, booked: 19 },
+];
+
+// Selected window (for 'windows' mode)
+let selectedWindowId = null;
+
+// ═══════════════════════════════════════════════════════
+// SLOT GENERATION
+// ═══════════════════════════════════════════════════════
+
+function allSlots() {
+  const slots = [];
+  const [sh,sm] = SLOT_START.split(':').map(Number);
+  const [eh,em] = SLOT_END.split(':').map(Number);
+  let t = sh*60+sm;
+  const end = eh*60+em;
+  while (t+SLOT_STEP<=end) {
+    const h=Math.floor(t/60),m=t%60,h2=Math.floor((t+SLOT_STEP)/60),m2=(t+SLOT_STEP)%60;
+    slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}–${String(h2).padStart(2,'0')}:${String(m2).padStart(2,'0')}`);
+    t+=SLOT_STEP;
+  }
+  return slots;
+}
+
+// ═══════════════════════════════════════════════════════
+// SLOT BUILDER STATE
+// ═══════════════════════════════════════════════════════
+
+let slots = [];
+let nextId = 0;
+let gdprChecked = false;
+
+function addSlot() {
+  if (slots.length>=MAX_SLOTS) return;
+  slots.push({ id:nextId++, vehicle_id:'', time_slot:'' });
+  renderSlots();
+}
+
+function removeSlot(id) {
+  slots = slots.filter(s=>s.id!==id);
+  renderSlots();
+}
+
+function renderSlots() {
+  const builder = document.getElementById('slotBuilder');
+  const addBtn  = document.getElementById('addSlotBtn');
+  const note    = document.getElementById('slotsNote');
+
+  builder.innerHTML = slots.map((s,i)=>buildSlotHtml(s,i)).join('');
+
+  slots.forEach(s => {
+    const vEl = document.getElementById(`vehicle-${s.id}`);
+    const tEl = document.getElementById(`time-${s.id}`);
+    if (vEl) vEl.addEventListener('change', ()=>{ s.vehicle_id=vEl.value; s.time_slot=''; updateTimeSelect(s); checkConflicts(); });
+    if (tEl) tEl.addEventListener('change', ()=>{ s.time_slot=tEl.value; checkConflicts(); });
+  });
+
+  slots.forEach(s=>{ if(s.vehicle_id) updateTimeSelect(s,true); });
+
+  addBtn.classList.toggle('hidden', slots.length>=MAX_SLOTS);
+  updateSlotsNote();
+}
+
+function buildSlotHtml(s,i) {
+  const ordinals = t('slotOrdinal');
+  const label = ordinals[i] || `${t('sectionRides')} ${i+1}`;
+  const vehicleOptions = VEHICLES.map(v=>`<option value="${v.id}" ${String(s.vehicle_id)===String(v.id)?'selected':''}>${v.name}</option>`).join('');
+  return `
+    <div class="slot-entry" id="slot-entry-${s.id}">
+      <div class="slot-entry-head">
+        <span class="slot-entry-num">${label}</span>
+        <button type="button" class="slot-remove" onclick="removeSlot(${s.id})"><span style="font-size:12px">×</span> ${t('slotRemove')}</button>
+      </div>
+      <div class="slot-fields">
+        <div class="slot-field">
+          <label>${t('slotVehicleLabel')}</label>
+          <div class="slot-select-wrap">
+            <select id="vehicle-${s.id}">
+              <option value="">${t('slotVehiclePh')}</option>
+              ${vehicleOptions}
+            </select>
+          </div>
+        </div>
+        <div class="slot-field">
+          <label>${t('slotTimeLabel')}</label>
+          <div class="slot-select-wrap">
+            <select id="time-${s.id}" ${!s.vehicle_id?'disabled':''}>
+              <option value="">${t('slotTimePh')}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="slot-conflict" id="conflict-${s.id}">${t('slotConflictMsg')}</div>
+    </div>`;
+}
+
+function updateTimeSelect(s, restoreValue) {
+  const tEl = document.getElementById(`time-${s.id}`); if(!tEl) return;
+  const booked   = BOOKED[s.vehicle_id] || new Set();
+  const usedTimes= new Set(slots.filter(x=>x.id!==s.id&&x.time_slot).map(x=>x.time_slot));
+  tEl.disabled = false;
+  tEl.innerHTML = `<option value="">${t('slotTimePh')}</option>` +
+    allSlots().map(slot=>{
+      const taken = booked.has(slot)||usedTimes.has(slot);
+      return `<option value="${slot}" ${taken?'disabled':''} ${restoreValue&&s.time_slot===slot?'selected':''}>${slot}${booked.has(slot)?' '+t('slotBooked'):usedTimes.has(slot)?' '+t('slotConflict'):''}</option>`;
+    }).join('');
+}
+
+function checkConflicts() {
+  slots.forEach(s=>{ if(s.vehicle_id) updateTimeSelect(s,true); });
+  slots.forEach(s=>{
+    const el=document.getElementById(`conflict-${s.id}`); if(!el) return;
+    const others=slots.filter(x=>x.id!==s.id&&x.time_slot).map(x=>x.time_slot);
+    el.classList.toggle('visible', !!(s.time_slot&&others.includes(s.time_slot)));
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// GDPR
+// ═══════════════════════════════════════════════════════
+
+function toggleGdpr() {
+  gdprChecked = !gdprChecked;
+  document.getElementById('gdprCb').classList.toggle('checked', gdprChecked);
+  document.getElementById('gdprError').classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════════════
+
+function showFieldError(id, show) { const el=document.getElementById(id); if(el) el.classList.toggle('visible',show); }
+
+function validate() {
+  let ok = true;
+  const sal = document.querySelector('input[name="salutation"]:checked');
+  // Update error messages to current lang before showing
+  document.getElementById('salutationError').textContent = t('errSalutation');
+  document.getElementById('firstNameError').textContent  = t('errFirstName');
+  document.getElementById('lastNameError').textContent   = t('errLastName');
+  document.getElementById('gdprError').textContent       = t('errGdpr');
+
+  showFieldError('salutationError',!sal); if(!sal) ok=false;
+  const fn = document.getElementById('firstName').value.trim();
+  document.getElementById('firstName').classList.toggle('error',!fn);
+  showFieldError('firstNameError',!fn); if(!fn) ok=false;
+  const ln = document.getElementById('lastName').value.trim();
+  document.getElementById('lastName').classList.toggle('error',!ln);
+  showFieldError('lastNameError',!ln); if(!ln) ok=false;
+  if (REGISTRATION_TYPE === 'windows') {
+    // Windows mode — window selection is required
+    if (!selectedWindowId) {
+      showFieldError('windowError', true);
+      ok = false;
+    }
+  } else {
+    // Drives mode — validate each slot
+    slots.forEach(s=>{
+      const vEl=document.getElementById('vehicle-'+s.id); const tEl=document.getElementById('time-'+s.id);
+      if(!s.vehicle_id){if(vEl)vEl.style.borderBottomColor='var(--red)';ok=false;}else{if(vEl)vEl.style.borderBottomColor='';}
+      if(!s.time_slot){if(tEl)tEl.style.borderBottomColor='var(--red)';ok=false;}else{if(tEl)tEl.style.borderBottomColor='';}
+    });
+  }
+  if(!gdprChecked){document.getElementById('gdprError').classList.add('visible');ok=false;}
+  return ok;
+}
+
+// ═══════════════════════════════════════════════════════
+// SUBMIT
+// ═══════════════════════════════════════════════════════
+
+function handleSubmit(e) {
+  e.preventDefault();
+  if (!validate()) return;
+
+  const sal = document.querySelector('input[name="salutation"]:checked').value;
+  const fn  = document.getElementById('firstName').value.trim();
+  const ln  = document.getElementById('lastName').value.trim();
+  const salLabel = (t('salLabels'))[sal] || sal;
+
+  // Mark booked slots
+  slots.forEach(s=>{
+    const b = BOOKED[s.vehicle_id] = BOOKED[s.vehicle_id]||new Set();
+    b.add(s.time_slot);
+  });
+
+  // Show success
+  document.getElementById('regForm').style.display='none';
+  document.querySelector('.header').style.display='none';
+  const success = document.getElementById('successScreen');
+  success.classList.add('visible');
+
+  // Update success screen texts
+  document.getElementById('successTitle').innerHTML = t('successTitle');
+  document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
+
+  let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
+  if (slots.length) {
+    const rideText = slots.map(s=>{
+      const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
+      return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;
+    }).join('<br><br>');
+    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="font-size:15px">${rideText}</span></div>`;
+  } else {
+    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="color:var(--muted);font-size:15px">${t('summaryNoRides')}</span></div>`;
+  }
+  summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryEvent')}</span><span class="summary-value" style="font-size:15px">14.–15. 6. 2025<br>Polygon Sosnová</span></div>`;
+  document.getElementById('successSummary').innerHTML=summaryHtml;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── Init registration mode + clear errors ──
+document.addEventListener('DOMContentLoaded', () => {
+  initRegistrationMode();
+
+  document.getElementById('firstName')?.addEventListener('input', function(){ this.classList.remove('error'); showFieldError('firstNameError',false); });
+  document.getElementById('lastName')?.addEventListener('input',  function(){ this.classList.remove('error'); showFieldError('lastNameError',false);  });
+  document.querySelectorAll('input[name="salutation"]').forEach(r=>r.addEventListener('change',()=>showFieldError('salutationError',false)));
+  document.getElementById('selectedWindow')?.addEventListener('change', function(){
+    selectedWindowId = this.value ? parseInt(this.value) : null;
+    updateWindowCapacityNote();
+    showFieldError('windowError', false);
+  });
+});
+
+function initRegistrationMode() {
+  if (REGISTRATION_TYPE === 'windows') {
+    // Hide drives section, show windows section
+    document.getElementById('drivesSection').style.display  = 'none';
+    document.getElementById('windowsSection').style.display = '';
+
+    // Populate window dropdown
+    const sel = document.getElementById('selectedWindow');
+    TIME_WINDOWS.forEach(w => {
+      const full    = w.capacity > 0 && w.booked >= w.capacity;
+      const avail   = w.capacity > 0 ? ` (${w.capacity - w.booked} volných míst)` : '';
+      const opt     = document.createElement('option');
+      opt.value     = w.id;
+      opt.textContent = `${w.label} · ${w.from}–${w.to}${avail}`;
+      if (full) { opt.disabled = true; opt.textContent += ' — PLNO'; }
+      sel.appendChild(opt);
+    });
+
+    // Update section title
+    const title = document.querySelector('#section-rides .form-section-title span[data-i18n="sectionRides"]');
+    if (title) title.textContent = 'Čas příchodu';
+    const optLabel = document.querySelector('#section-rides .form-section-title span[data-i18n="optional"]');
+    if (optLabel) optLabel.textContent = '';
+
+    // Update divider label
+    const divider = document.querySelector('.divider-label[data-i18n="dividerRides"]');
+    if (divider) divider.textContent = 'Čas příchodu';
+  }
+}
+
+function updateWindowCapacityNote() {
+  const note = document.getElementById('windowCapacityNote');
+  if (!note || !selectedWindowId) { if(note) note.textContent=''; return; }
+  const w = TIME_WINDOWS.find(w => w.id === selectedWindowId);
+  if (!w) return;
+  if (w.capacity > 0) {
+    const free = w.capacity - w.booked;
+    note.textContent = `Zbývá ${free} z ${w.capacity} míst`;
+    note.style.color = free <= 3 ? 'var(--red)' : 'var(--muted)';
+  } else {
+    note.textContent = '';
+  }
+}
+</script>
+</body>
+</html>
