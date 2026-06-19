@@ -694,8 +694,21 @@
 
 <div class="page-wrap">
 
+  <!-- LOADING -->
+  <div id="loadingScreen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;">
+    <div style="width:32px;height:32px;border:2px solid var(--gold-light);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Načítání…</div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg);}}</style>
+
+  <!-- LOAD ERROR -->
+  <div id="loadErrorScreen" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center;padding:0 24px;">
+    <div style="font-size:40px;">⚠️</div>
+    <div class="load-error-message" style="font-size:16px;color:var(--ink);max-width:420px;line-height:1.5;">Akci se nepodařilo načíst.</div>
+  </div>
+
   <!-- HEADER -->
-  <header class="header">
+  <header class="header" style="display:none;">
     <div class="header-eyebrow" data-i18n="eyebrow">Registrace</div>
     <h1 class="header-title">PPF Automotive<br><em>Experience 2025</em></h1>
     <div class="header-meta">
@@ -711,7 +724,7 @@
   </header>
 
   <!-- FORM -->
-  <form class="form" id="regForm" onsubmit="handleSubmit(event)" novalidate>
+  <form class="form" id="regForm" onsubmit="handleSubmit(event)" novalidate style="display:none;">
 
     <!-- 1. PERSONAL INFO -->
     <div class="form-section">
@@ -758,6 +771,16 @@
           <div class="field-line"></div>
           <div class="field-error" id="lastNameError" data-i18n="errLastName">Zadejte prosím příjmení.</div>
         </div>
+      </div>
+
+      <!-- Email -->
+      <div class="field">
+        <label class="field-label" for="email" data-i18n="labelEmail">E-mail</label>
+        <input class="field-input" id="email" type="email"
+          data-placeholder-cs="jan.novak@email.cz" data-placeholder-en="john.smith@email.com"
+          placeholder="jan.novak@email.cz" autocomplete="email">
+        <div class="field-line"></div>
+        <div class="field-error" id="emailError" data-i18n="errEmail">Zadejte prosím platný e-mail.</div>
       </div>
     </div>
 
@@ -870,6 +893,7 @@ const T = {
     labelSalutation: 'Oslovení',
     labelFirstName:  'Jméno',
     labelLastName:   'Příjmení',
+    labelEmail:      'E-mail',
     // Salutation options
     salMr:   'Pan',
     salMrs:  'Paní',
@@ -899,10 +923,14 @@ const T = {
     errSalutation: 'Vyberte prosím oslovení.',
     errFirstName:  'Zadejte prosím jméno.',
     errLastName:   'Zadejte prosím příjmení.',
+    errEmail:      'Zadejte prosím platný e-mail.',
     errGdpr:       'Souhlas se zpracováním osobních údajů je povinný.',
     // Submit
     submitBtn:  'Odeslat registraci',
+    submittingBtn: 'Odesílání…',
     submitNote: 'Po odeslání obdržíte potvrzení e-mailem',
+    errSlotTaken: 'Vybraný termín je již obsazen. Zkontrolujte prosím svůj výběr.',
+    errGeneric: 'Něco se pokazilo. Zkuste to prosím znovu.',
     // Success
     successTitle:   'Registrace<br><em>přijata</em>',
     successText:    (name) => `Děkujeme, ${name}. Potvrzení registrace jsme odeslali na Váš e-mail. Těšíme se na setkání.`,
@@ -927,6 +955,7 @@ const T = {
     labelSalutation: 'Title',
     labelFirstName:  'First name',
     labelLastName:   'Last name',
+    labelEmail:      'Email',
     salMr:   'Mr.',
     salMrs:  'Mrs.',
     salMs:   'Ms.',
@@ -951,9 +980,13 @@ const T = {
     errSalutation: 'Please select a title.',
     errFirstName:  'Please enter your first name.',
     errLastName:   'Please enter your last name.',
+    errEmail:      'Please enter a valid email address.',
     errGdpr:       'Consent to data processing is required.',
     submitBtn:  'Submit registration',
+    submittingBtn: 'Submitting…',
     submitNote: 'You will receive a confirmation by email',
+    errSlotTaken: 'The selected time slot is already taken. Please review your selection.',
+    errGeneric: 'Something went wrong. Please try again.',
     successTitle:   'Registration<br><em>confirmed</em>',
     successText:    (name) => `Thank you, ${name}. We have sent your registration confirmation to your email. We look forward to seeing you.`,
     summaryName:    'Name',
@@ -1014,40 +1047,127 @@ function updateSlotsNote() {
 }
 
 // ═══════════════════════════════════════════════════════
-// MOCK CONFIG
+// EVENT CONFIG (loaded from API)
 // ═══════════════════════════════════════════════════════
 
+const API_BASE = window.location.origin.includes('registration')
+  ? 'https://autorion.net/api'
+  : 'https://autorion.net/api';
+
+let EVENT_DATA = null;
+let EVENT_ID = null;
+let EVENT_SLUG = null;
+
 // Registration type: 'drives' | 'windows'
-// In production this comes from the API based on the event
-const REGISTRATION_TYPE = 'drives'; // change to 'windows' to test time windows mode
+let REGISTRATION_TYPE = 'drives';
 
 // ── DRIVES config ──
-const VEHICLES = [
-  { id: 1, name: 'Tesla Model S Plaid' },
-  { id: 2, name: 'Porsche Taycan Turbo S' },
-  { id: 3, name: 'Mercedes EQS 580 4MATIC' },
-  { id: 4, name: 'BMW iX M60' },
-];
-const SLOT_START = '10:00';
-const SLOT_END   = '19:00';
-const SLOT_STEP  = 15;
-const MAX_SLOTS  = 3;
-const BOOKED = {
-  1: new Set(['10:00–10:15','10:15–10:30','11:00–11:15']),
-  2: new Set(['10:00–10:15','12:30–12:45']),
-  3: new Set(['14:00–14:15','16:00–16:15']),
-  4: new Set(['10:00–10:15','18:00–18:15']),
-};
+let VEHICLES = [];
+let SLOT_START = '10:00';
+let SLOT_END   = '19:00';
+let SLOT_STEP  = 15;
+let MAX_SLOTS  = 3;
+let BOOKED = {};
 
 // ── WINDOWS config ──
-const TIME_WINDOWS = [
-  { id: 1, label: 'Dopolední blok', from: '09:00', to: '12:00', capacity: 30, booked: 8 },
-  { id: 2, label: 'Odpolední blok', from: '13:00', to: '16:00', capacity: 30, booked: 15 },
-  { id: 3, label: 'Večerní blok',   from: '17:00', to: '19:00', capacity: 20, booked: 19 },
-];
+let TIME_WINDOWS = [];
 
 // Selected window (for 'windows' mode)
 let selectedWindowId = null;
+
+function getEventSlugFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('event');
+}
+
+async function loadEventConfig() {
+  const slug = getEventSlugFromUrl();
+  EVENT_SLUG = slug;
+  const errorScreen = document.getElementById('loadErrorScreen');
+  const loadingScreen = document.getElementById('loadingScreen');
+  const formEl = document.getElementById('regForm');
+  const headerEl = document.querySelector('.header');
+
+  if (!slug) {
+    showLoadError('Chybí parametr akce v adrese (?event=...).');
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/events/public/${slug}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        showLoadError('Tato akce nebyla nalezena nebo již nepřijímá registrace.');
+      } else {
+        showLoadError('Nepodařilo se načíst informace o akci. Zkuste to prosím později.');
+      }
+      return false;
+    }
+    const event = await res.json();
+    EVENT_DATA = event;
+    EVENT_ID = event.id;
+
+    REGISTRATION_TYPE = event.registration_type || 'drives';
+    VEHICLES = (event.vehicles || []).map(v => ({ id: v.id, name: v.name }));
+    SLOT_START = event.slot_start || '10:00';
+    SLOT_END   = event.slot_end   || '19:00';
+    SLOT_STEP  = event.slot_duration || 15;
+    TIME_WINDOWS = (event.time_windows || []).map(w => ({
+      id: w.id, label: w.label, from: w.from, to: w.to,
+      capacity: w.capacity || 0, booked: 0
+    }));
+
+    // Load current availability (booked slots/windows)
+    try {
+      const availRes = await fetch(`${API_BASE}/events/public/${slug}/availability`);
+      if (availRes.ok) {
+        const avail = await availRes.json();
+        BOOKED = {};
+        Object.entries(avail.booked_by_vehicle || {}).forEach(([vid, slotsArr]) => {
+          BOOKED[vid] = new Set(slotsArr);
+        });
+        Object.entries(avail.booked_by_window || {}).forEach(([wid, count]) => {
+          const w = TIME_WINDOWS.find(w => String(w.id) === String(wid));
+          if (w) w.booked = count;
+        });
+      }
+    } catch (e) {
+      // Availability is non-critical; proceed without it
+      console.warn('Nepodařilo se načíst obsazenost:', e);
+    }
+
+    // Populate header with real event data
+    const titleEl = document.querySelector('.header-title');
+    if (titleEl) titleEl.textContent = event.name || '';
+    const dateEl = document.querySelector('.meta-item:nth-child(1) .meta-value');
+    if (dateEl) dateEl.textContent = formatEventDate(event.date_from, event.date_to);
+    const locEl = document.querySelector('.meta-item:nth-child(2) .meta-value');
+    if (locEl) locEl.textContent = event.location || '';
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    showLoadError('Nepodařilo se připojit k serveru. Zkontrolujte prosím připojení a zkuste to znovu.');
+    return false;
+  }
+}
+
+function formatEventDate(from, to) {
+  if (!from) return '';
+  if (to && to !== from) return `${from} – ${to}`;
+  return from;
+}
+
+function showLoadError(message) {
+  const loadingScreen = document.getElementById('loadingScreen');
+  const errorScreen = document.getElementById('loadErrorScreen');
+  if (loadingScreen) loadingScreen.style.display = 'none';
+  if (errorScreen) {
+    errorScreen.style.display = 'flex';
+    const msgEl = errorScreen.querySelector('.load-error-message');
+    if (msgEl) msgEl.textContent = message;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // SLOT GENERATION
@@ -1183,6 +1303,7 @@ function validate() {
   document.getElementById('salutationError').textContent = t('errSalutation');
   document.getElementById('firstNameError').textContent  = t('errFirstName');
   document.getElementById('lastNameError').textContent   = t('errLastName');
+  document.getElementById('emailError').textContent      = t('errEmail');
   document.getElementById('gdprError').textContent       = t('errGdpr');
 
   showFieldError('salutationError',!sal); if(!sal) ok=false;
@@ -1192,6 +1313,10 @@ function validate() {
   const ln = document.getElementById('lastName').value.trim();
   document.getElementById('lastName').classList.toggle('error',!ln);
   showFieldError('lastNameError',!ln); if(!ln) ok=false;
+  const emailVal = document.getElementById('email').value.trim();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal);
+  document.getElementById('email').classList.toggle('error',!emailOk);
+  showFieldError('emailError',!emailOk); if(!emailOk) ok=false;
   if (REGISTRATION_TYPE === 'windows') {
     // Windows mode — window selection is required
     if (!selectedWindowId) {
@@ -1214,52 +1339,145 @@ function validate() {
 // SUBMIT
 // ═══════════════════════════════════════════════════════
 
-function handleSubmit(e) {
+async function handleSubmit(e) {
   e.preventDefault();
   if (!validate()) return;
 
   const sal = document.querySelector('input[name="salutation"]:checked').value;
   const fn  = document.getElementById('firstName').value.trim();
   const ln  = document.getElementById('lastName').value.trim();
+  const emailVal = document.getElementById('email').value.trim();
   const salLabel = (t('salLabels'))[sal] || sal;
 
-  // Mark booked slots
-  slots.forEach(s=>{
-    const b = BOOKED[s.vehicle_id] = BOOKED[s.vehicle_id]||new Set();
-    b.add(s.time_slot);
+  const bookings = slots.map(s => {
+    const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
+    return { vehicle_id: s.vehicle_id ? parseInt(s.vehicle_id) : null, vehicle_name: v?.name || null, time_slot: s.time_slot };
   });
 
-  // Show success
-  document.getElementById('regForm').style.display='none';
-  document.querySelector('.header').style.display='none';
-  const success = document.getElementById('successScreen');
-  success.classList.add('visible');
+  const payload = {
+    first_name: fn,
+    last_name: ln,
+    email: emailVal,
+    event_id: EVENT_ID,
+    salutation: sal,
+    companion: false,
+    status: 'confirmed',
+    consent_signed: true,
+    bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
+    window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null
+  };
 
-  // Update success screen texts
-  document.getElementById('successTitle').innerHTML = t('successTitle');
-  document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
+  const submitBtn = document.querySelector('.submit-btn');
+  const submitNote = document.querySelector('.submit-note');
+  const originalBtnHtml = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.style.opacity = '0.6';
+  submitBtn.innerHTML = '<span>' + t('submittingBtn') + '</span>';
+  hideSubmitError();
 
-  let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
-  if (slots.length) {
-    const rideText = slots.map(s=>{
-      const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
-      return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;
-    }).join('<br><br>');
-    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="font-size:15px">${rideText}</span></div>`;
-  } else {
-    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="color:var(--muted);font-size:15px">${t('summaryNoRides')}</span></div>`;
+  try {
+    const res = await fetch(`${API_BASE}/events/${EVENT_ID}/guests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        showSubmitError(errData.detail || t('errSlotTaken'));
+        // Refresh availability so the user picks a free slot
+        await refreshAvailability();
+      } else {
+        showSubmitError(errData.detail || t('errGeneric'));
+      }
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '';
+      submitBtn.innerHTML = originalBtnHtml;
+      return;
+    }
+
+    // Success
+    document.getElementById('regForm').style.display='none';
+    document.querySelector('.header').style.display='none';
+    const success = document.getElementById('successScreen');
+    success.classList.add('visible');
+
+    document.getElementById('successTitle').innerHTML = t('successTitle');
+    document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
+
+    let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
+    if (slots.length) {
+      const rideText = slots.map(s=>{
+        const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
+        return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;
+      }).join('<br><br>');
+      summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="font-size:15px">${rideText}</span></div>`;
+    } else {
+      summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="color:var(--muted);font-size:15px">${t('summaryNoRides')}</span></div>`;
+    }
+    const eventDateStr = EVENT_DATA ? formatEventDate(EVENT_DATA.date_from, EVENT_DATA.date_to) : '';
+    const eventLocStr = EVENT_DATA ? (EVENT_DATA.location || '') : '';
+    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryEvent')}</span><span class="summary-value" style="font-size:15px">${eventDateStr}<br>${eventLocStr}</span></div>`;
+    document.getElementById('successSummary').innerHTML=summaryHtml;
+    window.scrollTo({top:0,behavior:'smooth'});
+  } catch (err) {
+    console.error(err);
+    showSubmitError(t('errGeneric'));
+    submitBtn.disabled = false;
+    submitBtn.style.opacity = '';
+    submitBtn.innerHTML = originalBtnHtml;
   }
-  summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryEvent')}</span><span class="summary-value" style="font-size:15px">14.–15. 6. 2025<br>Polygon Sosnová</span></div>`;
-  document.getElementById('successSummary').innerHTML=summaryHtml;
-  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function refreshAvailability() {
+  if (!EVENT_SLUG) return;
+  try {
+    const availRes = await fetch(`${API_BASE}/events/public/${EVENT_SLUG}/availability`);
+    if (availRes.ok) {
+      const avail = await availRes.json();
+      BOOKED = {};
+      Object.entries(avail.booked_by_vehicle || {}).forEach(([vid, slotsArr]) => {
+        BOOKED[vid] = new Set(slotsArr);
+      });
+      slots.forEach(s=>{ if(s.vehicle_id) updateTimeSelect(s,true); });
+    }
+  } catch (e) { /* non-critical */ }
+}
+
+function showSubmitError(message) {
+  let el = document.getElementById('submitErrorBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'submitErrorBox';
+    el.style.cssText = 'margin-top:14px;padding:12px 16px;border-radius:8px;background:rgba(200,60,60,0.08);border:1px solid var(--red);color:var(--red);font-size:13px;line-height:1.5;';
+    document.querySelector('.submit-wrap').prepend(el);
+  }
+  el.textContent = message;
+  el.style.display = 'block';
+}
+
+function hideSubmitError() {
+  const el = document.getElementById('submitErrorBox');
+  if (el) el.style.display = 'none';
 }
 
 // ── Init registration mode + clear errors ──
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const ok = await loadEventConfig();
+  if (!ok) return;
+
+  // Hide loading, show form
+  const loadingScreen = document.getElementById('loadingScreen');
+  if (loadingScreen) loadingScreen.style.display = 'none';
+  document.querySelector('.header').style.display = '';
+  document.getElementById('regForm').style.display = '';
+
   initRegistrationMode();
 
   document.getElementById('firstName')?.addEventListener('input', function(){ this.classList.remove('error'); showFieldError('firstNameError',false); });
   document.getElementById('lastName')?.addEventListener('input',  function(){ this.classList.remove('error'); showFieldError('lastNameError',false);  });
+  document.getElementById('email')?.addEventListener('input',     function(){ this.classList.remove('error'); showFieldError('emailError',false);     });
   document.querySelectorAll('input[name="salutation"]').forEach(r=>r.addEventListener('change',()=>showFieldError('salutationError',false)));
   document.getElementById('selectedWindow')?.addEventListener('change', function(){
     selectedWindowId = this.value ? parseInt(this.value) : null;
