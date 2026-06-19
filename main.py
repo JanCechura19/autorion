@@ -74,6 +74,10 @@ class GuestUpdate(BaseModel):
     status: Optional[str] = None
     checked_in: Optional[bool] = None
     companion: Optional[bool] = None
+    consent_signed: Optional[bool] = None
+    consent_paper: Optional[bool] = None
+    consent_license: Optional[str] = None
+    walk_in: Optional[bool] = None
 
 # ── INIT DB ─────────────────────────────────────────────
 
@@ -127,6 +131,7 @@ def init_db():
             bookings JSONB DEFAULT '[]',
             consent_signed BOOLEAN DEFAULT FALSE,
             consent_paper BOOLEAN DEFAULT FALSE,
+            consent_license VARCHAR(50) DEFAULT '',
             walk_in BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         );
