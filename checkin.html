@@ -944,75 +944,104 @@ canvas#sigCanvas {
 
 <script>
 // ══════════════════════════════════════════════════════
-// MOCK DATA
+// API CONFIG
 // ══════════════════════════════════════════════════════
 
-const EVENTS = [
-  {
-    id: 1,
-    name: 'PPF Automotive Experience 2025',
-    date: '14.–15. 6. 2025',
-    location: 'Polygon Sosnová, Česká Lípa',
-    icon: '🏎',
-    vehicles: [
-      { id:1, name:'Tesla Model S Plaid' },
-      { id:2, name:'Porsche Taycan Turbo S' },
-      { id:3, name:'Mercedes EQS 580 4MATIC' },
-      { id:4, name:'BMW iX M60' },
-    ],
-  },
-  {
-    id: 2,
-    name: 'FBW Drive Day 2025',
-    date: '10. 9. 2025',
-    location: 'Autodrom Most',
-    icon: '🚗',
-    vehicles: [
-      { id:5, name:'BMW M3 Competition' },
-      { id:6, name:'BMW M5 CS' },
-      { id:7, name:'BMW iX M60' },
-    ],
-  },
-];
+const API_BASE = 'https://autorion.net/api';
 
-function makeGuests(eventId) {
-  const data = [
-    { fn:'Petr',    ln:'Novák',      status:'confirmed', companion:true,  cName:'Jana Nováková', rides:[{vid:1,time:'10:00–10:15',day:'14. 6.'},{vid:2,time:'11:30–11:45',day:'14. 6.'},{vid:3,time:'14:00–14:15',day:'15. 6.'}] },
-    { fn:'Eva',     ln:'Svobodová',  status:'confirmed', companion:false, cName:'',              rides:[{vid:1,time:'10:15–10:30',day:'14. 6.'},{vid:4,time:'13:00–13:15',day:'14. 6.'}] },
-    { fn:'Martin',  ln:'Dvořák',     status:'confirmed', companion:true,  cName:'Lucie Dvořák',  rides:[] },
-    { fn:'Jana',    ln:'Procházková',status:'confirmed', companion:false, cName:'',              rides:[{vid:2,time:'10:00–10:15',day:'14. 6.'}] },
-    { fn:'Tomáš',   ln:'Kučera',     status:'confirmed', companion:true,  cName:'Marta Kučerová',rides:[{vid:3,time:'10:30–10:45',day:'14. 6.'},{vid:1,time:'15:00–15:15',day:'15. 6.'}] },
-    { fn:'Lucie',   ln:'Horáčková',  status:'confirmed', companion:false, cName:'',              rides:[{vid:4,time:'11:00–11:15',day:'14. 6.'}] },
-    { fn:'Pavel',   ln:'Veselý',     status:'confirmed', companion:true,  cName:'Petra Veselá',  rides:[] },
-    { fn:'Alena',   ln:'Marková',    status:'confirmed', companion:false, cName:'',              rides:[{vid:2,time:'12:00–12:15',day:'14. 6.'},{vid:3,time:'16:00–16:15',day:'15. 6.'}] },
-    { fn:'Jiří',    ln:'Blažek',     status:'confirmed', companion:false, cName:'',              rides:[{vid:1,time:'13:30–13:45',day:'14. 6.'}] },
-    { fn:'Kateřina',ln:'Pospíšilová',status:'confirmed', companion:true,  cName:'Roman Pospíšil',rides:[] },
-    { fn:'Ondřej',  ln:'Fiala',      status:'confirmed', companion:false, cName:'',              rides:[{vid:4,time:'14:30–14:45',day:'15. 6.'}] },
-    { fn:'Monika',  ln:'Kratochvílová',status:'confirmed',companion:true, cName:'Radek Kratochvíl',rides:[{vid:2,time:'15:30–15:45',day:'15. 6.'}] },
-  ];
-  return data.map((g, i) => ({
-    id: eventId * 1000 + i + 1,
-    event_id: eventId,
-    first_name: g.fn,
-    last_name: g.ln,
-    status: g.status,
-    companion: g.companion,
-    companion_name: g.cName,
-    rides: g.rides.map(r => ({
-      vehicle_id: r.vid,
-      vehicle_name: EVENTS.find(e=>e.id===eventId)?.vehicles.find(v=>v.id===r.vid)?.name || 'Vůz',
-      time_slot: r.time,
-      day_label: r.day,
-    })),
-    checked_in: false,
-    consent_signed: false,
-    consent_paper: false,
-    consent_license: '',
-  }));
+let EVENTS = [];
+let ALL_GUESTS = {};
+
+async function loadEventsFromApi() {
+  try {
+    const res = await fetch(`${API_BASE}/events`, { headers: authHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) { doCheckinLogout(); return; }
+      showToast('Nepodařilo se načíst akce');
+      return;
+    }
+    const events = await res.json();
+    EVENTS = events.map(ev => ({
+      id: ev.id,
+      name: ev.name,
+      date: formatEventDateRange(ev.date_from, ev.date_to),
+      location: ev.location,
+      icon: ev.icon || '🏎',
+      vehicles: (ev.vehicles || []).map(v => ({ id: v.id, name: v.name })),
+    }));
+    ALL_GUESTS = {};
+    renderEventList();
+  } catch (e) {
+    console.error(e);
+    showToast('Nepodařilo se připojit k serveru');
+  }
 }
 
-let ALL_GUESTS = {};
-EVENTS.forEach(e => { ALL_GUESTS[e.id] = makeGuests(e.id); });
+function formatEventDateRange(from, to) {
+  if (!from) return '';
+  if (to && to !== from) return `${from} – ${to}`;
+  return from;
+}
+
+async function loadGuestsForEvent(eventId) {
+  try {
+    const res = await fetch(`${API_BASE}/events/${eventId}/guests`, { headers: authHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) { doCheckinLogout(); return []; }
+      showToast('Nepodařilo se načíst hosty');
+      return [];
+    }
+    const guests = await res.json();
+    const event = EVENTS.find(e => e.id === eventId);
+    const mapped = guests.map(g => ({
+      id: g.id,
+      event_id: g.event_id,
+      first_name: g.first_name,
+      last_name: g.last_name,
+      email: g.email,
+      status: g.status,
+      companion: g.companion,
+      companion_name: '',
+      rides: (g.bookings || []).map(b => ({
+        vehicle_id: b.vehicle_id,
+        vehicle_name: b.vehicle_name || event?.vehicles.find(v=>v.id===b.vehicle_id)?.name || 'Vůz',
+        time_slot: b.time_slot,
+        day_label: '',
+      })),
+      checked_in: g.checked_in,
+      consent_signed: g.consent_signed,
+      consent_paper: g.consent_paper,
+      consent_license: g.consent_license || '',
+    }));
+    ALL_GUESTS[eventId] = mapped;
+    return mapped;
+  } catch (e) {
+    console.error(e);
+    showToast('Nepodařilo se připojit k serveru');
+    return [];
+  }
+}
+
+async function patchGuest(guestId, fields) {
+  try {
+    const res = await fetch(`${API_BASE}/guests/${guestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(fields)
+    });
+    if (!res.ok) {
+      if (res.status === 401) { doCheckinLogout(); return null; }
+      const data = await res.json().catch(() => ({}));
+      showToast(data.detail || 'Nepodařilo se uložit změnu');
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    showToast('Nepodařilo se připojit k serveru');
+    return null;
+  }
+}
 
 // ── STATE ──
 let currentEvent  = null;
@@ -1075,12 +1104,14 @@ function renderEventList() {
   }).join('');
 }
 
-function selectEvent(id) {
+async function selectEvent(id) {
   currentEvent = EVENTS.find(e => e.id === id);
   guestFilter = 'all';
   document.getElementById('guestSearch').value = '';
-  renderGuestList();
   showScreen('screenGuests');
+  document.getElementById('guestList').innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">Načítání hostů…</div></div>`;
+  await loadGuestsForEvent(id);
+  renderGuestList();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1294,12 +1325,16 @@ function statusChipSmall(status) {
   return map[status] || status;
 }
 
-function togglePaperConsent() {
+async function togglePaperConsent() {
   if (!currentGuest || currentGuest.checked_in) return;
-  currentGuest.consent_paper = !currentGuest.consent_paper;
-  // If paper consent checked, clear digital if any
-  if (currentGuest.consent_paper) {
-    // keep digital too if already signed
+  const newVal = !currentGuest.consent_paper;
+  const updated = await patchGuest(currentGuest.id, { consent_paper: newVal });
+  if (updated) {
+    currentGuest.consent_paper = updated.consent_paper;
+    // Sync into list cache
+    const list = ALL_GUESTS[currentEvent.id] || [];
+    const idx = list.findIndex(g => g.id === currentGuest.id);
+    if (idx >= 0) list[idx].consent_paper = updated.consent_paper;
   }
   renderGuestDetail();
 }
@@ -1551,12 +1586,32 @@ function updateSubmitBtn() {
   btn.disabled = !ok;
 }
 
-function submitConsent() {
+async function submitConsent() {
   if (!currentGuest) return;
-  const license = document.getElementById('licenseInput')?.value.trim();
-  currentGuest.consent_signed  = true;
-  currentGuest.consent_paper   = false;
-  currentGuest.consent_license = license;
+  const license = document.getElementById('licenseInput')?.value.trim() || '';
+  const submitBtn = document.querySelector('#screenConsent .confirm-btn, #screenConsent button[onclick="submitConsent()"]');
+
+  const updated = await patchGuest(currentGuest.id, {
+    consent_signed: true,
+    consent_paper: false,
+    consent_license: license
+  });
+
+  if (!updated) return; // error already toasted by patchGuest
+
+  currentGuest.consent_signed  = updated.consent_signed;
+  currentGuest.consent_paper   = updated.consent_paper;
+  currentGuest.consent_license = updated.consent_license;
+
+  // Sync into list cache
+  const list = ALL_GUESTS[currentEvent.id] || [];
+  const idx = list.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) Object.assign(list[idx], {
+    consent_signed: updated.consent_signed,
+    consent_paper: updated.consent_paper,
+    consent_license: updated.consent_license
+  });
+
   showToast('Souhlas byl podepsán ✓');
   goToDetail();
 }
@@ -1565,11 +1620,19 @@ function submitConsent() {
 // CHECK-IN CONFIRM
 // ══════════════════════════════════════════════════════
 
-function confirmCheckin() {
+async function confirmCheckin() {
   if (!currentGuest || currentGuest.checked_in) return;
   if (!currentGuest.consent_signed && !currentGuest.consent_paper) return;
 
-  currentGuest.checked_in = true;
+  const updated = await patchGuest(currentGuest.id, { checked_in: true });
+  if (!updated) return; // error already toasted
+
+  currentGuest.checked_in = updated.checked_in;
+
+  // Sync into list cache
+  const list = ALL_GUESTS[currentEvent.id] || [];
+  const idx = list.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) list[idx].checked_in = updated.checked_in;
 
   // Flash success overlay
   const overlay = document.getElementById('checkinSuccess');
@@ -1617,54 +1680,69 @@ function showToast(msg) {
 // AUTH
 // ══════════════════════════════════════════════════════
 
-let checkinUser = null;
+let checkinUser  = null;
+let checkinToken = null;
 
-function loadUsers() {
-  // Try localStorage first (synced from admin.html)
-  try {
-    const stored = localStorage.getItem('eventUsers');
-    if (stored) return JSON.parse(stored);
-  } catch(e) {}
-  // Fallback: built-in defaults (same as admin.html)
-  return [
-    { id:1, email:'admin@event.cz',   pass:'heslo123', name:'Jan Novák',       initials:'JN', role:'super_admin', checkin_access:true  },
-    { id:2, email:'manager@event.cz', pass:'spravce1', name:'Eva Procházková', initials:'EP', role:'manager',     checkin_access:true  },
-    { id:3, email:'viewer@event.cz',  pass:'nahled1',  name:'Tomáš Blažek',   initials:'TB', role:'viewer',      checkin_access:false },
-    { id:4, email:'hostess@event.cz', pass:'checkin1', name:'Petra Hosteska', initials:'PH', role:'viewer',      checkin_access:true  },
-  ];
-}
-
-function doCheckinLogin() {
+async function doCheckinLogin() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
   errEl.textContent = '';
 
-  const users = loadUsers();
-  const user  = users.find(u => u.email === email && u.pass === pass);
+  const loginBtn = document.getElementById('loginBtn');
+  const originalText = loginBtn.textContent;
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Přihlašování…';
 
-  if (!user) {
-    errEl.textContent = 'Nesprávný e-mail nebo heslo.';
-    return;
-  }
-  if (!user.checkin_access) {
-    errEl.textContent = 'Váš účet nemá přístup do Check-in aplikace.';
-    return;
-  }
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
 
-  checkinUser = user;
-  document.getElementById('loginScreen').style.display = 'none';
-  renderEventList();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.detail || 'Nesprávný e-mail nebo heslo.';
+      loginBtn.disabled = false;
+      loginBtn.textContent = originalText;
+      return;
+    }
+
+    const data = await res.json();
+    if (!data.user.checkin_access) {
+      errEl.textContent = 'Váš účet nemá přístup do Check-in aplikace.';
+      loginBtn.disabled = false;
+      loginBtn.textContent = originalText;
+      return;
+    }
+
+    checkinUser  = data.user;
+    checkinToken = data.token;
+    document.getElementById('loginScreen').style.display = 'none';
+    await loadEventsFromApi();
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = 'Nepodařilo se připojit k serveru.';
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = originalText;
+  }
 }
 
 function doCheckinLogout() {
-  checkinUser = null;
+  checkinUser  = null;
+  checkinToken = null;
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value  = '';
   document.getElementById('loginError').textContent = '';
   document.getElementById('loginScreen').style.display = 'flex';
   // Reset to event list
   showScreen('screenEvents');
+}
+
+function authHeaders() {
+  return checkinToken ? { 'Authorization': `Bearer ${checkinToken}` } : {};
 }
 
 // ══════════════════════════════════════════════════════
