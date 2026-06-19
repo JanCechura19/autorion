@@ -63,6 +63,7 @@ class GuestCreate(BaseModel):
     last_name: str
     email: str
     event_id: int
+    phone: Optional[str] = None
     companion: bool = False
     status: str = "pending"
     salutation: Optional[str] = None
@@ -71,6 +72,10 @@ class GuestCreate(BaseModel):
     consent_signed: bool = False
 
 class GuestUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     status: Optional[str] = None
     checked_in: Optional[bool] = None
     companion: Optional[bool] = None
@@ -124,6 +129,7 @@ def init_db():
             first_name VARCHAR(255),
             last_name VARCHAR(255),
             email VARCHAR(255),
+            phone VARCHAR(50) DEFAULT '',
             status VARCHAR(50) DEFAULT 'pending',
             checked_in BOOLEAN DEFAULT FALSE,
             companion BOOLEAN DEFAULT FALSE,
@@ -345,11 +351,11 @@ def create_guest(event_id: int, guest: GuestCreate):
                     raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
 
         cur.execute("""
-            INSERT INTO guests (event_id, first_name, last_name, email, companion, status, window_id, bookings, consent_signed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """, (
-            event_id, guest.first_name, guest.last_name, guest.email.lower(),
+            event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
             json.dumps(bookings_list), guest.consent_signed
         ))
@@ -371,6 +377,8 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
     fields = {k: v for k, v in update.dict().items() if v is not None}
     if not fields:
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
+    if "email" in fields:
+        fields["email"] = fields["email"].lower()
     set_clause = ", ".join([f"{k} = %s" for k in fields.keys()])
     values = list(fields.values()) + [guest_id]
     conn = get_db()
@@ -379,7 +387,23 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
     updated = cur.fetchone()
     cur.close()
     conn.close()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Host nenalezen")
     return dict(updated)
+
+@app.delete("/api/guests/{guest_id}")
+def delete_guest(guest_id: int, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("DELETE FROM guests WHERE id = %s RETURNING id", (guest_id,))
+    deleted = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Host nenalezen")
+    return {"status": "deleted", "id": guest_id}
 
 @app.get("/api/health")
 def health():

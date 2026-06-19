@@ -2002,12 +2002,19 @@ function updateBulkBar() {
   if (selectedIds.size>0){bar.classList.add('visible');document.getElementById('bulkCount').textContent=`${selectedIds.size} vybráno`;}
   else bar.classList.remove('visible');
 }
-function bulkDelete() {
+async function bulkDelete() {
   if (!requirePermission('canDelete')) return;
   if(!confirm(`Smazat ${selectedIds.size} hostů?`)) return;
-  guests = guests.filter(g=>!selectedIds.has(g.id));
+  const ids = [...selectedIds];
+  const results = await Promise.all(ids.map(id => apiCall(`/guests/${id}`, 'DELETE')));
+  const deletedIds = ids.filter((id, i) => results[i] && results[i].status === 'deleted');
+  guests = guests.filter(g=>!deletedIds.includes(g.id));
   selectedIds.clear(); updateBulkBar(); updateNavBadge(); applyFilters();
-  showToast('Hosté smazáni','success');
+  if (deletedIds.length === ids.length) {
+    showToast('Hosté smazáni','success');
+  } else {
+    showToast(`Smazáno ${deletedIds.length} z ${ids.length} hostů`, deletedIds.length ? 'success' : 'error');
+  }
 }
 function bulkEmail()  { openEmailComposer([...selectedIds]); }
 function bulkExport() { exportXLS(guests.filter(g=>selectedIds.has(g.id))); }
@@ -2054,9 +2061,11 @@ function openDetail(id) {
 
 function closeDetail() { document.getElementById('detailPanel').classList.remove('open'); }
 
-function checkIn(id) {
+async function checkIn(id) {
   if (!requirePermission('canCheckin')) return;
   const g = guests.find(g=>g.id===id); if(!g) return;
+  const updated = await apiCall(`/guests/${id}`, 'PATCH', { checked_in: true });
+  if (!updated) return;
   g.checked_in = true;
   openDetail(id);
   showToast(`${g.first_name} ${g.last_name} — check-in proveden`,'success');
@@ -2096,18 +2105,33 @@ function openGuestForm(g) {
   openModal();
 }
 
-function saveGuest(id) {
+async function saveGuest(id) {
   if (!requirePermission('canEdit')) return;
   const fn = document.getElementById('fFirstName').value.trim();
   const ln = document.getElementById('fLastName').value.trim();
   const em = document.getElementById('fEmail').value.trim();
   if (!fn||!ln||!em) { showToast('Vyplňte jméno, příjmení a e-mail','error'); return; }
   const payload = { first_name:fn, last_name:ln, email:em, phone:document.getElementById('fPhone').value, companion:document.getElementById('fCompanion').value==='true', status:document.getElementById('fStatus').value };
+
   if (id) {
-    const g = guests.find(g=>g.id===id); if(g) Object.assign(g, payload);
+    const updated = await apiCall(`/guests/${id}`, 'PATCH', payload);
+    if (!updated) return;
+    const g = guests.find(g=>g.id===id);
+    if (g) Object.assign(g, payload);
     showToast('Host upraven','success');
   } else {
-    guests.push({ id:Date.now(), ...payload, email_sent:false, checked_in:false, registered_at:new Date().toISOString(), notes:'', bookings:[], unique_token:'new-'+Date.now() });
+    const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', { ...payload, event_id: currentEventId });
+    if (!created) { showToast('Nepodařilo se přidat hosta','error'); return; }
+    guests.push({
+      id: created.id, event_id: created.event_id,
+      first_name: created.first_name, last_name: created.last_name,
+      email: created.email, phone: created.phone || '',
+      status: created.status, companion: created.companion,
+      email_sent:false, checked_in: !!created.checked_in,
+      registered_at: created.created_at || new Date().toISOString(),
+      notes:'', bookings: created.bookings || [],
+      unique_token:'guest-'+created.id
+    });
     showToast('Host přidán','success');
   }
   closeModal(); updateNavBadge(); applyFilters();
@@ -2138,22 +2162,43 @@ function openImportModal() {
 function handleDrop(e) { e.preventDefault(); document.getElementById('importZone').classList.remove('dragover'); if(e.dataTransfer.files[0]) processImportFile(e.dataTransfer.files[0]); }
 function handleFileSelect(input) { if(input.files[0]) processImportFile(input.files[0]); }
 
-function processImportFile(file) {
+async function processImportFile(file) {
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const wb = XLSX.read(e.target.result, {type:'array'});
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, {header:1}).slice(1).filter(r=>r.length);
     const existing = new Set(guests.map(g=>g.email.toLowerCase()));
-    let imported=0, skipped=0;
-    rows.forEach(r => {
+    let imported=0, skipped=0, failed=0;
+    document.getElementById('importPreview').innerHTML = `<div style="font-size:13px;color:var(--muted);margin-top:8px">⏳ Importování…</div>`;
+    for (const r of rows) {
       const email = String(r[2]||'').trim().toLowerCase();
-      if (!r[0]||!r[1]||!email) return;
-      if (existing.has(email)) { skipped++; return; }
-      guests.push({ id:Date.now()+Math.random(), first_name:String(r[0]).trim(), last_name:String(r[1]).trim(), email, phone:String(r[3]||'').trim(), companion:String(r[4]||'').toLowerCase()==='ano', status:'pending', email_sent:false, checked_in:false, registered_at:new Date().toISOString(), notes:'', bookings:[], unique_token:'imp-'+Date.now() });
-      existing.add(email); imported++;
-    });
-    document.getElementById('importPreview').innerHTML = `<div style="background:var(--green-bg);border:1px solid #b7dfcc;border-radius:6px;padding:12px 16px;font-size:13px;margin-top:8px">✅ Importováno <strong>${imported}</strong>, přeskočeno ${skipped} duplikátů</div>`;
+      if (!r[0]||!r[1]||!email) continue;
+      if (existing.has(email)) { skipped++; continue; }
+      const payload = {
+        first_name: String(r[0]).trim(), last_name: String(r[1]).trim(), email,
+        phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
+        status: 'pending', event_id: currentEventId
+      };
+      const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', payload);
+      if (created) {
+        guests.push({
+          id: created.id, event_id: created.event_id,
+          first_name: created.first_name, last_name: created.last_name,
+          email: created.email, phone: created.phone || '',
+          status: created.status, companion: created.companion,
+          email_sent:false, checked_in:false,
+          registered_at: created.created_at || new Date().toISOString(),
+          notes:'', bookings: created.bookings || [],
+          unique_token:'guest-'+created.id
+        });
+        existing.add(email); imported++;
+      } else {
+        failed++;
+      }
+    }
+    const failedHtml = failed ? `, ${failed} se nepodařilo uložit` : '';
+    document.getElementById('importPreview').innerHTML = `<div style="background:var(--green-bg);border:1px solid #b7dfcc;border-radius:6px;padding:12px 16px;font-size:13px;margin-top:8px">✅ Importováno <strong>${imported}</strong>, přeskočeno ${skipped} duplikátů${failedHtml}</div>`;
     updateNavBadge(); applyFilters();
   };
   reader.readAsArrayBuffer(file);
@@ -4343,11 +4388,43 @@ function renderSidebarEventContext() {
     </div>`;
 }
 
-function selectEvent(id) {
+async function selectEvent(id) {
   currentEventId=id;
   const ev=EVENTS_DB.find(e=>e.id===id); if(!ev) return;
   EVENT=ev;
-  renderSidebarV2(); updateNavBadge(); showPage('dashboard');
+  renderSidebarV2();
+  await loadGuestsFromApi(id);
+  updateNavBadge();
+  showPage('dashboard');
+}
+
+async function loadGuestsFromApi(eventId) {
+  const data = await apiCall(`/events/${eventId}/guests`);
+  if (!data) return; // apiCall already handled error/logout
+  guests = data.map(g => ({
+    id: g.id,
+    event_id: g.event_id,
+    first_name: g.first_name,
+    last_name: g.last_name,
+    email: g.email,
+    phone: g.phone || '',
+    status: g.status || 'pending',
+    companion: !!g.companion,
+    email_sent: false,
+    checked_in: !!g.checked_in,
+    registered_at: g.created_at || new Date().toISOString(),
+    notes: '',
+    bookings: (g.bookings || []).map(b => ({
+      vehicle_id: b.vehicle_id,
+      vehicle_name: b.vehicle_name,
+      time_slot: b.time_slot
+    })),
+    window_id: g.window_id ?? null,
+    consent_signed: !!g.consent_signed,
+    consent_paper: !!g.consent_paper,
+    unique_token: 'guest-' + g.id,
+  }));
+  filteredGuests = [...guests];
 }
 
 function selectArchivedEvent(id) {
