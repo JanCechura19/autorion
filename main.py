@@ -53,6 +53,11 @@ class EventCreate(BaseModel):
     registration_type: str = "drives"
     icon: str = "🎯"
 
+class BookingItem(BaseModel):
+    vehicle_id: Optional[int] = None
+    vehicle_name: Optional[str] = None
+    time_slot: Optional[str] = None
+
 class GuestCreate(BaseModel):
     first_name: str
     last_name: str
@@ -60,6 +65,10 @@ class GuestCreate(BaseModel):
     event_id: int
     companion: bool = False
     status: str = "pending"
+    salutation: Optional[str] = None
+    window_id: Optional[int] = None
+    bookings: List[BookingItem] = []
+    consent_signed: bool = False
 
 class GuestUpdate(BaseModel):
     status: Optional[str] = None
@@ -197,6 +206,44 @@ def get_event_public(slug: str):
         raise HTTPException(status_code=404, detail="Akce nenalezena")
     return dict(event)
 
+@app.get("/api/events/public/{slug}/availability")
+def get_event_availability(slug: str):
+    """Vrátí obsazené time_sloty pro každé vozidlo + obsazenost time_windows, podle existujících guests."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM events WHERE slug = %s", (slug,))
+    event = cur.fetchone()
+    if not event:
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+
+    cur.execute(
+        "SELECT bookings, window_id FROM guests WHERE event_id = %s AND status != 'cancelled'",
+        (event["id"],)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    booked_by_vehicle = {}
+    booked_by_window = {}
+    for row in rows:
+        bookings = row.get("bookings") or []
+        for b in bookings:
+            vid = str(b.get("vehicle_id"))
+            slot = b.get("time_slot")
+            if vid and slot:
+                booked_by_vehicle.setdefault(vid, []).append(slot)
+        if row.get("window_id") is not None:
+            wid = str(row["window_id"])
+            booked_by_window[wid] = booked_by_window.get(wid, 0) + 1
+
+    return {
+        "booked_by_vehicle": booked_by_vehicle,
+        "booked_by_window": booked_by_window
+    }
+
 @app.post("/api/events")
 def create_event(event: EventCreate, user=Depends(get_current_user)):
     if user["role"] not in ["super_admin", "manager"]:
@@ -243,17 +290,76 @@ def get_guests(event_id: int, user=Depends(get_current_user)):
 @app.post("/api/events/{event_id}/guests")
 def create_guest(event_id: int, guest: GuestCreate):
     conn = get_db()
+    conn.autocommit = False
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("""
-        INSERT INTO guests (event_id, first_name, last_name, email, companion, status)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING *
-    """, (event_id, guest.first_name, guest.last_name,
-          guest.email.lower(), guest.companion, guest.status))
-    new_guest = cur.fetchone()
-    cur.close()
-    conn.close()
-    return dict(new_guest)
+    try:
+        # Lock guests rows for this event to avoid race conditions on slot booking
+        cur.execute("LOCK TABLE guests IN SHARE ROW EXCLUSIVE MODE")
+
+        bookings_list = [b.dict() for b in guest.bookings]
+
+        if bookings_list:
+            # Check vehicle+time_slot collisions
+            cur.execute(
+                "SELECT bookings FROM guests WHERE event_id = %s AND status != 'cancelled'",
+                (event_id,)
+            )
+            existing = cur.fetchall()
+            taken = set()
+            for row in existing:
+                for b in (row["bookings"] or []):
+                    if b.get("vehicle_id") is not None and b.get("time_slot"):
+                        taken.add((str(b["vehicle_id"]), b["time_slot"]))
+            for b in bookings_list:
+                key = (str(b.get("vehicle_id")), b.get("time_slot"))
+                if key in taken:
+                    conn.rollback()
+                    cur.close()
+                    conn.close()
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Termín {b.get('time_slot')} pro toto vozidlo je již obsazen. Obnovte stránku a vyberte jiný."
+                    )
+
+        if guest.window_id is not None:
+            # Check window capacity
+            cur.execute("SELECT time_windows FROM events WHERE id = %s", (event_id,))
+            ev = cur.fetchone()
+            windows = ev["time_windows"] if ev else []
+            window_def = next((w for w in windows if w.get("id") == guest.window_id), None)
+            if window_def and window_def.get("capacity", 0) > 0:
+                cur.execute(
+                    "SELECT COUNT(*) AS cnt FROM guests WHERE event_id = %s AND window_id = %s AND status != 'cancelled'",
+                    (event_id, guest.window_id)
+                )
+                cnt = cur.fetchone()["cnt"]
+                if cnt >= window_def["capacity"]:
+                    conn.rollback()
+                    cur.close()
+                    conn.close()
+                    raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
+
+        cur.execute("""
+            INSERT INTO guests (event_id, first_name, last_name, email, companion, status, window_id, bookings, consent_signed)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+        """, (
+            event_id, guest.first_name, guest.last_name, guest.email.lower(),
+            guest.companion, guest.status, guest.window_id,
+            json.dumps(bookings_list), guest.consent_signed
+        ))
+        new_guest = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return dict(new_guest)
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/api/guests/{guest_id}")
 def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_user)):
