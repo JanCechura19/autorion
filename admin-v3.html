@@ -1690,34 +1690,35 @@ async function initApp() {
   syncUsersToStorage();
   loadRolePermissions();
   updateUserInfo();
-  // Load events from API
+  // Load events from API — replace mock EVENTS_DB entirely with real DB data
   const eventsData = await apiCall('/events');
   if (eventsData) {
-    // Merge API events with EVENTS_DB format
+    EVENTS_DB.length = 0; // clear mock data
     eventsData.forEach(ev => {
-      if (!EVENTS_DB.find(e => e.id === ev.id)) {
-        EVENTS_DB.push({
-          id:                ev.id,
-          name:              ev.name,
-          date_from:         ev.date_from || '',
-          date_to:           ev.date_to || '',
-          location:          ev.location || '',
-          capacity:          ev.capacity || 100,
-          registration_open: ev.registration_open,
-          icon:              ev.icon || '🎯',
-          status:            ev.status || 'active',
-          theme:             null,
-          registration_type: ev.registration_type || 'drives',
-          time_windows:      ev.time_windows || [],
-          slot_start:        ev.slot_start || '10:00',
-          slot_end:          ev.slot_end || '18:00',
-          slot_duration:     ev.slot_duration || 15,
-          consent_cs:        ev.consent_cs || '',
-          consent_en:        ev.consent_en || '',
-          slug:              ev.slug || '',
-        });
-      }
+      EVENTS_DB.push({
+        id:                ev.id,
+        name:              ev.name,
+        date_from:         ev.date_from || '',
+        date_to:           ev.date_to || '',
+        location:          ev.location || '',
+        capacity:          ev.capacity || 100,
+        registration_open: ev.registration_open,
+        icon:              ev.icon || '🎯',
+        status:            ev.status || 'active',
+        theme:             null,
+        registration_type: ev.registration_type || 'drives',
+        time_windows:      ev.time_windows || [],
+        slot_start:        ev.slot_start || '10:00',
+        slot_end:          ev.slot_end || '18:00',
+        slot_duration:     ev.slot_duration || 15,
+        consent_cs:        ev.consent_cs || '',
+        consent_en:        ev.consent_en || '',
+        slug:              ev.slug || '',
+        vehicles:          ev.vehicles || [],
+      });
     });
+    if (EVENTS_DB.length) EVENT = EVENTS_DB[0];
+    guests = []; // no mock guests until a real event is selected
   }
   renderSidebarV2();
   showPage('events');
