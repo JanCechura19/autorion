@@ -1284,8 +1284,8 @@ input[type="checkbox"] {
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <a href="visual-editor.html" target="_blank" class="btn btn-secondary btn-sm">↗ Otevřít v novém okně</a>
-            <a href="registration.html" target="_blank" class="btn btn-secondary btn-sm">👁 Náhled formuláře</a>
+            <a href="visual-editor.html" id="editorOpenNewWindow" target="_blank" class="btn btn-secondary btn-sm">↗ Otevřít v novém okně</a>
+            <a href="registration.html" id="editorPreviewLink" target="_blank" class="btn btn-secondary btn-sm">👁 Náhled formuláře</a>
           </div>
         </div>
         <iframe id="editorIframe" src="visual-editor.html" style="flex:1;border:none;width:100%;display:block;min-height:0;" title="Visual Editor"></iframe>
@@ -1751,6 +1751,15 @@ function showPage(name, navEl) {
   const ct = document.querySelector('.content');
   if (tb) tb.style.display  = (name === 'editor') ? 'none' : '';
   if (ct) ct.style.padding  = (name === 'editor') ? '0' : '';
+  if (name === 'editor' && currentEventId) {
+    const editorUrl = `visual-editor.html?event=${currentEventId}`;
+    const iframe = document.getElementById('editorIframe');
+    if (iframe && !iframe.src.includes(`event=${currentEventId}`)) iframe.src = editorUrl;
+    const newWinLink = document.getElementById('editorOpenNewWindow');
+    if (newWinLink) newWinLink.href = editorUrl;
+    const previewLink = document.getElementById('editorPreviewLink');
+    if (previewLink && EVENT?.slug) previewLink.href = `registration.html?event=${EVENT.slug}`;
+  }
   const titles = { dashboard:'Dashboard', guests:'Správa hostů', emails:'E-maily', slots:'Obsazenost', settings:'Nastavení akce', editor:'Visual Editor', archive:'Archiv akcí' };
   document.getElementById('topbarTitle').textContent = titles[name] || name;
 

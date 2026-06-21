@@ -1147,24 +1147,46 @@ let isDirty = false;
 // INIT
 // ════════════════════════════════════════════════
 
-function init() {
+async function init() {
   renderThemeGrid();
   renderVehicleImages();
   loadPreview();
 
-  // Load saved theme from localStorage
-  try {
-    const saved = localStorage.getItem('eventTheme');
-    if (saved) {
-      restoreTheme(JSON.parse(saved));
-      showToast('Téma načteno z lokálního úložiště', '');
-    } else {
+  EVENT_ID = getEventIdFromUrl();
+
+  if (EVENT_ID) {
+    // Event context: load theme from the database via API
+    try {
+      const res = await fetch(`/api/events/preview/${EVENT_ID}`);
+      if (res.ok) {
+        const event = await res.json();
+        if (event.theme && Object.keys(event.theme).length) {
+          restoreTheme(event.theme);
+          showToast('Téma akce načteno', '');
+        } else {
+          applyTheme();
+        }
+      } else {
+        applyTheme();
+      }
+    } catch (e) {
+      console.warn('Nepodařilo se načíst téma akce:', e);
       applyTheme();
     }
-  } catch(e) {
-    applyTheme();
+  } else {
+    // Standalone mode (no event context): fall back to localStorage
+    try {
+      const saved = localStorage.getItem('eventTheme');
+      if (saved) {
+        restoreTheme(JSON.parse(saved));
+        showToast('Téma načteno z lokálního úložiště', '');
+      } else {
+        applyTheme();
+      }
+    } catch(e) {
+      applyTheme();
+    }
   }
-
 }
 
 function restoreTheme(saved) {
@@ -1671,9 +1693,24 @@ body::before {
 </body>
 </html>`;
 
+let EVENT_ID = null;
+let EVENT_SLUG = null;
+let pendingThemeApply = null;
+
+function getEventIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('event');
+}
+
 function loadPreview() {
   const frame = document.getElementById('previewFrame');
-  frame.srcdoc = REGISTRATION_HTML;
+  EVENT_ID = getEventIdFromUrl();
+  if (EVENT_ID) {
+    frame.src = `registration.html?event=__preview_${EVENT_ID}`;
+  } else {
+    // No event context (editor opened standalone) — fall back to static preview
+    frame.srcdoc = REGISTRATION_HTML;
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -1988,11 +2025,38 @@ function markDirty() {
   document.getElementById('unsavedDot').classList.add('visible');
 }
 
-function saveTheme() {
+async function saveTheme() {
   const theme = collectTheme();
-  // Save to localStorage
+
+  if (EVENT_ID) {
+    // Event context: persist to the database
+    const token = localStorage.getItem('authToken');
+    try {
+      const res = await fetch(`/api/events/${EVENT_ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ theme })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Nepodařilo se uložit téma', 'error');
+        return;
+      }
+      isDirty = false;
+      document.getElementById('unsavedDot').classList.remove('visible');
+      showToast('Téma akce uloženo ✓', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Nepodařilo se připojit k serveru', 'error');
+    }
+    return;
+  }
+
+  // Standalone mode: keep the original localStorage + JSON download behavior
   localStorage.setItem('eventTheme', JSON.stringify(theme));
-  // Also download as JSON backup
   const blob = new Blob([JSON.stringify(theme, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

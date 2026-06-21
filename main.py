@@ -53,6 +53,25 @@ class EventCreate(BaseModel):
     registration_type: str = "drives"
     icon: str = "🎯"
 
+class EventUpdate(BaseModel):
+    name: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    location: Optional[str] = None
+    capacity: Optional[int] = None
+    registration_type: Optional[str] = None
+    icon: Optional[str] = None
+    registration_open: Optional[bool] = None
+    status: Optional[str] = None
+    theme: Optional[dict] = None
+    time_windows: Optional[list] = None
+    slot_start: Optional[str] = None
+    slot_end: Optional[str] = None
+    slot_duration: Optional[int] = None
+    consent_cs: Optional[str] = None
+    consent_en: Optional[str] = None
+    vehicles: Optional[list] = None
+
 class BookingItem(BaseModel):
     vehicle_id: Optional[int] = None
     vehicle_name: Optional[str] = None
@@ -119,6 +138,7 @@ def init_db():
             slot_duration INTEGER DEFAULT 15,
             consent_cs TEXT DEFAULT '',
             consent_en TEXT DEFAULT '',
+            theme JSONB DEFAULT '{}',
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -217,6 +237,20 @@ def get_event_public(slug: str):
         raise HTTPException(status_code=404, detail="Akce nenalezena")
     return dict(event)
 
+@app.get("/api/events/preview/{event_id}")
+def get_event_preview(event_id: int):
+    """Used by the Visual Editor preview iframe — no registration_open requirement.
+    Read-only, no auth (mirrors the public endpoint's exposure level)."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+    event = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not event:
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    return dict(event)
+
 @app.get("/api/events/public/{slug}/availability")
 def get_event_availability(slug: str):
     """Vrátí obsazené time_sloty pro každé vozidlo + obsazenost time_windows, podle existujících guests."""
@@ -285,6 +319,31 @@ def get_event(event_id: int, user=Depends(get_current_user)):
     if not event:
         raise HTTPException(status_code=404, detail="Akce nenalezena")
     return dict(event)
+
+@app.patch("/api/events/{event_id}")
+def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    fields = {k: v for k, v in update.dict().items() if v is not None}
+    if not fields:
+        raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
+    json_fields = {"theme", "time_windows", "vehicles"}
+    set_parts = []
+    values = []
+    for k, v in fields.items():
+        set_parts.append(f"{k} = %s")
+        values.append(json.dumps(v) if k in json_fields else v)
+    set_clause = ", ".join(set_parts)
+    values.append(event_id)
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f"UPDATE events SET {set_clause} WHERE id = %s RETURNING *", values)
+    updated = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    return dict(updated)
 
 # ── GUESTS ──────────────────────────────────────────────
 

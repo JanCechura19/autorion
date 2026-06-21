@@ -5,33 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Registrace — PPF Automotive Experience 2025</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link id="gfonts" rel="stylesheet" href="">
 <style>
   :root {
-    --ink: #0e0d0b;
-    --paper: #f7f4ef;
+    /* Theme-overridable variables (set by Visual Editor or by API-loaded theme) */
+    --color-primary: #0e0d0b;
+    --color-accent: #b8924a;
+    --color-surface: #f7f4ef;
+    --color-muted: #8a8070;
+    --color-border: #d6cfc3;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'Cormorant Garamond', Georgia, serif;
+    --font-mono: 'Geist Mono', monospace;
+    --title-size: clamp(42px, 7vw, 72px);
+    --title-weight: 300;
+    --body-size: 18px;
+    --line-height: 1.6;
+    --page-padding: 80px 40px 120px;
+    --max-width: 720px;
+    --radius: 2px;
+    --noise-opacity: 0.6;
+    --noise-display: block;
+    --anim-header: fadeUp 0.8s ease both;
+    --anim-form: fadeUp 0.8s 0.15s ease both;
+    --logo-display: none;
+    --logo-height: 40px;
+    --logo-position: center;
+    --hero-display: none;
+    --hero-height: 320px;
+    --hero-fit: cover;
+    --hero-overlay: 0.3;
+    --bg: #f7f4ef;
+
+    /* Legacy variable names mapped onto theme variables (kept for existing styles below) */
+    --ink: var(--color-primary);
+    --paper: var(--color-surface);
     --cream: #ede9e1;
-    --warm: #d6cfc3;
-    --gold: #b8924a;
+    --warm: var(--color-border);
+    --gold: var(--color-accent);
     --gold-light: #e8d9bc;
-    --muted: #8a8070;
+    --muted: var(--color-muted);
     --red: #9b3a2a;
     --green: #2d5a3d;
     --green-bg: #eaf2ec;
-    --radius: 2px;
   }
+  /* Visual Editor injects overrides here (id required for postMessage theming) */
+  #themeStyle {}
+</style>
+<style id="themeStyle"></style>
+<style>
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   html { scroll-behavior: smooth; }
 
   body {
-    font-family: 'Cormorant Garamond', Georgia, serif;
-    background: var(--paper);
+    font-family: var(--font-body);
+    background: var(--bg, var(--paper));
     color: var(--ink);
     min-height: 100vh;
-    font-size: 18px;
+    font-size: var(--body-size);
     font-weight: 300;
-    line-height: 1.6;
+    line-height: var(--line-height);
     overflow-x: hidden;
   }
 
@@ -43,26 +78,60 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 0;
-    opacity: 0.6;
+    display: var(--noise-display, block);
+    opacity: var(--noise-opacity, 0.6);
   }
 
   /* ── LAYOUT ── */
   .page-wrap {
     position: relative;
     z-index: 1;
-    max-width: 720px;
+    max-width: var(--max-width, 720px);
     margin: 0 auto;
-    padding: 80px 40px 120px;
+    padding: var(--page-padding, 80px 40px 120px);
+  }
+
+  /* ── LOGO ── */
+  .site-logo-wrap {
+    display: var(--logo-display, none);
+    justify-content: var(--logo-position, center);
+    margin-bottom: 32px;
+  }
+  .site-logo-wrap img {
+    height: var(--logo-height, 40px);
+    object-fit: contain;
+  }
+
+  /* ── HERO ── */
+  .hero-wrap {
+    display: var(--hero-display, none);
+    position: relative;
+    height: var(--hero-height, 320px);
+    margin-bottom: 40px;
+    overflow: hidden;
+    border-radius: var(--radius);
+  }
+  .hero-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: var(--hero-fit, cover);
+    display: block;
+  }
+  .hero-wrap::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,var(--hero-overlay, 0.3));
   }
 
   /* ── HEADER ── */
   .header {
     margin-bottom: 72px;
-    animation: fadeUp 0.8s ease both;
+    animation: var(--anim-header, fadeUp 0.8s ease both);
   }
 
   .header-eyebrow {
-    font-family: 'Geist Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 400;
     letter-spacing: 0.25em;
@@ -82,8 +151,9 @@
   }
 
   .header-title {
-    font-size: clamp(42px, 7vw, 72px);
-    font-weight: 300;
+    font-family: var(--font-display);
+    font-size: var(--title-size, clamp(42px, 7vw, 72px));
+    font-weight: var(--title-weight, 300);
     line-height: 1.05;
     letter-spacing: -0.01em;
     margin-bottom: 24px;
@@ -707,8 +777,18 @@
     <div class="load-error-message" style="font-size:16px;color:var(--ink);max-width:420px;line-height:1.5;">Akci se nepodařilo načíst.</div>
   </div>
 
+  <!-- HERO IMAGE (theme-controlled) -->
+  <div class="hero-wrap" id="heroWrap">
+    <img id="heroImg" src="" alt="">
+  </div>
+
+  <!-- LOGO (theme-controlled) -->
+  <div class="site-logo-wrap" id="logoWrap">
+    <img id="siteLogo" src="" alt="Logo">
+  </div>
+
   <!-- HEADER -->
-  <header class="header" style="display:none;">
+  <header class="header section-header" style="display:none;">
     <div class="header-eyebrow" data-i18n="eyebrow">Registrace</div>
     <h1 class="header-title">PPF Automotive<br><em>Experience 2025</em></h1>
     <div class="header-meta">
@@ -727,7 +807,7 @@
   <form class="form" id="regForm" onsubmit="handleSubmit(event)" novalidate style="display:none;">
 
     <!-- 1. PERSONAL INFO -->
-    <div class="form-section">
+    <div class="form-section section-personal">
       <div class="form-section-title">
         <span class="num">1</span>
         <span data-i18n="sectionPersonal">Osobní údaje</span>
@@ -790,7 +870,7 @@
     </div>
 
     <!-- 2. JÍZDY / ČASOVÉ OKNO -->
-    <div class="form-section" id="section-rides">
+    <div class="form-section section-slots" id="section-rides">
       <div class="form-section-title">
         <span class="num">2</span>
         <span data-i18n="sectionRides">Rezervace jízd</span>
@@ -828,7 +908,7 @@
     </div>
 
     <!-- 3. GDPR -->
-    <div class="form-section">
+    <div class="form-section section-gdpr">
       <div class="form-section-title">
         <span class="num">3</span>
         <span data-i18n="sectionGdpr">Ochrana osobních údajů</span>
@@ -1057,6 +1137,7 @@ const API_BASE = window.location.origin.includes('registration')
 let EVENT_DATA = null;
 let EVENT_ID = null;
 let EVENT_SLUG = null;
+let IS_PREVIEW = false;
 
 // Registration type: 'drives' | 'windows'
 let REGISTRATION_TYPE = 'drives';
@@ -1093,8 +1174,15 @@ async function loadEventConfig() {
     return false;
   }
 
+  // Preview mode: opened from the Visual Editor as ?event=__preview_{id}
+  const previewMatch = slug.match(/^__preview_(\d+)$/);
+  const isPreview = !!previewMatch;
+  const fetchUrl = isPreview
+    ? `${API_BASE}/events/preview/${previewMatch[1]}`
+    : `${API_BASE}/events/public/${slug}`;
+
   try {
-    const res = await fetch(`${API_BASE}/events/public/${slug}`);
+    const res = await fetch(fetchUrl);
     if (!res.ok) {
       if (res.status === 404) {
         showLoadError('Tato akce nebyla nalezena nebo již nepřijímá registrace.');
@@ -1106,6 +1194,9 @@ async function loadEventConfig() {
     const event = await res.json();
     EVENT_DATA = event;
     EVENT_ID = event.id;
+    IS_PREVIEW = isPreview;
+
+    applyEventTheme(event.theme);
 
     REGISTRATION_TYPE = event.registration_type || 'drives';
     VEHICLES = (event.vehicles || []).map(v => ({ id: v.id, name: v.name }));
@@ -1168,6 +1259,97 @@ function showLoadError(message) {
     if (msgEl) msgEl.textContent = message;
   }
 }
+
+// ═══════════════════════════════════════════════════════
+// THEME (set by Visual Editor — applied from API on load,
+// or live via postMessage when embedded in the editor iframe)
+// ═══════════════════════════════════════════════════════
+
+function applyEventTheme(theme) {
+  if (!theme || !Object.keys(theme).length) return;
+  buildThemeCss(theme);
+}
+
+function buildThemeCss(theme) {
+  const styleEl = document.getElementById('themeStyle');
+  if (!styleEl) return;
+
+  const bg     = theme.bg || {};
+  const colors = theme.colors || {};
+  const typo   = theme.typography || {};
+  const layout = theme.layout || {};
+  const logo   = theme.logo || {};
+  const hero   = theme.hero || {};
+  const hidden = theme.hiddenSections || [];
+
+  let bgValue = colors.surface || 'var(--paper)';
+  if (bg.type === 'gradient') bgValue = `linear-gradient(${bg.gradAngle||135}deg, ${bg.grad1||'#fff'}, ${bg.grad2||'#eee'})`;
+  if (bg.type === 'image' && bg.imageUrl) bgValue = `url(${bg.imageUrl})`;
+
+  const css = `
+    :root {
+      --bg: ${bg.type === 'color' ? (bg.color||colors.surface||'#f7f4ef') : 'transparent'};
+      --color-primary: ${colors.primary || '#0e0d0b'};
+      --color-accent: ${colors.accent || '#b8924a'};
+      --color-surface: ${colors.surface || '#f7f4ef'};
+      --color-muted: ${colors.muted || '#8a8070'};
+      --color-border: ${colors.border || '#d6cfc3'};
+      --radius: ${layout.borderRadius != null ? layout.borderRadius+'px' : '2px'};
+      --font-display: ${typo.fontDisplay || "'Cormorant Garamond', Georgia, serif"};
+      --font-body: ${typo.fontBody || "'Cormorant Garamond', Georgia, serif"};
+      --font-mono: ${typo.fontMono || "'Geist Mono', monospace"};
+      --title-size: clamp(32px, 5vw, ${typo.titleSize || 72}px);
+      --title-weight: ${typo.titleWeight || 300};
+      --body-size: ${typo.bodySize || 18}px;
+      --line-height: ${typo.lineHeight || 1.6};
+      --page-padding: ${layout.pagePadding != null ? layout.pagePadding+'px' : '80px'} 40px 120px;
+      --max-width: ${layout.maxWidth || 720}px;
+      --noise-opacity: ${layout.noiseTexture === false ? 0 : 0.6};
+      --noise-display: ${layout.noiseTexture === false ? 'none' : 'block'};
+      --anim-header: ${layout.animations === false ? 'none' : `fadeUp ${layout.animSpeed||0.8}s ease both`};
+      --anim-form: ${layout.animations === false ? 'none' : `fadeUp ${layout.animSpeed||0.8}s 0.15s ease both`};
+      --logo-display: ${logo.visible && logo.imageUrl ? 'flex' : 'none'};
+      --logo-height: ${logo.height || 40}px;
+      --logo-position: ${logo.position || 'center'};
+      --hero-display: ${hero.imageUrl ? 'block' : 'none'};
+      --hero-height: ${hero.height || 320}px;
+      --hero-fit: ${hero.fit || 'cover'};
+      --hero-overlay: ${hero.overlay != null ? hero.overlay : 0.3};
+    }
+    body { background: ${bg.type === 'image' ? `rgba(0,0,0,${bg.overlayOpacity!=null?bg.overlayOpacity:0.3}) ${bgValue} center/cover fixed` : bgValue}; }
+    ${hidden.includes('header')   ? '.section-header { display: none !important; }'   : ''}
+    ${hidden.includes('personal') ? '.section-personal { display: none !important; }' : ''}
+    ${hidden.includes('slots')    ? '.section-slots { display: none !important; }'    : ''}
+    ${hidden.includes('gdpr')     ? '.section-gdpr { display: none !important; }'     : ''}
+  `;
+  styleEl.textContent = css;
+
+  // Fonts
+  const fontFamilies = [typo.fontDisplay, typo.fontBody, typo.fontMono]
+    .filter(Boolean)
+    .map(f => f.match(/'([^']+)'/)?.[1])
+    .filter(Boolean)
+    .filter(f => !['Georgia','serif','sans-serif','monospace'].includes(f));
+  const uniqueFonts = [...new Set(fontFamilies)];
+  const gfontLink = document.getElementById('gfonts');
+  if (gfontLink && uniqueFonts.length) {
+    gfontLink.href = `https://fonts.googleapis.com/css2?${uniqueFonts.map(f=>`family=${f.replace(/ /g,'+')}:wght@300;400;600;700;800`).join('&')}&display=swap`;
+  }
+
+  // Logo / hero images
+  const logoEl = document.getElementById('siteLogo');
+  if (logoEl) logoEl.src = logo.imageUrl || '';
+  const heroEl = document.getElementById('heroImg');
+  if (heroEl) heroEl.src = hero.imageUrl || '';
+}
+
+// Allow the Visual Editor (parent window, when this page is embedded in its
+// preview iframe) to push live theme updates without a page reload.
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'autorion-theme-update') {
+    buildThemeCss(e.data.theme || {});
+  }
+});
 
 // ═══════════════════════════════════════════════════════
 // SLOT GENERATION
@@ -1341,6 +1523,10 @@ function validate() {
 
 async function handleSubmit(e) {
   e.preventDefault();
+  if (IS_PREVIEW) {
+    alert('Toto je náhled ve Visual Editoru — registrace se v tomto režimu neodesílají.');
+    return;
+  }
   if (!validate()) return;
 
   const sal = document.querySelector('input[name="salutation"]:checked').value;
