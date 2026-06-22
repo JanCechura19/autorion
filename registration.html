@@ -301,6 +301,15 @@
   .field-input.error,
   .field-select.error { border-bottom-color: var(--red); }
 
+  /* Neutralize browser autofill background (Chrome paints it light blue by
+     default, which breaks dark themes). Use a long transition delay trick
+     to override the internal autofill background color. */
+  .field-input:-webkit-autofill {
+    -webkit-text-fill-color: var(--ink);
+    transition: background-color 5000s ease-in-out 0s;
+    box-shadow: 0 0 0px 1000px transparent inset;
+  }
+
   /* Underline animation */
   .field-line {
     position: absolute;
@@ -539,7 +548,7 @@
   .gdpr-custom-cb {
     width: 20px; height: 20px;
     border: 1px solid var(--warm);
-    background: var(--paper);
+    background: transparent;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
@@ -547,11 +556,11 @@
   }
   .gdpr-cb:checked ~ * .gdpr-custom-cb,
   .gdpr-custom-cb.checked {
-    background: var(--ink);
-    border-color: var(--ink);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
   }
   .gdpr-check-icon {
-    color: var(--paper);
+    color: #fff;
     font-size: 12px;
     opacity: 0;
     transition: opacity 0.15s;
