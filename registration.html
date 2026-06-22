@@ -1280,6 +1280,36 @@ function applyEventTheme(theme) {
   buildThemeCss(theme);
 }
 
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return { r: 247, g: 244, b: 239 };
+  const m = hex.replace('#','').match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return { r: 247, g: 244, b: 239 };
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c+c).join('');
+  return {
+    r: parseInt(h.slice(0,2), 16),
+    g: parseInt(h.slice(2,4), 16),
+    b: parseInt(h.slice(4,6), 16),
+  };
+}
+
+function isLightColor(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  // Perceived luminance (sRGB, simple weighted average)
+  return (0.299*r + 0.587*g + 0.114*b) > 140;
+}
+
+// Returns a card background color that visually separates from the page
+// background: lighten dark pages, darken-or-tint light pages.
+function deriveCardColor(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const light = isLightColor(hex);
+  const amt = light ? -10 : 28; // light pages: subtle tint; dark pages: lift
+  const clamp = v => Math.max(0, Math.min(255, v));
+  const nr = clamp(r + amt), ng = clamp(g + amt), nb = clamp(b + amt);
+  return `rgb(${nr}, ${ng}, ${nb})`;
+}
+
 function buildThemeCss(theme) {
   const styleEl = document.getElementById('themeStyle');
   if (!styleEl) return;
@@ -1296,6 +1326,13 @@ function buildThemeCss(theme) {
   if (bg.type === 'gradient') bgValue = `linear-gradient(${bg.gradAngle||135}deg, ${bg.grad1||'#fff'}, ${bg.grad2||'#eee'})`;
   if (bg.type === 'image' && bg.imageUrl) bgValue = `url(${bg.imageUrl})`;
 
+  // Derive a "card" background (used for slot entries, GDPR box, success
+  // summary, lang switcher, etc.) that always contrasts with the page
+  // background, whether the theme is light or dark.
+  const pageBgColor = (bg.type === 'color' ? bg.color : null) || colors.surface || '#f7f4ef';
+  const cardBg   = deriveCardColor(pageBgColor);
+  const cardText = isLightColor(pageBgColor) ? (colors.primary || '#0e0d0b') : '#1a1816';
+
   const css = `
     :root {
       --bg: ${bg.type === 'color' ? (bg.color||colors.surface||'#f7f4ef') : 'transparent'};
@@ -1304,6 +1341,9 @@ function buildThemeCss(theme) {
       --color-surface: ${colors.surface || '#f7f4ef'};
       --color-muted: ${colors.muted || '#8a8070'};
       --color-border: ${colors.border || '#d6cfc3'};
+      --cream: ${cardBg};
+      --warm: ${colors.border || '#d6cfc3'};
+      --card-text: ${cardText};
       --radius: ${layout.borderRadius != null ? layout.borderRadius+'px' : '2px'};
       --font-display: ${typo.fontDisplay || "'Cormorant Garamond', Georgia, serif"};
       --font-body: ${typo.fontBody || "'Cormorant Garamond', Georgia, serif"};
@@ -1327,6 +1367,13 @@ function buildThemeCss(theme) {
       --hero-overlay: ${hero.overlay != null ? hero.overlay : 0.3};
     }
     body { background: ${bg.type === 'image' ? `rgba(0,0,0,${bg.overlayOpacity!=null?bg.overlayOpacity:0.3}) ${bgValue} center/cover fixed` : bgValue}; }
+    .slot-entry .slot-entry-num, .slot-entry .slot-field label, .slot-entry select, .slot-entry option,
+    .gdpr-wrap .gdpr-text, .gdpr-wrap label,
+    .success-summary .summary-label, .success-summary .summary-value,
+    .lang-switcher .lang-btn,
+    .salutation-pill input:checked + .salutation-pill-label {
+      color: var(--card-text) !important;
+    }
     ${hidden.includes('header')   ? '.section-header { display: none !important; }'   : ''}
     ${hidden.includes('personal') ? '.section-personal { display: none !important; }' : ''}
     ${hidden.includes('slots')    ? '.section-slots { display: none !important; }'    : ''}
