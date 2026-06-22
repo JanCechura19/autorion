@@ -801,6 +801,7 @@
         <span class="meta-value">Polygon Sosnová, Česká Lípa</span>
       </div>
     </div>
+    <div class="header-intro-text" id="headerIntroText" style="display:none;margin-top:28px;font-size:17px;line-height:1.7;color:var(--ink);max-width:560px;"></div>
   </header>
 
   <!-- FORM -->
@@ -1234,6 +1235,15 @@ async function loadEventConfig() {
     if (dateEl) dateEl.textContent = formatEventDate(event.date_from, event.date_to);
     const locEl = document.querySelector('.meta-item:nth-child(2) .meta-value');
     if (locEl) locEl.textContent = event.location || '';
+    const introEl = document.getElementById('headerIntroText');
+    if (introEl) {
+      if (event.intro_text && event.intro_text.trim()) {
+        introEl.textContent = event.intro_text;
+        introEl.style.display = 'block';
+      } else {
+        introEl.style.display = 'none';
+      }
+    }
 
     return true;
   } catch (e) {

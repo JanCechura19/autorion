@@ -64,6 +64,7 @@ class EventUpdate(BaseModel):
     registration_open: Optional[bool] = None
     status: Optional[str] = None
     theme: Optional[dict] = None
+    intro_text: Optional[str] = None
     time_windows: Optional[list] = None
     slot_start: Optional[str] = None
     slot_end: Optional[str] = None
@@ -139,6 +140,7 @@ def init_db():
             consent_cs TEXT DEFAULT '',
             consent_en TEXT DEFAULT '',
             theme JSONB DEFAULT '{}',
+            intro_text TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)

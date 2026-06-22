@@ -602,7 +602,8 @@ iframe#previewFrame {
   <!-- LEFT PANEL -->
   <div class="left-panel">
     <div class="panel-tabs">
-      <div class="panel-tab active" onclick="switchTab('design', this)"><span class="panel-tab-icon">🎨</span>Design</div>
+      <div class="panel-tab active" onclick="switchTab('content', this)"><span class="panel-tab-icon">✎</span>Obsah</div>
+      <div class="panel-tab" onclick="switchTab('design', this)"><span class="panel-tab-icon">🎨</span>Design</div>
       <div class="panel-tab" onclick="switchTab('typography', this)"><span class="panel-tab-icon">T</span>Písmo</div>
       <div class="panel-tab" onclick="switchTab('media', this)"><span class="panel-tab-icon">🖼</span>Média</div>
       <div class="panel-tab" onclick="switchTab('layout', this)"><span class="panel-tab-icon">⬛</span>Layout</div>
@@ -610,8 +611,47 @@ iframe#previewFrame {
 
     <div class="panel-content">
 
+      <!-- ── CONTENT TAB ── -->
+      <div class="tab-pane active" id="tab-content">
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">✎</span>Základní informace</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <label class="ctrl-label">Název akce</label>
+              <input type="text" class="ctrl-input" id="contentEventName" placeholder="Název akce" oninput="markDirty(); applyContentLive();">
+            </div>
+            <div class="ctrl-row">
+              <label class="ctrl-label">Datum <span style="opacity:.6;font-weight:400;">(upravte v Nastavení akce)</span></label>
+              <input type="text" class="ctrl-input" id="contentEventDate" readonly style="opacity:.6;cursor:not-allowed;">
+            </div>
+            <div class="ctrl-row">
+              <label class="ctrl-label">Místo</label>
+              <input type="text" class="ctrl-input" id="contentEventLocation" placeholder="Místo konání" oninput="markDirty(); applyContentLive();">
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">📝</span>Úvodní text / poznámka</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <label class="ctrl-label">Zobrazí se pod hlavičkou registrace (nepovinné)</label>
+              <textarea class="ctrl-input" id="contentIntroText" rows="5" placeholder="Např. doplňující informace, program dne, pokyny pro hosty…" oninput="markDirty(); applyContentLive();"></textarea>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       <!-- ── DESIGN TAB ── -->
-      <div class="tab-pane active" id="tab-design">
+      <div class="tab-pane" id="tab-design">
 
         <!-- Přednastavená témata -->
         <div class="ctrl-section">
@@ -1155,11 +1195,13 @@ async function init() {
   EVENT_ID = getEventIdFromUrl();
 
   if (EVENT_ID) {
-    // Event context: load theme from the database via API
+    // Event context: load theme + content from the database via API
     try {
       const res = await fetch(`/api/events/preview/${EVENT_ID}`);
       if (res.ok) {
         const event = await res.json();
+        CURRENT_EVENT = event;
+        populateContentTab(event);
         if (event.theme && Object.keys(event.theme).length) {
           restoreTheme(event.theme);
           showToast('Téma akce načteno', '');
@@ -1694,6 +1736,7 @@ body::before {
 </html>`;
 
 let EVENT_ID = null;
+let CURRENT_EVENT = null;
 let EVENT_SLUG = null;
 let pendingThemeApply = null;
 
@@ -1710,6 +1753,53 @@ function loadPreview() {
   } else {
     // No event context (editor opened standalone) — fall back to static preview
     frame.srcdoc = REGISTRATION_HTML;
+  }
+}
+
+// ════════════════════════════════════════════════
+// CONTENT TAB (name / date / location / intro text)
+// ════════════════════════════════════════════════
+
+function populateContentTab(event) {
+  document.getElementById('contentEventName').value     = event.name || '';
+  document.getElementById('contentEventDate').value     = formatEventDateRange(event.date_from, event.date_to);
+  document.getElementById('contentEventLocation').value = event.location || '';
+  document.getElementById('contentIntroText').value      = event.intro_text || '';
+}
+
+function formatEventDateRange(from, to) {
+  if (!from) return '';
+  if (to && to !== from) return `${from} – ${to}`;
+  return from;
+}
+
+function applyContentLive() {
+  const frame = document.getElementById('previewFrame');
+  const doc = frame.contentDocument || frame.contentWindow?.document;
+  if (!doc) return;
+
+  const name  = document.getElementById('contentEventName').value;
+  const date  = document.getElementById('contentEventDate').value;
+  const loc   = document.getElementById('contentEventLocation').value;
+  const intro = document.getElementById('contentIntroText').value;
+
+  const titleEl = doc.querySelector('.header-title');
+  if (titleEl && name) titleEl.textContent = name;
+
+  const dateEl = doc.querySelector('.meta-item:nth-child(1) .meta-value');
+  if (dateEl) dateEl.textContent = date;
+
+  const locEl = doc.querySelector('.meta-item:nth-child(2) .meta-value');
+  if (locEl) locEl.textContent = loc;
+
+  const introEl = doc.getElementById('headerIntroText');
+  if (introEl) {
+    if (intro && intro.trim()) {
+      introEl.textContent = intro;
+      introEl.style.display = 'block';
+    } else {
+      introEl.style.display = 'none';
+    }
   }
 }
 
@@ -2029,8 +2119,14 @@ async function saveTheme() {
   const theme = collectTheme();
 
   if (EVENT_ID) {
-    // Event context: persist to the database
+    // Event context: persist theme + content fields to the database
     const token = localStorage.getItem('authToken');
+    const payload = {
+      theme,
+      name: document.getElementById('contentEventName').value.trim() || undefined,
+      location: document.getElementById('contentEventLocation').value.trim() || undefined,
+      intro_text: document.getElementById('contentIntroText').value,
+    };
     try {
       const res = await fetch(`/api/events/${EVENT_ID}`, {
         method: 'PATCH',
@@ -2038,7 +2134,7 @@ async function saveTheme() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ theme })
+        body: JSON.stringify(payload)
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2047,7 +2143,7 @@ async function saveTheme() {
       }
       isDirty = false;
       document.getElementById('unsavedDot').classList.remove('visible');
-      showToast('Téma akce uloženo ✓', 'success');
+      showToast('Téma a obsah uloženy ✓', 'success');
     } catch (e) {
       console.error(e);
       showToast('Nepodařilo se připojit k serveru', 'error');
@@ -2165,9 +2261,15 @@ function showToast(msg, type) {
 
 window.addEventListener('DOMContentLoaded', () => {
   init();
-  // After iframe loads, apply theme
+  // After iframe loads, apply theme + content (with a short delay so the
+  // registration page's own async API load finishes first and doesn't
+  // overwrite our live edits).
   document.getElementById('previewFrame').addEventListener('load', () => {
     applyTheme();
+    setTimeout(() => {
+      applyTheme();
+      if (CURRENT_EVENT) applyContentLive();
+    }, 600);
   });
 });
 
