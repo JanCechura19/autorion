@@ -599,11 +599,11 @@
 
   .submit-btn {
     position: relative;
-    background: var(--ink);
-    color: var(--paper);
+    background: var(--color-primary);
+    color: #ffffff;
     border: none;
     padding: 18px 52px;
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-size: 20px;
     font-weight: 400;
     letter-spacing: 0.05em;
@@ -616,12 +616,12 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: var(--gold);
+    background: var(--color-accent);
     transform: translateX(-101%);
     transition: transform 0.4s cubic-bezier(0.77, 0, 0.18, 1);
   }
   .submit-btn:hover::before { transform: translateX(0); }
-  .submit-btn span { position: relative; z-index: 1; }
+  .submit-btn span { position: relative; z-index: 1; color: #ffffff; }
   .submit-note {
     font-family: 'Geist Mono', monospace;
     font-size: 10px;
@@ -1341,7 +1341,10 @@ function buildThemeCss(theme) {
   // background, whether the theme is light or dark.
   const pageBgColor = (bg.type === 'color' ? bg.color : null) || colors.surface || '#f7f4ef';
   const cardBg   = deriveCardColor(pageBgColor);
-  const cardText = isLightColor(pageBgColor) ? (colors.primary || '#0e0d0b') : '#1a1816';
+  // Text color is chosen to contrast with the CARD itself, not the page —
+  // the card's own lightness is what matters for readability.
+  const cardText = isLightColor(cardBg) ? '#1a1816' : '#f5f2ec';
+  const cardMuted = isLightColor(cardBg) ? '#6b6256' : '#b8b2a6';
 
   const css = `
     :root {
@@ -1354,6 +1357,7 @@ function buildThemeCss(theme) {
       --cream: ${cardBg};
       --warm: ${colors.border || '#d6cfc3'};
       --card-text: ${cardText};
+      --card-muted: ${cardMuted};
       --radius: ${layout.borderRadius != null ? layout.borderRadius+'px' : '2px'};
       --font-display: ${typo.fontDisplay || "'Cormorant Garamond', Georgia, serif"};
       --font-body: ${typo.fontBody || "'Cormorant Garamond', Georgia, serif"};
@@ -1383,6 +1387,12 @@ function buildThemeCss(theme) {
     .lang-switcher .lang-btn,
     .salutation-pill input:checked + .salutation-pill-label {
       color: var(--card-text) !important;
+    }
+    .slot-entry .slot-remove {
+      color: var(--card-muted) !important;
+    }
+    .gdpr-wrap .gdpr-text a {
+      color: var(--color-accent) !important;
     }
     ${hidden.includes('header')   ? '.section-header { display: none !important; }'   : ''}
     ${hidden.includes('personal') ? '.section-personal { display: none !important; }' : ''}
