@@ -8,7 +8,11 @@ import psycopg2.extras
 import hashlib
 import secrets
 import json
+import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Autorion API")
 
@@ -21,11 +25,20 @@ app.add_middleware(
 )
 
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "autorion",
-    "user": "autorion_user",
-    "password": "Autorion2025"
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "database": os.environ.get("DB_NAME", "autorion"),
+    "user": os.environ.get("DB_USER", "autorion_user"),
+    "password": os.environ.get("DB_PASSWORD"),
 }
+
+if not DB_CONFIG["password"]:
+    raise RuntimeError(
+        "DB_PASSWORD environment variable is not set. "
+        "Create a .env file (see .env.example) with the required secrets."
+    )
+
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@autorion.net")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 def get_db():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -164,18 +177,19 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
-    # Default admin user
-    cur.execute("""
-        INSERT INTO users (email, password_hash, name, role, checkin_access)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (email) DO NOTHING;
-    """, (
-        "admin@autorion.net",
-        hash_password("Autorion2025!"),
-        "Admin",
-        "super_admin",
-        True
-    ))
+    # Default admin user (only created if ADMIN_PASSWORD is configured)
+    if ADMIN_PASSWORD:
+        cur.execute("""
+            INSERT INTO users (email, password_hash, name, role, checkin_access)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (email) DO NOTHING;
+        """, (
+            ADMIN_EMAIL.lower(),
+            hash_password(ADMIN_PASSWORD),
+            "Admin",
+            "super_admin",
+            True
+        ))
     cur.close()
     conn.close()
 
