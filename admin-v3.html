@@ -1439,7 +1439,7 @@ const EVENTS_DB = [
 // Ukazuje na aktuálně vybranou akci (přepíná se při selectEvent)
 let EVENT = EVENTS_DB[0];
 
-const VEHICLES = [
+let VEHICLES = [
   { id: 1, name: 'Tesla Model S Plaid' },
   { id: 2, name: 'Porsche Taycan Turbo S' },
   { id: 3, name: 'Mercedes EQS 580 4MATIC' },
@@ -3962,6 +3962,18 @@ function buildSystemSettingsHTML(isSuperAdmin) {
   return `
     <div style="max-width:760px;display:flex;flex-direction:column;gap:24px;">
       <div class="table-wrap" style="padding:24px;">
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Bezpečnost</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:20px;">Změna hesla pro váš účet (${currentUser?.email||''}).</div>
+        <div id="pwChangeError" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:6px;background:rgba(200,60,60,0.08);border:1px solid var(--red);color:var(--red);font-size:13px;"></div>
+        <div id="pwChangeSuccess" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:6px;background:var(--green-bg);border:1px solid #b7dfcc;color:var(--green);font-size:13px;"></div>
+        <div style="display:flex;flex-direction:column;gap:14px;max-width:360px;">
+          <div class="form-row"><label>Současné heslo</label><input type="password" id="pwCurrent" autocomplete="current-password"></div>
+          <div class="form-row"><label>Nové heslo <span style="color:var(--muted);font-weight:300">(min. 8 znaků)</span></label><input type="password" id="pwNew" autocomplete="new-password"></div>
+          <div class="form-row"><label>Potvrzení nového hesla</label><input type="password" id="pwNewConfirm" autocomplete="new-password"></div>
+          <button class="btn btn-primary" id="pwChangeBtn" style="align-self:flex-start" onclick="submitPasswordChange()">Změnit heslo</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="padding:24px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
           <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;">Uživatelé</div>
           ${can('canManageUsers') ? `<button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ Přidat uživatele</button>` : ''}
@@ -4130,6 +4142,74 @@ function deleteUser(id) {
 function requirePermission(perm) {
   if(!can(perm)){showToast('Nemáte oprávnění k této akci.','error');return false;}
   return true;
+}
+
+async function submitPasswordChange() {
+  const errEl = document.getElementById('pwChangeError');
+  const okEl  = document.getElementById('pwChangeSuccess');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  const current = document.getElementById('pwCurrent').value;
+  const next    = document.getElementById('pwNew').value;
+  const confirm = document.getElementById('pwNewConfirm').value;
+
+  if (!current || !next || !confirm) {
+    errEl.textContent = 'Vyplňte všechna pole.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (next.length < 8) {
+    errEl.textContent = 'Nové heslo musí mít alespoň 8 znaků.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (next !== confirm) {
+    errEl.textContent = 'Nové heslo a potvrzení se neshodují.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('pwChangeBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Měním heslo…';
+
+  let result = null;
+  let wrongCurrentPassword = false;
+  try {
+    const res = await fetch(`${API_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ current_password: current, new_password: next })
+    });
+    if (res.status === 401) {
+      wrongCurrentPassword = true;
+    } else if (res.ok) {
+      result = await res.json();
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalText;
+
+  if (!result) {
+    errEl.textContent = wrongCurrentPassword
+      ? 'Současné heslo není správné.'
+      : 'Nepodařilo se změnit heslo. Zkuste to prosím znovu.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  okEl.textContent = 'Heslo bylo úspěšně změněno. Za chvíli budete odhlášeni — přihlaste se prosím novým heslem.';
+  okEl.style.display = 'block';
+  document.getElementById('pwCurrent').value = '';
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwNewConfirm').value = '';
+
+  setTimeout(() => { doLogout(); }, 2500);
 }
 
 function syncUsersToStorage() {
@@ -4313,7 +4393,7 @@ function renderSidebarEventList() {
           <span style="font-weight:500;font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</span>
           <span style="font-size:10px;color:rgba(255,255,255,0.35);flex-shrink:0;">→</span>
         </div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.35);padding-left:23px;">${e.date_from} · ${guests.filter(g=>g.status==='confirmed').length} potvrzených</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);padding-left:23px;">${e.date_from}${currentEventId===e.id ? ' · ' + guests.filter(g=>g.status==='confirmed').length + ' potvrzených' : ''}</div>
       </div>`).join(''):'<div style="padding:8px 16px;font-size:12px;color:rgba(255,255,255,0.3);">Žádné aktivní akce</div>'}
     ${pages.includes('archive')?`
       <div class="sidebar-section" style="padding:14px 16px 4px;margin-top:4px;">Archiv</div>
@@ -4380,6 +4460,7 @@ async function selectEvent(id) {
   currentEventId=id;
   const ev=EVENTS_DB.find(e=>e.id===id); if(!ev) return;
   EVENT=ev;
+  VEHICLES = (ev.vehicles && ev.vehicles.length) ? ev.vehicles.map(v=>({...v})) : [];
   renderSidebarV2();
   await loadGuestsFromApi(id);
   updateNavBadge();

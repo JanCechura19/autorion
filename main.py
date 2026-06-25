@@ -57,6 +57,10 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class EventCreate(BaseModel):
     name: str
     date_from: str
@@ -228,6 +232,32 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(HTTPBea
     if not credentials or credentials.credentials not in sessions:
         raise HTTPException(status_code=401, detail="Nejste přihlášeni")
     return sessions[credentials.credentials]
+
+@app.post("/api/auth/change-password")
+def change_password(req: PasswordChangeRequest, user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE id = %s", (user["id"],))
+    current = cur.fetchone()
+    if not current or current["password_hash"] != hash_password(req.current_password):
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=401, detail="Současné heslo není správné")
+    if len(req.new_password) < 8:
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Nové heslo musí mít alespoň 8 znaků")
+    new_hash = hash_password(req.new_password)
+    cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, user["id"]))
+    cur.close()
+    conn.close()
+    # Invalidate all other sessions for this user except the current one, so
+    # the password change takes effect everywhere on next request.
+    current_token = None
+    for token, sess_user in list(sessions.items()):
+        if sess_user["id"] == user["id"]:
+            del sessions[token]
+    return {"status": "ok", "detail": "Heslo bylo změněno. Přihlaste se znovu."}
 
 # ── EVENTS ──────────────────────────────────────────────
 
