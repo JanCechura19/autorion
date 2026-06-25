@@ -3894,7 +3894,7 @@ function buildRolesTable(isSuperAdmin) {
             style="width:16px;height:16px;accent-color:var(--text);cursor:${isSuperAdmin&&!sup?'pointer':'default'};">
         </td>`;
       }).join('');
-      return `<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 12px;font-size:13px;">${pd.label}</td>${rows}</tr>`.replace('${rows}', cells);
+      return `<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 12px;font-size:13px;">${pd.label}</td>${cells}</tr>`;
     }).join('');
     return header + rows;
   }).join('');
