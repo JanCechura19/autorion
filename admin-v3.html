@@ -3945,6 +3945,7 @@ function showSystemSettings() {
   currentEventId = null;
   renderSidebarV2();
   showPage('system');
+  renderSystemSettings();
   setTimeout(() => {
     document.querySelectorAll('#sidebarNav .nav-item').forEach(i=>i.classList.remove('active'));
     document.getElementById('l2-system')?.classList.add('active');
