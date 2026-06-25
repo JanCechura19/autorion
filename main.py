@@ -61,6 +61,23 @@ class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
 
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "viewer"
+    checkin_access: bool = False
+    event_access: Optional[List[int]] = None  # None = all events
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+    checkin_access: Optional[bool] = None
+    event_access: Optional[List[int]] = None
+    event_access_all: Optional[bool] = None  # convenience flag from frontend
+
 class EventCreate(BaseModel):
     name: str
     date_from: str
@@ -134,6 +151,7 @@ def init_db():
             name VARCHAR(255) NOT NULL,
             role VARCHAR(50) DEFAULT 'viewer',
             checkin_access BOOLEAN DEFAULT FALSE,
+            event_access JSONB DEFAULT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -258,6 +276,120 @@ def change_password(req: PasswordChangeRequest, user=Depends(get_current_user)):
         if sess_user["id"] == user["id"]:
             del sessions[token]
     return {"status": "ok", "detail": "Heslo bylo změněno. Přihlaste se znovu."}
+
+# ── USER MANAGEMENT ─────────────────────────────────────
+
+def _user_dict(row):
+    """Strip password_hash before returning a user row to the client."""
+    d = dict(row)
+    d.pop("password_hash", None)
+    return d
+
+@app.get("/api/users")
+def get_users(user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM users ORDER BY created_at")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [_user_dict(r) for r in rows]
+
+@app.post("/api/users")
+def create_user(req: UserCreate, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 6 znaků")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("""
+            INSERT INTO users (email, password_hash, name, role, checkin_access, event_access)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING *
+        """, (
+            req.email.lower(), hash_password(req.password), req.name,
+            req.role, req.checkin_access,
+            json.dumps(req.event_access) if req.event_access is not None else None
+        ))
+        new_user = cur.fetchone()
+        cur.close()
+        conn.close()
+        return _user_dict(new_user)
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=409, detail="Uživatel s tímto e-mailem již existuje")
+
+@app.patch("/api/users/{user_id}")
+def update_user(user_id: int, req: UserUpdate, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    if user_id == user["id"] and req.role is not None and req.role != user["role"]:
+        raise HTTPException(status_code=400, detail="Nemůžete změnit vlastní roli")
+
+    fields = {}
+    if req.name is not None: fields["name"] = req.name
+    if req.email is not None: fields["email"] = req.email.lower()
+    if req.password:
+        if len(req.password) < 6:
+            raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 6 znaků")
+        fields["password_hash"] = hash_password(req.password)
+    if req.role is not None: fields["role"] = req.role
+    if req.checkin_access is not None: fields["checkin_access"] = req.checkin_access
+    if req.event_access_all:
+        fields["event_access"] = None
+    elif req.event_access is not None:
+        fields["event_access"] = json.dumps(req.event_access)
+
+    if not fields:
+        raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
+
+    set_clause = ", ".join([f"{k} = %s" for k in fields.keys()])
+    values = list(fields.values()) + [user_id]
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(f"UPDATE users SET {set_clause} WHERE id = %s RETURNING *", values)
+        updated = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not updated:
+            raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+        # If the updated user has an active session, invalidate it so role/
+        # password changes take effect on next request.
+        for token, sess_user in list(sessions.items()):
+            if sess_user["id"] == user_id:
+                del sessions[token]
+        return _user_dict(updated)
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=409, detail="Uživatel s tímto e-mailem již existuje")
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Nemůžete smazat sami sebe")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("DELETE FROM users WHERE id = %s RETURNING id", (user_id,))
+    deleted = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    for token, sess_user in list(sessions.items()):
+        if sess_user["id"] == user_id:
+            del sessions[token]
+    return {"status": "deleted", "id": user_id}
 
 # ── EVENTS ──────────────────────────────────────────────
 

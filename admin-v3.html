@@ -1349,12 +1349,7 @@ input[type="checkbox"] {
 const API_URL = 'https://autorion.net/api';
 let authToken = localStorage.getItem('authToken') || null;
 
-const USERS = [
-  { id:1, email:'admin@event.cz',    pass:'heslo123', name:'Jan Novák',        initials:'JN', role:'super_admin', checkin_access:true  },
-  { id:2, email:'manager@event.cz',  pass:'spravce1', name:'Eva Procházková',  initials:'EP', role:'manager',     checkin_access:true  },
-  { id:3, email:'viewer@event.cz',   pass:'nahled1',  name:'Tomáš Blažek',    initials:'TB', role:'viewer',      checkin_access:false },
-  { id:4, email:'hostess@event.cz',  pass:'checkin1', name:'Petra Hosteska',  initials:'PH', role:'viewer',      checkin_access:true  },
-];
+let USERS = [];
 
 // Přihlášený uživatel
 let currentUser = null;
@@ -1670,9 +1665,28 @@ function doLogout() {
 // INIT
 // ═══════════════════════════════════════════════════════
 
+async function loadUsersFromApi() {
+  const data = await apiCall('/users');
+  if (!data) return; // apiCall already handled 401/network error
+  USERS = data.map(u => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    initials: u.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+    role: u.role,
+    checkin_access: !!u.checkin_access,
+    event_access: u.event_access ?? null,
+  }));
+  // Keep currentUser.event_access in sync with the DB value
+  if (currentUser) {
+    const me = USERS.find(u => u.id === currentUser.id);
+    if (me) currentUser.event_access = me.event_access;
+  }
+}
+
 async function initApp() {
-  syncUsersToStorage();
   loadRolePermissions();
+  await loadUsersFromApi();
   updateUserInfo();
   // Load events from API — replace mock EVENTS_DB entirely with real DB data
   const eventsData = await apiCall('/events');
@@ -4032,7 +4046,7 @@ function openAddUserModal() {
   openModal();
 }
 
-function saveNewUser() {
+async function saveNewUser() {
   const name=document.getElementById('uName').value.trim();
   const email=document.getElementById('uEmail').value.trim().toLowerCase();
   const pass=document.getElementById('uPass').value;
@@ -4041,9 +4055,18 @@ function saveNewUser() {
   if(!name||!email||!pass){showToast('Vyplňte všechna pole','error');return;}
   if(pass.length<6){showToast('Heslo musí mít alespoň 6 znaků','error');return;}
   if(USERS.find(u=>u.email===email)){showToast('E-mail již existuje','error');return;}
-  const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
-  USERS.push({id:Date.now(),email,pass,name,initials,role,checkin_access:checkin,event_access:null});
-  syncUsersToStorage();
+
+  const created = await apiCall('/users', 'POST', {
+    name, email, password: pass, role, checkin_access: checkin, event_access: null
+  });
+  if (!created) { showToast('Nepodařilo se vytvořit uživatele','error'); return; }
+
+  USERS.push({
+    id: created.id, email: created.email, name: created.name,
+    initials: created.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+    role: created.role, checkin_access: !!created.checkin_access,
+    event_access: created.event_access ?? null
+  });
   closeModal();
   showToast(`Uživatel ${name} přidán`,'success');
   renderSystemSettings();
@@ -4054,7 +4077,7 @@ function openEditUserModal(id) {
   const u=USERS.find(u=>u.id===id); if(!u) return;
   const isSelf=u.id===currentUser.id;
   const allEvents=EVENTS_DB.filter(e=>e.status==='active');
-  const allAccess=u.event_access===null;
+  const allAccess=u.event_access==null;
 
   const activeEventChecks=allEvents.map(ev=>{
     const checked=allAccess||(u.event_access||[]).includes(ev.id);
@@ -4111,30 +4134,56 @@ function toggleAllEventAccess(checked) {
   if(!checked) document.querySelectorAll('.uEventAccess').forEach(cb=>cb.checked=true);
 }
 
-function saveEditUser(id) {
+async function saveEditUser(id) {
   const u=USERS.find(u=>u.id===id); if(!u) return;
-  u.name=document.getElementById('uName').value.trim()||u.name;
-  const newPass=document.getElementById('uPass').value;
-  if(newPass) u.pass=newPass;
-  if(u.id!==currentUser.id) u.role=document.getElementById('uRole').value;
-  u.checkin_access=document.getElementById('uCheckin')?.checked??u.checkin_access??false;
-  const allEvents=document.getElementById('uEventAll')?.checked??true;
-  if(allEvents){ u.event_access=null; }
-  else { const checked=[...document.querySelectorAll('.uEventAccess:checked')]; u.event_access=checked.map(cb=>parseInt(cb.value)); }
-  u.initials=u.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
-  if(u.id===currentUser.id){ currentUser=u; updateUserInfo(); renderSidebarV2(); }
-  syncUsersToStorage();
+  const name = document.getElementById('uName').value.trim() || u.name;
+  const newPass = document.getElementById('uPass').value;
+  const role = (u.id !== currentUser.id) ? document.getElementById('uRole').value : undefined;
+  const checkin = document.getElementById('uCheckin')?.checked ?? u.checkin_access ?? false;
+  const allEvents = document.getElementById('uEventAll')?.checked ?? true;
+
+  const payload = { name, checkin_access: checkin };
+  if (newPass) payload.password = newPass;
+  if (role !== undefined) payload.role = role;
+  if (allEvents) {
+    payload.event_access_all = true;
+  } else {
+    const checked = [...document.querySelectorAll('.uEventAccess:checked')];
+    payload.event_access = checked.map(cb => parseInt(cb.value));
+  }
+
+  const updated = await apiCall(`/users/${id}`, 'PATCH', payload);
+  if (!updated) { showToast('Nepodařilo se uložit uživatele','error'); return; }
+
+  u.name = updated.name;
+  u.initials = updated.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  u.role = updated.role;
+  u.checkin_access = !!updated.checkin_access;
+  u.event_access = updated.event_access ?? null;
+
+  if (u.id === currentUser.id) {
+    currentUser.name = u.name;
+    currentUser.event_access = u.event_access;
+    updateUserInfo();
+    renderSidebarV2();
+  }
   closeModal();
-  showToast('Uživatel upraven ✓','success');
+  if (newPass && u.id === currentUser.id) {
+    showToast('Heslo změněno — za chvíli budete odhlášeni.', 'success');
+    setTimeout(() => doLogout(), 2000);
+  } else {
+    showToast('Uživatel upraven ✓','success');
+  }
   renderSystemSettings();
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
   if(id===currentUser.id){showToast('Nemůžete smazat sebe sama','error');return;}
   const u=USERS.find(u=>u.id===id); if(!u) return;
   if(!confirm(`Smazat uživatele ${u.name}?`)) return;
+  const result = await apiCall(`/users/${id}`, 'DELETE');
+  if (!result || result.status !== 'deleted') { showToast('Nepodařilo se smazat uživatele','error'); return; }
   USERS.splice(USERS.findIndex(u=>u.id===id),1);
-  syncUsersToStorage();
   closeModal();
   showToast(`Uživatel ${u.name} smazán`,'success');
   renderSystemSettings();
