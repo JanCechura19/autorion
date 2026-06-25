@@ -3464,34 +3464,34 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════
 
 // ── PERMISSION DEFINITIONS ─────────────────────────────
-// REMOVED_DUP: const PERMISSION_DEFS = [
-//   { group:'Akce',       key:'canCreateEvent',  label:'Vytvářet nové akce' },
-//   { group:'Akce',       key:'canArchiveEvent', label:'Archivovat aktivní akce' },
-//   { group:'Akce',       key:'canRestoreEvent', label:'Obnovovat akce z archivu' },
-//   { group:'Hosté',      key:'canEdit',         label:'Přidávat a upravovat hosty' },
-//   { group:'Hosté',      key:'canDelete',       label:'Mazat hosty' },
-//   { group:'Hosté',      key:'canImport',       label:'Importovat hosty (XLS)' },
-//   { group:'Hosté',      key:'canExport',       label:'Exportovat hosty (XLS)' },
-//   { group:'Hosté',      key:'canCheckin',      label:'Provádět check-in' },
-//   { group:'E-maily',    key:'canSendEmail',    label:'Odesílat e-maily' },
-//   { group:'Nastavení',  key:'canEditSettings', label:'Upravovat nastavení akce' },
-//   { group:'Nastavení',  key:'canEditVehicles', label:'Spravovat vozidla' },
-//   { group:'Nastavení',  key:'canOpenEditor',   label:'Přistupovat do Visual Editoru' },
-//   { group:'Nastavení',  key:'canManageUsers',  label:'Spravovat uživatele a role' },
-// ];
+const PERMISSION_DEFS = [
+  { group:'Akce',       key:'canCreateEvent',  label:'Vytvářet nové akce' },
+  { group:'Akce',       key:'canArchiveEvent', label:'Archivovat aktivní akce' },
+  { group:'Akce',       key:'canRestoreEvent', label:'Obnovovat akce z archivu' },
+  { group:'Hosté',      key:'canEdit',         label:'Přidávat a upravovat hosty' },
+  { group:'Hosté',      key:'canDelete',       label:'Mazat hosty' },
+  { group:'Hosté',      key:'canImport',       label:'Importovat hosty (XLS)' },
+  { group:'Hosté',      key:'canExport',       label:'Exportovat hosty (XLS)' },
+  { group:'Hosté',      key:'canCheckin',      label:'Provádět check-in' },
+  { group:'E-maily',    key:'canSendEmail',    label:'Odesílat e-maily' },
+  { group:'Nastavení',  key:'canEditSettings', label:'Upravovat nastavení akce' },
+  { group:'Nastavení',  key:'canEditVehicles', label:'Spravovat vozidla' },
+  { group:'Nastavení',  key:'canOpenEditor',   label:'Přistupovat do Visual Editoru' },
+  { group:'Nastavení',  key:'canManageUsers',  label:'Spravovat uživatele a role' },
+];
 
-// REMOVED_DUP: const PAGE_DEFS = [
-//   { key:'events',    label:'Přehled akcí' },
-//   { key:'dashboard', label:'Dashboard' },
-//   { key:'guests',    label:'Hosté' },
-//   { key:'emails',    label:'E-maily' },
-//   { key:'slots',     label:'Testovací jízdy / Časová okna' },
-//   { key:'editor',    label:'Visual Editor / Šablona' },
-//   { key:'settings',  label:'Nastavení' },
-//   { key:'archive',   label:'Archiv' },
-// ];
+const PAGE_DEFS = [
+  { key:'events',    label:'Přehled akcí' },
+  { key:'dashboard', label:'Dashboard' },
+  { key:'guests',    label:'Hosté' },
+  { key:'emails',    label:'E-maily' },
+  { key:'slots',     label:'Testovací jízdy / Časová okna' },
+  { key:'editor',    label:'Visual Editor / Šablona' },
+  { key:'settings',  label:'Nastavení' },
+  { key:'archive',   label:'Archiv' },
+];
 
-// REMOVED_DUP: const ROLES_ORDER = ['super_admin', 'manager', 'viewer'];
+const ROLES_ORDER = ['super_admin', 'manager', 'viewer'];
 
 function renderSettings() {
   const readonly     = !can('canEditSettings');
