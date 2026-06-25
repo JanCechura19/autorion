@@ -3984,7 +3984,7 @@ function buildSystemSettingsHTML(isSuperAdmin) {
           <tbody>
             ${USERS.map(u => {
               const rm = ROLE_META[u.role];
-              const accessLabel = u.event_access===null ? '<span class="badge badge-green">Všechny</span>' : u.event_access.length===0 ? '<span class="badge badge-gray">Žádné</span>' : `<span class="badge badge-yellow">${u.event_access.length} akce</span>`;
+              const accessLabel = (u.event_access==null) ? '<span class="badge badge-green">Všechny</span>' : u.event_access.length===0 ? '<span class="badge badge-gray">Žádné</span>' : `<span class="badge badge-yellow">${u.event_access.length} akce</span>`;
               return `<tr>
                 <td class="name-cell">${u.name}</td>
                 <td class="email-cell">${u.email}</td>
