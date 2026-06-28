@@ -106,6 +106,7 @@ class EventUpdate(BaseModel):
     consent_cs: Optional[str] = None
     consent_en: Optional[str] = None
     vehicles: Optional[list] = None
+    landing_page: Optional[dict] = None
 
 class BookingItem(BaseModel):
     vehicle_id: Optional[int] = None
@@ -176,6 +177,7 @@ def init_db():
             consent_en TEXT DEFAULT '',
             theme JSONB DEFAULT '{}',
             intro_text TEXT DEFAULT '',
+            landing_page JSONB DEFAULT '{}',
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -415,6 +417,20 @@ def get_event_public(slug: str):
         raise HTTPException(status_code=404, detail="Akce nenalezena")
     return dict(event)
 
+@app.get("/api/events/landing/{slug}")
+def get_event_landing(slug: str):
+    """Public landing page data — does not require registration_open, since
+    the info page can exist independently of whether registration is live."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM events WHERE slug = %s", (slug,))
+    event = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not event:
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    return dict(event)
+
 @app.get("/api/events/preview/{event_id}")
 def get_event_preview(event_id: int):
     """Used by the Visual Editor preview iframe — no registration_open requirement.
@@ -505,7 +521,7 @@ def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_us
     fields = {k: v for k, v in update.dict().items() if v is not None}
     if not fields:
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
-    json_fields = {"theme", "time_windows", "vehicles"}
+    json_fields = {"theme", "time_windows", "vehicles", "landing_page"}
     set_parts = []
     values = []
     for k, v in fields.items():
