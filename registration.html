@@ -933,7 +933,7 @@
         </div>
         <div>
           <div class="gdpr-text" id="gdprText">
-            Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce PPF Automotive Experience 2025. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" data-i18n="gdprLink">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.
+            Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" data-i18n="gdprLink">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.
           </div>
           <div class="gdpr-error" id="gdprError" data-i18n="errGdpr">Souhlas se zpracováním osobních údajů je povinný.</div>
         </div>
@@ -1008,7 +1008,7 @@ const T = {
     slotConflict:     '(koliduje)',
     slotConflictMsg:  '⚠ Tento čas koliduje s jinou Vaší rezervací.',
     // GDPR
-    gdprText:   'Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce PPF Automotive Experience 2025. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.',
+    gdprText:   (eventName) => `Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce ${eventName||''}. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" id="gdprLinkCs">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.`,
     gdprLink:   'Zásadami ochrany osobních údajů',
     // Validation errors
     errSalutation: 'Vyberte prosím oslovení.',
@@ -1066,7 +1066,7 @@ const T = {
     slotBooked:       '(unavailable)',
     slotConflict:     '(conflict)',
     slotConflictMsg:  '⚠ This time slot conflicts with another booking.',
-    gdprText:   'I consent to the processing of my personal data by PPF Group N.V. for the purpose of organising and running the PPF Automotive Experience 2025 event. I acknowledge that my personal data (name, contact information) will be processed in accordance with the <a href="#" onclick="event.stopPropagation()">Privacy Policy</a> and will not be shared with third parties without my consent. I give this consent voluntarily and may withdraw it at any time.',
+    gdprText:   (eventName) => `I consent to the processing of my personal data by Autorion s.r.o. (parent company of Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., and Orbion Cars s.r.o.) for the purpose of organising and running the ${eventName||''} event. I acknowledge that my personal data (name, contact information) will be processed in accordance with the <a href="#" onclick="event.stopPropagation()" id="gdprLinkEn">Privacy Policy</a> and will not be shared with third parties without my consent. I give this consent voluntarily and may withdraw it at any time.`,
     gdprLink:   'Privacy Policy',
     errSalutation: 'Please select a title.',
     errFirstName:  'Please enter your first name.',
@@ -1113,9 +1113,16 @@ function setLang(lang) {
       : el.getAttribute('data-placeholder-en');
   });
 
-  // Update GDPR text block (has HTML inside)
+  // Update GDPR text block (has HTML inside, includes dynamic event name)
   const gdprEl = document.getElementById('gdprText');
-  if (gdprEl) gdprEl.innerHTML = t('gdprText');
+  if (gdprEl) {
+    const gdprFn = t('gdprText');
+    gdprEl.innerHTML = typeof gdprFn === 'function'
+      ? gdprFn(EVENT_DATA?.name || '')
+      : gdprFn;
+    // Apply correct GDPR URL to the link inside the text
+    applyGdprUrl();
+  }
 
   // Re-render dynamic parts
   renderSlots();
@@ -1172,15 +1179,7 @@ function getGdprUrl() {
 
 function applyGdprUrl() {
   const url = getGdprUrl();
-  // Update all GDPR links in the page (HTML fallback + JS-generated text)
-  document.querySelectorAll('[data-i18n="gdprLink"], .gdpr-link').forEach(el => {
-    if (el.tagName === 'A') {
-      el.href = url;
-      el.target = '_blank';
-      el.rel = 'noopener noreferrer';
-    }
-  });
-  // Also update the gdprText element directly if it contains an anchor
+  // Update link inside the GDPR text block
   const gdprTextEl = document.getElementById('gdprText');
   if (gdprTextEl) {
     const link = gdprTextEl.querySelector('a');
@@ -1190,6 +1189,14 @@ function applyGdprUrl() {
       link.rel = 'noopener noreferrer';
     }
   }
+  // Also update any other elements with data-i18n="gdprLink"
+  document.querySelectorAll('[data-i18n="gdprLink"]').forEach(el => {
+    if (el.tagName === 'A') {
+      el.href = url;
+      el.target = '_blank';
+      el.rel = 'noopener noreferrer';
+    }
+  });
 }
 
 // Registration type: 'drives' | 'windows'
