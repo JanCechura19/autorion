@@ -1115,7 +1115,7 @@ input[type="checkbox"] {
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     z-index: 200;
-    width: 260px;
+    width: 260px !important;  /* přepíše var(--sidebar-w) = 0px */
   }
   .sidebar.mobile-open { transform: translateX(0); }
 
