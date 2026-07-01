@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Event Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<title>Autorion Events</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,300;1,14..32,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 
@@ -13,23 +13,24 @@
 
 
 :root {
-  --bg: #f5f3ef;
+  --bg: #f5f4f2;
   --surface: #ffffff;
-  --surface2: #f0ede8;
-  --border: #e2ddd6;
-  --border2: #cdc7be;
+  --surface2: #eeece8;
+  --border: #dddad4;
+  --border2: #c9c5bc;
   --text: #1a1816;
   --muted: #8a8278;
-  --accent: #1a1816;
-  --accent2: #c8622a;
-  --green: #2d6a4f;
-  --green-bg: #eaf4ef;
+  --accent: #3B5C49;      /* Autorion lesní zelená — primární */
+  --accent2: #A6916C;     /* Autorion zlatohnědá — sekundární akcent */
+  --accent3: #8291A6;     /* Autorion modro-šedá — terciální */
+  --green: #3B5C49;
+  --green-bg: #eaf2ed;
   --red: #c0392b;
   --red-bg: #fdf0ee;
-  --yellow: #b07d2a;
+  --yellow: #A6916C;
   --yellow-bg: #fdf6e8;
-  --blue: #2563a8;
-  --blue-bg: #eef4fc;
+  --blue: #8291A6;
+  --blue-bg: #eef2f7;
   --sidebar-w: 240px;
   --radius: 8px;
 }
@@ -37,7 +38,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Instrument Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
@@ -67,7 +68,7 @@ body {
   box-shadow: 0 24px 80px rgba(0,0,0,0.4);
 }
 .login-logo {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -99,7 +100,7 @@ body {
   border: none;
   border-radius: 6px;
   padding: 12px;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -116,7 +117,7 @@ body {
 /* ── SIDEBAR ── */
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--text);
+  background: #2d4737;  /* tmavší tón lesní zelené pro sidebar */
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -126,12 +127,15 @@ body {
 }
 .sidebar-logo {
   padding: 28px 24px 20px;
-  font-family: 'Syne', sans-serif;
-  font-size: 17px;
-  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.01em;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  line-height: 1.3;
 }
+.sidebar-logo .logo-main { color: #ffffff; font-size: 17px; font-weight: 800; }
+.sidebar-logo .logo-sub { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; }
 .sidebar-logo span { color: var(--accent2); }
 .sidebar-section {
   padding: 20px 12px 8px;
@@ -183,7 +187,7 @@ body {
   background: var(--accent2);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 12px;
   font-weight: 700;
   color: #fff;
@@ -216,7 +220,7 @@ body {
   z-index: 50;
 }
 .page-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -253,7 +257,7 @@ body {
 .stat-card.neutral::before { background: var(--muted); }
 
 .stat-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-.stat-value { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+.stat-value { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
 .stat-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
 /* ── TOOLBAR ── */
@@ -339,7 +343,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .table-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   font-weight: 700;
 }
@@ -460,7 +464,7 @@ input[type="checkbox"] {
   align-items: flex-start;
   justify-content: space-between;
 }
-.modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+.modal-title { font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 700; }
 .modal-close {
   background: none; border: none;
   color: var(--muted); cursor: pointer;
@@ -522,13 +526,13 @@ input[type="checkbox"] {
   border-radius: 50%;
   background: var(--text);
   color: #fff;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 16px;
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.detail-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; }
+.detail-name { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700; }
 .detail-email { font-size: 12px; color: var(--muted); }
 .detail-close {
   margin-left: auto;
@@ -725,7 +729,7 @@ input[type="checkbox"] {
   border-radius: var(--radius);
   padding: 20px 24px;
 }
-.chart-card-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; }
+.chart-card-title { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; }
 .bar-chart { display: flex; flex-direction: column; gap: 10px; }
 .bar-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .bar-label { width: 100px; flex-shrink: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -741,7 +745,7 @@ input[type="checkbox"] {
 .donut-center {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 .donut-num { font-size: 22px; font-weight: 800; line-height: 1; }
 .donut-label { font-size: 9px; color: var(--muted); letter-spacing: 0.05em; }
@@ -790,7 +794,7 @@ input[type="checkbox"] {
 .sidebar-l1 {
   width: 60px;
   flex-shrink: 0;
-  background: #0f0e0c;
+  background: #1e3028;  /* nejhlubší tón lesní zelené */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -802,7 +806,7 @@ input[type="checkbox"] {
 .sidebar-l1::-webkit-scrollbar { display: none; }
 
 .l1-logo {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 15px;
   font-weight: 800;
   color: #fff;
@@ -852,7 +856,7 @@ input[type="checkbox"] {
   background: #1a1816;
   color: #fff;
   font-size: 12px;
-  font-family: 'Instrument Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 500;
   white-space: nowrap;
   padding: 5px 10px;
@@ -874,7 +878,7 @@ input[type="checkbox"] {
   text-transform: uppercase;
   color: rgba(255,255,255,0.25);
   margin: 6px 0 2px;
-  font-family: 'Instrument Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 /* Level 2 — event context nav */
@@ -892,7 +896,7 @@ input[type="checkbox"] {
   flex-shrink: 0;
 }
 .l2-event-name {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 700;
   color: #fff;
@@ -937,7 +941,7 @@ input[type="checkbox"] {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.28);
-  font-family: 'Instrument Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .l2-item {
@@ -1006,7 +1010,7 @@ input[type="checkbox"] {
   background: var(--accent2);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: #fff;
@@ -1070,11 +1074,11 @@ input[type="checkbox"] {
 
 .ecard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .ecard-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
-.ecard-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+.ecard-title { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 3px; }
 .ecard-meta  { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .ecard-stats { display: flex; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
 .ecard-stat  { flex: 1; text-align: center; }
-.ecard-stat-val   { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; line-height: 1; }
+.ecard-stat-val   { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 800; line-height: 1; }
 .ecard-stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
 /* Template badge on event card */
@@ -1092,8 +1096,74 @@ input[type="checkbox"] {
   width: fit-content;
 }
 
+/* ══════════════════════════════════════════════════════
+   RESPONSIVE — TABLET (max 1024px) & MOBILE (max 640px)
+   ══════════════════════════════════════════════════════ */
 
+@media (max-width: 1024px) {
+  :root { --sidebar-w: 200px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .table-wrap { overflow-x: auto; }
+  table { min-width: 600px; }
+  .modal-box { width: calc(100vw - 32px); max-width: 560px; }
+}
 
+@media (max-width: 640px) {
+  :root { --sidebar-w: 0px; }
+
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 200;
+    width: 260px;
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 199;
+  }
+  .sidebar-overlay.visible { display: block; }
+
+  .topbar { padding: 0 16px; gap: 12px; }
+  .topbar-hamburger {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; cursor: pointer; flex-shrink: 0;
+    color: var(--text); font-size: 20px; background: none; border: none;
+  }
+  .topbar-title { font-size: 15px; }
+
+  .main { margin-left: 0 !important; }
+
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 560px; }
+
+  th:nth-child(5), td:nth-child(5),
+  th:nth-child(7), td:nth-child(7),
+  th:nth-child(8), td:nth-child(8) { display: none; }
+
+  .modal-box {
+    width: 100vw; max-width: 100vw; margin: 0;
+    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+    max-height: 90vh; border-radius: 16px 16px 0 0;
+    transform: none !important;
+  }
+
+  .detail-panel {
+    width: 100vw !important; border-radius: 16px 16px 0 0;
+    position: fixed; bottom: 0; top: auto; max-height: 90vh; overflow-y: auto;
+  }
+
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .content { padding: 16px !important; }
+  .login-box { margin: 20px 16px; padding: 28px 20px; }
+
+  .sidebar-v2 { transform: translateX(calc(-100% - 60px)); }
+  .sidebar-v2.mobile-open { transform: translateX(0); }
+}
 
 
 </style>
@@ -1107,7 +1177,7 @@ input[type="checkbox"] {
 <!-- LOGIN -->
 <div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--ink);padding:24px;">
   <div class="login-box">
-    <div class="login-logo">Event<span style="color:var(--accent2)">Admin</span></div>
+    <div class="login-logo"><span class="logo-main">Autorion</span><span style="color:var(--accent2);font-weight:400;font-size:13px;letter-spacing:0.05em;display:block;margin-top:2px;">EVENTS</span></div>
     <div class="login-sub">Správa eventů · Přihlaste se</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Role určuje, co v systému uvidíte a můžete měnit.</div>
     <div class="login-field">
@@ -1135,7 +1205,7 @@ input[type="checkbox"] {
 
   <!-- SIDEBAR V2: Single column, two-state -->
   <nav class="sidebar" style="width:var(--sidebar-w);display:flex;flex-direction:column;padding:0;">
-    <div class="sidebar-logo" style="padding:20px 20px 16px;">Event<span style="color:var(--accent2)">Admin</span></div>
+    <div class="sidebar-logo" style="padding:20px 20px 16px;"><div class="logo-main">Autorion</div><div class="logo-sub">Events</div></div>
 
     <!-- Dynamic nav — renders either event list or event context -->
     <div id="sidebarNav" style="flex:1;overflow-y:auto;overflow-x:hidden;">
@@ -1160,9 +1230,13 @@ input[type="checkbox"] {
       <span><strong>Režim nahlížení</strong> — nemůžete měnit data. Vidíte dashboard, hosty a rozpis jízd.</span>
     </div>
     <div class="topbar">
+      <button class="topbar-hamburger" id="hamburgerBtn" onclick="toggleMobileSidebar()" aria-label="Menu" style="display:none;">☰</button>
       <div class="page-title" id="topbarTitle">Akce</div>
       <div class="topbar-actions" id="topbarActions"></div>
     </div>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
 
     <div class="content">
 
@@ -1224,6 +1298,7 @@ input[type="checkbox"] {
                   <th onclick="sortTable('firstName')">Jméno <span class="sort-arrow">↕</span></th>
                   <th onclick="sortTable('email')">E-mail <span class="sort-arrow">↕</span></th>
                   <th onclick="sortTable('phone')">Telefon <span class="sort-arrow">↕</span></th>
+                  <th onclick="sortTable('company')">Společnost <span class="sort-arrow">↕</span></th>
                   <th onclick="sortTable('status')">Odpověď <span class="sort-arrow">↕</span></th>
                   <th>Doprovod</th>
                   <th>E-mail odeslán</th>
@@ -1264,7 +1339,7 @@ input[type="checkbox"] {
       <div class="page" id="page-editor" style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
         <div style="text-align:center;max-width:420px;">
           <div style="font-size:48px;margin-bottom:16px;">🎨</div>
-          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;">Visual Editor</div>
+          <div style="font-family:'Inter',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;">Visual Editor</div>
           <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6;">
             Upravte vzhled registračního formuláře — barvy, fonty, layout a obrázky — v samostatném okně s živým náhledem.
           </div>
@@ -1958,6 +2033,7 @@ function renderTable() {
       <td>${g.first_name}</td>
       <td class="email-cell">${g.email}</td>
       <td style="color:var(--muted);font-size:12px">${g.phone||'—'}</td>
+      <td>${g.company ? `<span class="badge" style="background:${g.company==='albion'?'#A6916C':g.company==='cardion'?'#8291A6':'#333'};color:#fff;text-transform:uppercase;font-size:10px">${g.company}</span>` : '<span class="badge badge-gray">—</span>'}</td>
       <td>${statusBadge(g.status)}</td>
       <td>${g.companion?'<span class="badge badge-blue">Ano</span>':'<span class="badge badge-gray">Ne</span>'}</td>
       <td>${g.email_sent?'<span class="badge badge-green">✓</span>':'<span class="badge badge-gray">Ne</span>'}</td>
@@ -2039,6 +2115,7 @@ function openDetail(id) {
     <div>
       <div class="detail-section-title">Základní info</div>
       <div class="detail-row"><span class="detail-row-label">Telefon</span><span class="detail-row-value">${g.phone||'—'}</span></div>
+      <div class="detail-row"><span class="detail-row-label">Společnost</span><span class="detail-row-value">${g.company ? `<span class="badge" style="background:${g.company==='albion'?'#A6916C':g.company==='cardion'?'#8291A6':'#333'};color:#fff;text-transform:uppercase;font-size:10px">${g.company}</span>` : '—'}</span></div>
       <div class="detail-row"><span class="detail-row-label">Odpověď</span><span class="detail-row-value">${statusBadge(g.status)}</span></div>
       <div class="detail-row"><span class="detail-row-label">Doprovod</span><span class="detail-row-value">${g.companion?'Ano':'Ne'}</span></div>
       <div class="detail-row"><span class="detail-row-label">E-mail odeslán</span><span class="detail-row-value">${g.email_sent?'<span class="badge badge-green">Ano</span>':'Ne'}</span></div>
@@ -2089,6 +2166,14 @@ function openGuestForm(g) {
     </div>
     <div class="form-row"><label>E-mail</label><input type="email" id="fEmail" value="${g?.email||''}"></div>
     <div class="form-row"><label>Telefon</label><input id="fPhone" value="${g?.phone||''}"></div>
+    <div class="form-row"><label>Společnost</label>
+      <select id="fCompany">
+        <option value="" ${!g?.company?'selected':''}>— Nevybráno —</option>
+        <option value="albion"  ${g?.company==='albion' ?'selected':''}>Albion Cars</option>
+        <option value="cardion" ${g?.company==='cardion'?'selected':''}>Cardion Cars</option>
+        <option value="orbion"  ${g?.company==='orbion' ?'selected':''}>Orbion Cars</option>
+      </select>
+    </div>
     <div class="form-grid">
       <div class="form-row"><label>Doprovod</label>
         <select id="fCompanion"><option value="false" ${!g?.companion?'selected':''}>Ne</option><option value="true" ${g?.companion?'selected':''}>Ano</option></select>
@@ -2113,7 +2198,7 @@ async function saveGuest(id) {
   const ln = document.getElementById('fLastName').value.trim();
   const em = document.getElementById('fEmail').value.trim();
   if (!fn||!ln||!em) { showToast('Vyplňte jméno, příjmení a e-mail','error'); return; }
-  const payload = { first_name:fn, last_name:ln, email:em, phone:document.getElementById('fPhone').value, companion:document.getElementById('fCompanion').value==='true', status:document.getElementById('fStatus').value };
+  const payload = { first_name:fn, last_name:ln, email:em, phone:document.getElementById('fPhone').value, companion:document.getElementById('fCompanion').value==='true', status:document.getElementById('fStatus').value, company:document.getElementById('fCompany')?.value||'' };
 
   if (id) {
     const updated = await apiCall(`/guests/${id}`, 'PATCH', payload);
@@ -2180,6 +2265,7 @@ async function processImportFile(file) {
       const payload = {
         first_name: String(r[0]).trim(), last_name: String(r[1]).trim(), email,
         phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
+        company: String(r[5]||'').trim().toLowerCase(),
         status: 'pending', event_id: currentEventId
       };
       const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', payload);
@@ -2268,7 +2354,7 @@ function switchEmailTab(tab, el) {
             <div style="background:var(--surface2);padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
               <span style="font-size:22px">${t.icon||'✉️'}</span>
               <div>
-                <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;">${t.name}</div>
+                <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;">${t.name}</div>
                 <div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.subject.replace('{{event_name}}','…')}</div>
               </div>
             </div>
@@ -2379,7 +2465,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
       ${statItems.map(s=>`
         <div style="flex:1;min-width:80px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:${s.color}">${s.val}</div>
+          <div style="font-family:'Inter',sans-serif;font-size:18px;font-weight:800;color:${s.color}">${s.val}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">${s.label}</div>
         </div>`).join('')}
     </div>
@@ -2405,7 +2491,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
               <span style="font-size:13px;font-weight:${selectedGroup===grp.key?'600':'400'};">${grp.label}</span>
               <span style="font-size:11px;color:var(--muted);margin-left:6px;">${grp.desc}</span>
             </div>
-            <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;flex-shrink:0;color:${grp.count===0?'var(--muted)':'var(--text)'};">${grp.count}</div>
+            <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;flex-shrink:0;color:${grp.count===0?'var(--muted)':'var(--text)'};">${grp.count}</div>
           </label>`).join('')}
         ${isCustom ? `
           <label style="display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--text);border-radius:6px;cursor:default;background:var(--surface2);">
@@ -2414,7 +2500,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
               <span style="font-size:13px;font-weight:600;">Vlastní výběr</span>
               <span style="font-size:11px;color:var(--muted);margin-left:6px;">Ručně vybraní hosté z tabulky</span>
             </div>
-            <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;">${recip.length}</div>
+            <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;">${recip.length}</div>
           </label>` : ''}
       </div>
     </div>
@@ -2547,7 +2633,7 @@ function renderEmailEditor() {
       <div style="flex:1;background:#e8e8e8;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:24px;">
         <div style="width:100%;max-width:600px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <div style="font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Náhled e-mailu</div>
+            <div style="font-size:11px;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Náhled e-mailu</div>
             <div style="display:flex;gap:6px;">
               <button class="btn btn-secondary btn-sm" id="prevDesktop" onclick="setEmailViewport('desktop',this)" style="background:#fff;">🖥 Desktop</button>
               <button class="btn btn-secondary btn-sm" id="prevMobile"  onclick="setEmailViewport('mobile',this)">📱 Mobil</button>
@@ -2893,11 +2979,11 @@ function renderSlotsWindows() {
       <div class="table-wrap" style="overflow:hidden;margin-bottom:12px;">
         <div style="padding:14px 20px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;">
           <div style="flex:1;">
-            <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;">${w.label}</div>
+            <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;">${w.label}</div>
             <div style="font-size:12px;color:var(--muted);margin-top:2px;">${w.day ? '📅 '+w.day+' · ' : ''}🕐 ${w.from} – ${w.to}</div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
-            <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:${full?'var(--red)':'var(--text)'};">
+            <div style="font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:${full?'var(--red)':'var(--text)'};">
               ${list.length}${w.capacity>0?`<span style="font-size:13px;font-weight:400;color:var(--muted);">/${w.capacity}</span>`:''}
             </div>
             <div style="font-size:11px;color:var(--muted);">${full?'🔴 Plno':'🟢 Volno'}</div>
@@ -2916,13 +3002,13 @@ function renderSlotsWindows() {
   }
 
   let html = `<div style="margin-bottom:16px;">
-    <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px;">Obsazenost — časová okna</div>
+    <div style="font-family:'Inter',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px;">Obsazenost — časová okna</div>
     <div style="font-size:13px;color:var(--muted);">Přehled přihlášených hostů v jednotlivých blocích.</div>
   </div>`;
 
   if (multiDay) {
     days.forEach(day => {
-      html += `<div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin:16px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--border);">📅 ${day}</div>`;
+      html += `<div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;margin:16px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--border);">📅 ${day}</div>`;
       windows.filter(w => w.day === day).forEach(w => { html += windowCard(w); });
     });
     const undated = windows.filter(w => !w.day);
@@ -2948,7 +3034,7 @@ function renderSettings() {
   document.getElementById('settingsContent').innerHTML = `
     <div style="max-width:600px;display:flex;flex-direction:column;gap:24px;">
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Základní informace</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Základní informace</div>
         <div style="display:flex;flex-direction:column;gap:14px;">
           <div class="form-row"><label>Název akce</label><input id="sName" value="${EVENT.name}" ${ro}></div>
           <div class="form-grid">
@@ -2960,7 +3046,7 @@ function renderSettings() {
         </div>
       </div>
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Vozidla</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Vozidla</div>
         <div id="vehicleSettingsList" style="display:flex;flex-direction:column;gap:8px;">
           ${VEHICLES.map(v=>`
             <div style="display:flex;gap:8px;align-items:center;">
@@ -2971,7 +3057,7 @@ function renderSettings() {
         ${can('canEditVehicles') ? `<button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="addVehicle()">+ Přidat vůz</button>` : ''}
       </div>
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Uživatelé a role</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Uživatelé a role</div>
         <table style="width:100%">
           <thead><tr><th>E-mail</th><th>Jméno</th><th>Role</th><th>Check-in</th>${can('canManageUsers')?'<th></th>':''}</tr></thead>
           <tbody>
@@ -3186,7 +3272,7 @@ function renderArchiveDetail(id) {
     
     <div style="display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;margin-bottom:28px;">
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.01em;margin-bottom:6px;">${ev.name}</div>
+        <div style="font-family:'Inter',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.01em;margin-bottom:6px;">${ev.name}</div>
         <div style="font-size:13px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
           <span>📅 ${ev.date_from}${ev.date_to !== ev.date_from ? '–'+ev.date_to : ''}</span>
           <span>📍 ${ev.location}</span>
@@ -3214,7 +3300,7 @@ function renderArchiveDetail(id) {
 
       
       <div class="table-wrap" style="padding:20px 24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
+        <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
           🚗 Vozidla (${ev.vehicles.length})
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -3231,7 +3317,7 @@ function renderArchiveDetail(id) {
 
       
       <div class="table-wrap" style="padding:20px 24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
+        <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
           🎨 Šablona registrace
         </div>
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;">
@@ -3520,7 +3606,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
 
       
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Základní informace</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Základní informace</div>
         <div style="display:flex;flex-direction:column;gap:14px;">
           <div class="form-row"><label>Název akce</label><input id="sName" value="${EVENT.name}" ${ro}></div>
           <div class="form-grid">
@@ -3534,7 +3620,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
 
       
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Vozidla</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Vozidla</div>
         <div id="vehicleSettingsList" style="display:flex;flex-direction:column;gap:8px;">
           ${VEHICLES.map(v=>`
             <div style="display:flex;gap:8px;align-items:center;">
@@ -3547,7 +3633,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
 
       
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Typ registrace</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:20px;">Typ registrace</div>
         <div style="display:flex;flex-direction:column;gap:14px;">
           <div class="form-row">
             <label>Typ registrace pro tuto akci</label>
@@ -3560,7 +3646,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
         </div>
         <!-- Drives config editor -->
         <div id="drivesEditor" style="margin-top:20px;${EVENT.registration_type === 'drives' ? '' : 'display:none;'}">
-          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px;">Nastavení časových slotů</div>
+          <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px;">Nastavení časových slotů</div>
           <div class="form-grid" style="margin-bottom:10px;">
             <div class="form-row"><label>Začátek jízd</label><input type="time" id="sSlotStart" value="${EVENT.slot_start||'10:00'}" ${!can('canEditSettings')?'disabled style="opacity:0.6"':''}></div>
             <div class="form-row"><label>Konec jízd</label><input type="time" id="sSlotEnd" value="${EVENT.slot_end||'18:00'}" ${!can('canEditSettings')?'disabled style="opacity:0.6"':''}></div>
@@ -3576,7 +3662,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
         </div>
 
         <div id="timeWindowsEditor" style="margin-top:20px;${EVENT.registration_type !== 'windows' ? 'display:none;' : ''}">
-          <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
             <span>Časová okna</span>
             ${can('canEditSettings') ? `<button class="btn btn-primary btn-sm" onclick="openAddWindowModal()">+ Přidat okno</button>` : ''}
           </div>
@@ -3589,7 +3675,7 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
 
       
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Uživatelé s přístupem k akci</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Uživatelé s přístupem k akci</div>
         ${can('canManageUsers') ? `<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
           Pro správu uživatelů přejděte do
           <a href="#" onclick="showSystemSettings();return false;" style="color:var(--blue);">Nastavení systému</a>.
@@ -3977,7 +4063,7 @@ function buildSystemSettingsHTML(isSuperAdmin) {
   return `
     <div style="max-width:760px;display:flex;flex-direction:column;gap:24px;">
       <div class="table-wrap" style="padding:24px;">
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Bezpečnost</div>
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Bezpečnost</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:20px;">Změna hesla pro váš účet (${currentUser?.email||''}).</div>
         <div id="pwChangeError" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:6px;background:rgba(200,60,60,0.08);border:1px solid var(--red);color:var(--red);font-size:13px;"></div>
         <div id="pwChangeSuccess" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:6px;background:var(--green-bg);border:1px solid #b7dfcc;color:var(--green);font-size:13px;"></div>
@@ -3990,7 +4076,7 @@ function buildSystemSettingsHTML(isSuperAdmin) {
       </div>
       <div class="table-wrap" style="padding:24px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;">Uživatelé</div>
+          <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;">Uživatelé</div>
           ${can('canManageUsers') ? `<button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ Přidat uživatele</button>` : ''}
         </div>
         <table style="width:100%">
@@ -4013,7 +4099,7 @@ function buildSystemSettingsHTML(isSuperAdmin) {
       </div>
       <div class="table-wrap" style="padding:24px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;">Role a oprávnění</div>
+          <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;">Role a oprávnění</div>
           ${isSuperAdmin ? `<button class="btn btn-primary btn-sm" onclick="saveRolePermissions()">💾 Uložit</button>` : `<span style="font-size:12px;color:var(--muted);">🔒 Pouze Super Admin</span>`}
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6;">Super Admin má vždy plný přístup a nelze ho omezit.</div>
@@ -4349,7 +4435,7 @@ function renderArchiveDetail(id) {
       <button class="btn btn-secondary btn-sm" onclick="renderArchive()">← Zpět na archiv</button>
       <span>/</span><span style="color:var(--text);font-weight:500">${ev.name}</span>
     </div>
-    <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:6px;">${ev.name}</div>
+    <div style="font-family:'Inter',sans-serif;font-size:22px;font-weight:800;margin-bottom:6px;">${ev.name}</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">📅 ${ev.date_from} · 📍 ${ev.location} · Archivováno ${formatDate(ev.archived_at)}</div>
     <div class="stats-grid" style="margin-bottom:24px;">
       <div class="stat-card green"><div class="stat-label">Potvrzení</div><div class="stat-value">${confirmed}</div></div>
@@ -4484,7 +4570,7 @@ function renderSidebarEventContext() {
     <div style="padding:10px 16px 14px;border-bottom:1px solid rgba(255,255,255,0.08);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
         <span style="font-size:18px;">${ev.icon||'🎯'}</span>
-        <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;line-height:1.3;">${ev.name}</div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#fff;line-height:1.3;">${ev.name}</div>
       </div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;padding-left:26px;">
         ${ev.date_from}${ev.date_to&&ev.date_to!==ev.date_from?'–'+ev.date_to:''}<br>${ev.location||''}
@@ -4541,6 +4627,7 @@ async function loadGuestsFromApi(eventId) {
     window_id: g.window_id ?? null,
     consent_signed: !!g.consent_signed,
     consent_paper: !!g.consent_paper,
+    company: g.company || '',
     unique_token: 'guest-' + g.id,
   }));
   filteredGuests = [...guests];
@@ -4628,7 +4715,7 @@ function renderEventsPage() {
 
   const newEventBtn=can('canCreateEvent')?`<button class="btn btn-primary" onclick="openNewEventModal()">+ Nová akce</button>`:'';
   const archivedSection=ARCHIVE.length?`
-    <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;margin-top:8px;display:flex;align-items:center;gap:8px;">
+    <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;margin-top:8px;display:flex;align-items:center;gap:8px;">
       <span style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;"></span>Archivované akce
     </div>
     <div class="events-grid">${ARCHIVE.map(buildArchivedCard).join('')}</div>`
@@ -4637,11 +4724,11 @@ function renderEventsPage() {
   el.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.01em;margin-bottom:4px;">Přehled akcí</div>
+        <div style="font-family:'Inter',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.01em;margin-bottom:4px;">Přehled akcí</div>
         <div style="font-size:13px;color:var(--muted);">Kliknutím na akci přejdete do jejího administračního rozhraní.</div>
       </div>${newEventBtn}
     </div>
-    <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+    <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
       <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;"></span>Aktivní akce
     </div>
     <div class="events-grid" style="margin-bottom:32px;">
@@ -4788,7 +4875,27 @@ function updateUserInfo() {
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('loginBtn').addEventListener('click', doLogin);
   document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+  function checkMobile() {
+    const isMobile = window.innerWidth <= 640;
+    const btn = document.getElementById('hamburgerBtn');
+    if (btn) btn.style.display = isMobile ? 'flex' : 'none';
+    if (!isMobile) {
+      document.querySelector('.sidebar')?.classList.remove('mobile-open');
+      document.getElementById('sidebarOverlay')?.classList.remove('visible');
+    }
+  }
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
 });
+
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.toggle('mobile-open');
+  if (overlay) overlay.classList.toggle('visible', isOpen);
+}
 </script>
 </body>
 </html>

@@ -107,6 +107,7 @@ class EventUpdate(BaseModel):
     consent_en: Optional[str] = None
     vehicles: Optional[list] = None
     landing_page: Optional[dict] = None
+    company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
 
 class BookingItem(BaseModel):
     vehicle_id: Optional[int] = None
@@ -125,6 +126,7 @@ class GuestCreate(BaseModel):
     window_id: Optional[int] = None
     bookings: List[BookingItem] = []
     consent_signed: bool = False
+    company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
 
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -138,6 +140,7 @@ class GuestUpdate(BaseModel):
     consent_paper: Optional[bool] = None
     consent_license: Optional[str] = None
     walk_in: Optional[bool] = None
+    company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
 
 # ── INIT DB ─────────────────────────────────────────────
 
@@ -189,6 +192,7 @@ def init_db():
             last_name VARCHAR(255),
             email VARCHAR(255),
             phone VARCHAR(50) DEFAULT '',
+            company VARCHAR(50) DEFAULT '',
             status VARCHAR(50) DEFAULT 'pending',
             checked_in BOOLEAN DEFAULT FALSE,
             companion BOOLEAN DEFAULT FALSE,
@@ -604,13 +608,13 @@ def create_guest(event_id: int, guest: GuestCreate):
                     raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
 
         cur.execute("""
-            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed, company)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
-            json.dumps(bookings_list), guest.consent_signed
+            json.dumps(bookings_list), guest.consent_signed, guest.company or ''
         ))
         new_guest = cur.fetchone()
         conn.commit()
