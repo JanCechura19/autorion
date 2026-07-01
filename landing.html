@@ -155,7 +155,7 @@
     letter-spacing: 0.03em; padding: 14px 36px; border-radius: var(--radius);
     cursor: pointer; text-decoration: none; transition: opacity 0.2s; border: none;
   }
-  .btn-primary { background: var(--color-primary); color: #ffffff; }
+  .btn-primary { background: var(--btn-bg, var(--color-primary)); color: var(--btn-text, #ffffff); }
   .btn-primary:hover { opacity: 0.85; }
   .btn-secondary { background: transparent; color: var(--ink); border: 1px solid var(--warm); }
   .btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
@@ -465,9 +465,13 @@ function buildThemeCss(theme) {
   if (bg.type === 'image' && bg.imageUrl) bgValue = `url(${bg.imageUrl})`;
 
   const pageBgColor = (bg.type === 'color' ? bg.color : null) || colors.surface || '#f7f4ef';
-  const cardBg   = deriveCardColor(pageBgColor);
-  const cardText = isLightColor(cardBg) ? '#1a1816' : '#f5f2ec';
+  const autoBg   = deriveCardColor(pageBgColor);
+  const autoText = isLightColor(autoBg) ? '#1a1816' : '#f5f2ec';
+  const cardBg   = colors.cardBg   || autoBg;
+  const cardText = colors.cardText || autoText;
   const cardMuted = isLightColor(cardBg) ? '#6b6256' : '#b8b2a6';
+  const btnBg    = colors.btn      || colors.primary || '#0e0d0b';
+  const btnText  = colors.btnText  || '#ffffff';
 
   const css = `
     :root {
@@ -479,8 +483,11 @@ function buildThemeCss(theme) {
       --color-border: ${colors.border || '#d6cfc3'};
       --cream: ${cardBg};
       --warm: ${colors.border || '#d6cfc3'};
+      --card-bg: ${cardBg};
       --card-text: ${cardText};
       --card-muted: ${cardMuted};
+      --btn-bg: ${btnBg};
+      --btn-text: ${btnText};
       --radius: ${layout.borderRadius != null ? layout.borderRadius+'px' : '2px'};
       --font-display: ${typo.fontDisplay || "'Cormorant Garamond', Georgia, serif"};
       --font-body: ${typo.fontBody || "'Cormorant Garamond', Georgia, serif"};

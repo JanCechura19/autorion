@@ -599,8 +599,8 @@
 
   .submit-btn {
     position: relative;
-    background: var(--color-primary);
-    color: #ffffff;
+    background: var(--btn-bg, var(--color-primary));
+    color: var(--btn-text, #ffffff);
     border: none;
     padding: 18px 52px;
     font-family: var(--font-display);
@@ -1386,15 +1386,17 @@ function buildThemeCss(theme) {
   if (bg.type === 'gradient') bgValue = `linear-gradient(${bg.gradAngle||135}deg, ${bg.grad1||'#fff'}, ${bg.grad2||'#eee'})`;
   if (bg.type === 'image' && bg.imageUrl) bgValue = `url(${bg.imageUrl})`;
 
-  // Derive a "card" background (used for slot entries, GDPR box, success
-  // summary, lang switcher, etc.) that always contrasts with the page
-  // background, whether the theme is light or dark.
+  // Use manually set card/button colors if available, otherwise auto-derive
   const pageBgColor = (bg.type === 'color' ? bg.color : null) || colors.surface || '#f7f4ef';
-  const cardBg   = deriveCardColor(pageBgColor);
-  // Text color is chosen to contrast with the CARD itself, not the page —
-  // the card's own lightness is what matters for readability.
-  const cardText = isLightColor(cardBg) ? '#1a1816' : '#f5f2ec';
+  const autoBg   = deriveCardColor(pageBgColor);
+  const autoText = isLightColor(autoBg) ? '#1a1816' : '#f5f2ec';
+  const autoMuted = isLightColor(autoBg) ? '#6b6256' : '#b8b2a6';
+
+  const cardBg   = colors.cardBg   || autoBg;
+  const cardText = colors.cardText || autoText;
   const cardMuted = isLightColor(cardBg) ? '#6b6256' : '#b8b2a6';
+  const btnBg    = colors.btn      || colors.primary || '#0e0d0b';
+  const btnText  = colors.btnText  || '#ffffff';
 
   const css = `
     :root {
@@ -1406,8 +1408,11 @@ function buildThemeCss(theme) {
       --color-border: ${colors.border || '#d6cfc3'};
       --cream: ${cardBg};
       --warm: ${colors.border || '#d6cfc3'};
+      --card-bg: ${cardBg};
       --card-text: ${cardText};
       --card-muted: ${cardMuted};
+      --btn-bg: ${btnBg};
+      --btn-text: ${btnText};
       --radius: ${layout.borderRadius != null ? layout.borderRadius+'px' : '2px'};
       --font-display: ${typo.fontDisplay || "'Cormorant Garamond', Georgia, serif"};
       --font-body: ${typo.fontBody || "'Cormorant Garamond', Georgia, serif"};

@@ -620,7 +620,9 @@ iframe#previewFrame {
       <div class="panel-tab" onclick="switchTab('typography', this)"><span class="panel-tab-icon">T</span>Písmo</div>
       <div class="panel-tab" onclick="switchTab('media', this)"><span class="panel-tab-icon">🖼</span>Média</div>
       <div class="panel-tab" onclick="switchTab('layout', this)"><span class="panel-tab-icon">⬛</span>Layout</div>
-      <div class="panel-tab" id="tabSectionsBtn" onclick="switchTab('sections', this)" style="display:none;"><span class="panel-tab-icon">☰</span>Sekce</div>
+    </div>
+    <div class="panel-tabs" id="sectionsTabRow" style="display:none;border-top:1px solid var(--border);background:var(--surface2);">
+      <div class="panel-tab" id="tabSectionsBtn" onclick="switchTab('sections', this)"><span class="panel-tab-icon">☰</span>Dealerské sekce</div>
     </div>
 
     <div class="panel-content">
@@ -722,19 +724,9 @@ iframe#previewFrame {
             </div>
 
             <div id="bgImageCtrl" style="display:none;" class="ctrl-row">
-              <div class="ctrl-label">Obrázek pozadí</div>
-              <div class="img-upload-wrap" id="bgImgWrap" onclick="document.getElementById('bgImgInput').click()">
-                <img class="img-preview" id="bgImgPreview" src="" alt="">
-                <div class="img-placeholder" id="bgImgPlaceholder">
-                  <span class="img-placeholder-icon">🖼</span>
-                  <span class="img-placeholder-text">Klikněte nebo přetáhněte obrázek</span>
-                </div>
-                <input class="img-upload-input" type="file" id="bgImgInput" accept="image/*" onchange="handleImageUpload('bg', this)">
-              </div>
-              <div class="img-actions">
-                <button class="img-action-btn" onclick="event.stopPropagation(); document.getElementById('bgImgInput').click()">Změnit</button>
-                <button class="img-action-btn danger" onclick="event.stopPropagation(); clearImage('bg')">Odstranit</button>
-              </div>
+              <div class="ctrl-label">URL obrázku pozadí <span style="color:var(--muted);font-weight:400;">(https://...)</span></div>
+              <input type="text" class="ctrl-input" id="bgImageUrl" placeholder="https://example.com/background.jpg"
+                oninput="applyTheme()" style="margin-bottom:8px;">
               <div class="ctrl-label" style="margin-top:8px">Překrytí (overlay)</div>
               <div class="slider-ctrl">
                 <input type="range" id="bgOverlay" min="0" max="80" value="0" oninput="updateLabel('bgOverlayVal', this.value + '%'); applyTheme()">
@@ -812,6 +804,46 @@ iframe#previewFrame {
             <div class="ctrl-row slider-ctrl">
               <div class="ctrl-label">Zaoblení rohů <span class="ctrl-value-display" id="radiusVal">2px</span></div>
               <input type="range" id="borderRadius" min="0" max="24" value="2" oninput="updateLabel('radiusVal', this.value+'px'); applyTheme()">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+        <!-- Tlačítka a karty -->
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">🔲</span>Tlačítka a karty</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div class="ctrl-row">
+              <div class="ctrl-label">Pozadí tlačítek</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorBtn" value="#0e0d0b" oninput="syncColor('colorBtn','hexBtn'); applyTheme()"></div>
+                <input class="color-hex" id="hexBtn" value="#0E0D0B" maxlength="7" oninput="syncHex('hexBtn','colorBtn'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Text tlačítek</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorBtnText" value="#ffffff" oninput="syncColor('colorBtnText','hexBtnText'); applyTheme()"></div>
+                <input class="color-hex" id="hexBtnText" value="#FFFFFF" maxlength="7" oninput="syncHex('hexBtnText','colorBtnText'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Pozadí karet / obdélníků</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorCardBg" value="#ede9e1" oninput="syncColor('colorCardBg','hexCardBg'); applyTheme()"></div>
+                <input class="color-hex" id="hexCardBg" value="#EDE9E1" maxlength="7" oninput="syncHex('hexCardBg','colorCardBg'); applyTheme()">
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <div class="ctrl-label">Text v kartách</div>
+              <div class="color-ctrl">
+                <div class="color-swatch"><input type="color" id="colorCardText" value="#1a1816" oninput="syncColor('colorCardText','hexCardText'); applyTheme()"></div>
+                <input class="color-hex" id="hexCardText" value="#1A1816" maxlength="7" oninput="syncHex('hexCardText','colorCardText'); applyTheme()">
+              </div>
             </div>
           </div>
         </div>
@@ -1272,9 +1304,14 @@ function restoreTheme(saved) {
     const bgTypeEl = document.getElementById('bgType');
     if (bgTypeEl) { bgTypeEl.value = bg.type || 'color'; onBgTypeChange(); }
     if (bg.color) { setColor('bgColor','hexBg', bg.color); }
+    if (bg.imageUrl) { const el = document.getElementById('bgImageUrl'); if (el) el.value = bg.imageUrl; }
     if (bg.grad1) document.getElementById('grad1').value = bg.grad1;
     if (bg.grad2) document.getElementById('grad2').value = bg.grad2;
     if (bg.gradAngle) document.getElementById('gradAngle').value = bg.gradAngle;
+    if (bg.overlayOpacity != null) {
+      const ov = document.getElementById('bgOverlay');
+      if (ov) { ov.value = bg.overlayOpacity; updateLabel('bgOverlayVal', bg.overlayOpacity + '%'); }
+    }
   }
   // Colors
   if (saved.colors) {
@@ -1284,6 +1321,10 @@ function restoreTheme(saved) {
     if (c.surface) setColor('colorSurface','hexSurface', c.surface);
     if (c.muted)   setColor('colorMuted',  'hexMuted',   c.muted);
     if (c.border)  setColor('colorBorder', 'hexBorder',  c.border);
+    if (c.btn)     setColor('colorBtn',    'hexBtn',     c.btn);
+    if (c.btnText) setColor('colorBtnText','hexBtnText', c.btnText);
+    if (c.cardBg)  setColor('colorCardBg', 'hexCardBg',  c.cardBg);
+    if (c.cardText)setColor('colorCardText','hexCardText',c.cardText);
   }
   // Typography
   if (saved.typography) {
@@ -1863,6 +1904,10 @@ function applyTheme() {
   const surface  = document.getElementById('colorSurface').value;
   const muted    = document.getElementById('colorMuted').value;
   const border   = document.getElementById('colorBorder').value;
+  const btnBg    = document.getElementById('colorBtn')?.value || primary;
+  const btnText  = document.getElementById('colorBtnText')?.value || '#ffffff';
+  const cardBg   = document.getElementById('colorCardBg')?.value || '#ede9e1';
+  const cardText = document.getElementById('colorCardText')?.value || '#1a1816';
   const radius   = document.getElementById('borderRadius').value;
   const fontDisp = document.getElementById('fontDisplay').value;
   const fontBd   = document.getElementById('fontBody').value;
@@ -1884,10 +1929,12 @@ function applyTheme() {
   const heroOv   = parseFloat(document.getElementById('heroOverlay').value) / 100;
   const bgOv     = parseFloat(document.getElementById('bgOverlay').value) / 100;
 
+  const bgImageUrl = document.getElementById('bgImageUrl')?.value || '';
+
   // Background
   let bgValue = bgColor;
   if (bgType === 'gradient') bgValue = `linear-gradient(${gradAng}deg, ${grad1}, ${grad2})`;
-  if (bgType === 'image' && imageData.bg) bgValue = `url(${imageData.bg})`;
+  if (bgType === 'image' && bgImageUrl) bgValue = `url(${bgImageUrl})`;
 
   // Fonts for Google Fonts link
   const gfontLink = doc.getElementById('gfonts');
@@ -1913,6 +1960,12 @@ function applyTheme() {
       --color-surface: ${surface};
       --color-muted: ${muted};
       --color-border: ${border};
+      --btn-bg: ${btnBg};
+      --btn-text: ${btnText};
+      --cream: ${cardBg};
+      --card-bg: ${cardBg};
+      --card-text: ${cardText};
+      --card-muted: ${cardText}cc;
       --radius: ${radius}px;
       --font-display: ${fontDisp};
       --font-body: ${fontBd};
@@ -1936,8 +1989,8 @@ function applyTheme() {
       --hero-overlay: ${heroOv};
     }
     body {
-      background: ${bgType === 'image' && imageData.bg
-        ? `rgba(0,0,0,${bgOv}) url(${imageData.bg}) center/cover fixed`
+      background: ${bgType === 'image' && bgImageUrl
+        ? `rgba(0,0,0,${bgOv}) url(${bgImageUrl}) center/cover fixed`
         : bgType === 'gradient'
         ? `linear-gradient(${gradAng}deg, ${grad1}, ${grad2})`
         : bgColor};
@@ -2151,8 +2204,9 @@ function setEditorMode(mode) {
     btnLand.style.fontWeight = mode === 'landing' ? '600' : '500';
   }
 
-  // Show/hide Sections tab
-  if (sectionsBtn) sectionsBtn.style.display = mode === 'landing' ? '' : 'none';
+  // Show/hide Sections tab row
+  const sectionsRow = document.getElementById('sectionsTabRow');
+  if (sectionsRow) sectionsRow.style.display = mode === 'landing' ? '' : 'none';
 
   // Switch preview iframe
   if (EVENT_ID) {
@@ -2219,9 +2273,9 @@ function renderSectionsList() {
             oninput="updateSection(${s.id},'logo_url',this.value)" placeholder="https://...">
         </div>
         <div class="ctrl-row">
-          <label class="ctrl-label">YouTube / Vimeo URL</label>
+          <label class="ctrl-label">YouTube / Vimeo URL <span style="color:var(--muted);font-weight:400;">(nebo jen ID videa)</span></label>
           <input type="text" class="ctrl-input" value="${s.video_url||''}"
-            oninput="updateSection(${s.id},'video_url',this.value)" placeholder="https://youtube.com/...">
+            oninput="updateSection(${s.id},'video_url',this.value)" placeholder="dQw4w9WgXcQ nebo https://youtu.be/...">
         </div>
         <div class="ctrl-row">
           <label class="ctrl-label">Text (popis)</label>
@@ -2422,6 +2476,7 @@ function collectTheme() {
     bg: {
       type: document.getElementById('bgType').value,
       color: document.getElementById('bgColor').value,
+      imageUrl: document.getElementById('bgImageUrl')?.value || '',
       grad1: document.getElementById('grad1').value,
       grad2: document.getElementById('grad2').value,
       gradAngle: document.getElementById('gradAngle').value,
@@ -2433,6 +2488,10 @@ function collectTheme() {
       surface: document.getElementById('colorSurface').value,
       muted: document.getElementById('colorMuted').value,
       border: document.getElementById('colorBorder').value,
+      btn: document.getElementById('colorBtn')?.value || '#0e0d0b',
+      btnText: document.getElementById('colorBtnText')?.value || '#ffffff',
+      cardBg: document.getElementById('colorCardBg')?.value || '#ede9e1',
+      cardText: document.getElementById('colorCardText')?.value || '#1a1816',
     },
     typography: {
       fontDisplay: document.getElementById('fontDisplay').value,
