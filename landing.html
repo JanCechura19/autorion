@@ -209,6 +209,22 @@
   }
   .footer-cta-title { font-family: var(--font-display); font-size: 28px; color: var(--card-text); margin-bottom: 20px; }
 
+  /* SITE FOOTER (GDPR / legal) */
+  .site-footer {
+    margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--warm);
+    display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between;
+  }
+  .site-footer-text {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .site-footer-links { display: flex; gap: 20px; }
+  .site-footer-links a {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+  }
+  .site-footer-links a:hover { color: var(--gold); }
+
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(24px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -263,6 +279,13 @@
     <a class="btn btn-primary" id="ctaRegisterFooter" href="#">Registrovat se</a>
   </div>
 
+  <footer class="site-footer">
+    <div class="site-footer-text">© <span id="footerYear"></span> Autorion s.r.o.</div>
+    <div class="site-footer-links">
+      <a href="#" id="gdprFooterLink" target="_blank" rel="noopener noreferrer">Zásady ochrany osobních údajů</a>
+    </div>
+  </footer>
+
 </div>
 
 <script>
@@ -271,6 +294,27 @@ const API_BASE = 'https://autorion.net/api';
 let EVENT_DATA = null;
 let EVENT_SLUG = null;
 let IS_PREVIEW = false;
+
+// ── GDPR / privacy policy footer link ──
+// Same dealer→URL mapping as registration.html, so both pages always agree.
+const GDPR_URLS = {
+  albion:  'https://www.albioncars.cz/zasady-zpracovani-a-ochrany-osobnich-udaju#cookies',
+  cardion: 'https://www.volvista.cz/zasady-zpracovani-a-ochrany-osobnich-udaju',
+  orbion:  'https://www.lynkac.cz/zasady-zpracovani-a-ochrany-osobnich-udaju',
+};
+
+function getDealerFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const d = (params.get('dealer') || '').toLowerCase();
+  return ['albion', 'cardion', 'orbion'].includes(d) ? d : null;
+}
+
+function applyGdprFooterLink() {
+  const dealer = getDealerFromUrl();
+  const url = GDPR_URLS[dealer] || GDPR_URLS['albion'];
+  const link = document.getElementById('gdprFooterLink');
+  if (link) link.href = url;
+}
 
 function getEventSlugFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -527,6 +571,9 @@ window.addEventListener('message', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  const yearEl = document.getElementById('footerYear');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+  applyGdprFooterLink();
   loadEventData();
 });
 </script>
