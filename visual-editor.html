@@ -596,23 +596,23 @@ iframe#previewFrame {
   <button class="topbar-btn btn-save" onclick="saveTheme()">💾 Uložit téma</button>
 </div>
 
+<!-- MODE SWITCHER: Registrace / Landing page -->
+<div id="modeSwitcher" style="display:flex;border-bottom:2px solid var(--border);background:var(--surface);flex-shrink:0;">
+  <button id="modeRegistration" onclick="setEditorMode('registration')"
+    style="flex:1;max-width:160px;padding:8px 16px;font-size:12px;font-family:inherit;font-weight:600;border:none;border-bottom:2px solid var(--text);cursor:pointer;background:transparent;color:var(--text);margin-bottom:-2px;transition:all 0.15s;">
+    📋 Registrace
+  </button>
+  <button id="modeLanding" onclick="setEditorMode('landing')"
+    style="flex:1;max-width:160px;padding:8px 16px;font-size:12px;font-family:inherit;font-weight:500;border:none;border-bottom:2px solid transparent;cursor:pointer;background:transparent;color:var(--muted);margin-bottom:-2px;transition:all 0.15s;">
+    🏠 Landing page
+  </button>
+</div>
+
 <!-- EDITOR LAYOUT -->
 <div class="editor-layout">
 
   <!-- LEFT PANEL -->
   <div class="left-panel">
-
-    <!-- MODE SWITCHER: Registrace / Landing page -->
-    <div id="modeSwitcher" style="display:flex;border-bottom:1px solid var(--border);background:var(--surface2);">
-      <button id="modeRegistration" onclick="setEditorMode('registration')"
-        style="flex:1;padding:10px 8px;font-size:12px;font-family:inherit;font-weight:600;border:none;cursor:pointer;background:var(--text);color:#fff;border-radius:0;transition:all 0.15s;">
-        📋 Registrace
-      </button>
-      <button id="modeLanding" onclick="setEditorMode('landing')"
-        style="flex:1;padding:10px 8px;font-size:12px;font-family:inherit;font-weight:500;border:none;cursor:pointer;background:transparent;color:var(--muted);border-radius:0;transition:all 0.15s;">
-        🏠 Landing page
-      </button>
-    </div>
 
     <div class="panel-tabs">
       <div class="panel-tab active" onclick="switchTab('content', this)"><span class="panel-tab-icon">✎</span>Obsah</div>
@@ -2194,13 +2194,13 @@ function setEditorMode(mode) {
 
   // Update mode buttons styling
   if (btnReg) {
-    btnReg.style.background = mode === 'registration' ? 'var(--text)' : 'transparent';
-    btnReg.style.color = mode === 'registration' ? '#fff' : 'var(--muted)';
+    btnReg.style.borderBottomColor = mode === 'registration' ? 'var(--text)' : 'transparent';
+    btnReg.style.color = mode === 'registration' ? 'var(--text)' : 'var(--muted)';
     btnReg.style.fontWeight = mode === 'registration' ? '600' : '500';
   }
   if (btnLand) {
-    btnLand.style.background = mode === 'landing' ? 'var(--text)' : 'transparent';
-    btnLand.style.color = mode === 'landing' ? '#fff' : 'var(--muted)';
+    btnLand.style.borderBottomColor = mode === 'landing' ? 'var(--text)' : 'transparent';
+    btnLand.style.color = mode === 'landing' ? 'var(--text)' : 'var(--muted)';
     btnLand.style.fontWeight = mode === 'landing' ? '600' : '500';
   }
 
