@@ -601,12 +601,26 @@ iframe#previewFrame {
 
   <!-- LEFT PANEL -->
   <div class="left-panel">
+
+    <!-- MODE SWITCHER: Registrace / Landing page -->
+    <div id="modeSwitcher" style="display:flex;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <button id="modeRegistration" onclick="setEditorMode('registration')"
+        style="flex:1;padding:10px 8px;font-size:12px;font-family:inherit;font-weight:600;border:none;cursor:pointer;background:var(--text);color:#fff;border-radius:0;transition:all 0.15s;">
+        📋 Registrace
+      </button>
+      <button id="modeLanding" onclick="setEditorMode('landing')"
+        style="flex:1;padding:10px 8px;font-size:12px;font-family:inherit;font-weight:500;border:none;cursor:pointer;background:transparent;color:var(--muted);border-radius:0;transition:all 0.15s;">
+        🏠 Landing page
+      </button>
+    </div>
+
     <div class="panel-tabs">
       <div class="panel-tab active" onclick="switchTab('content', this)"><span class="panel-tab-icon">✎</span>Obsah</div>
       <div class="panel-tab" onclick="switchTab('design', this)"><span class="panel-tab-icon">🎨</span>Design</div>
       <div class="panel-tab" onclick="switchTab('typography', this)"><span class="panel-tab-icon">T</span>Písmo</div>
       <div class="panel-tab" onclick="switchTab('media', this)"><span class="panel-tab-icon">🖼</span>Média</div>
       <div class="panel-tab" onclick="switchTab('layout', this)"><span class="panel-tab-icon">⬛</span>Layout</div>
+      <div class="panel-tab" id="tabSectionsBtn" onclick="switchTab('sections', this)" style="display:none;"><span class="panel-tab-icon">☰</span>Sekce</div>
     </div>
 
     <div class="panel-content">
@@ -1093,6 +1107,25 @@ iframe#previewFrame {
 
       </div>
 
+      <!-- ── SECTIONS TAB (only visible in Landing page mode) ── -->
+      <div class="tab-pane" id="tab-sections">
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">☰</span>Sekce (dealerské bloky)</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+              Každá sekce se zobrazí jako samostatný blok na landing page s logem, názvem, značkou, videem a textem.
+            </div>
+            <div id="sectionsList"></div>
+            <button onclick="addSection()" style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px dashed var(--border2);border-radius:6px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;">
+              + Přidat sekci
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div><!-- end panel-content -->
   </div><!-- end left-panel -->
 
@@ -1202,6 +1235,7 @@ async function init() {
         const event = await res.json();
         CURRENT_EVENT = event;
         populateContentTab(event);
+        populateSectionsTab(event.landing_page || {});
         if (event.theme && Object.keys(event.theme).length) {
           restoreTheme(event.theme);
           showToast('Téma akce načteno', '');
@@ -1739,6 +1773,9 @@ let EVENT_ID = null;
 let CURRENT_EVENT = null;
 let EVENT_SLUG = null;
 let pendingThemeApply = null;
+let EDITOR_MODE = 'registration'; // 'registration' | 'landing'
+let LANDING_SECTIONS = []; // array of dealer section objects
+let SECTION_COUNTER = 1;
 
 function getEventIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -2091,6 +2128,216 @@ function toggleLayer(eyeEl, layer) {
 // TABS & SECTIONS
 // ════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════
+// EDITOR MODE (Registration / Landing page)
+// ════════════════════════════════════════════════
+
+function setEditorMode(mode) {
+  EDITOR_MODE = mode;
+  const frame = document.getElementById('previewFrame');
+  const sectionsBtn = document.getElementById('tabSectionsBtn');
+  const btnReg = document.getElementById('modeRegistration');
+  const btnLand = document.getElementById('modeLanding');
+
+  // Update mode buttons styling
+  if (btnReg) {
+    btnReg.style.background = mode === 'registration' ? 'var(--text)' : 'transparent';
+    btnReg.style.color = mode === 'registration' ? '#fff' : 'var(--muted)';
+    btnReg.style.fontWeight = mode === 'registration' ? '600' : '500';
+  }
+  if (btnLand) {
+    btnLand.style.background = mode === 'landing' ? 'var(--text)' : 'transparent';
+    btnLand.style.color = mode === 'landing' ? '#fff' : 'var(--muted)';
+    btnLand.style.fontWeight = mode === 'landing' ? '600' : '500';
+  }
+
+  // Show/hide Sections tab
+  if (sectionsBtn) sectionsBtn.style.display = mode === 'landing' ? '' : 'none';
+
+  // Switch preview iframe
+  if (EVENT_ID) {
+    if (mode === 'registration') {
+      frame.src = `registration.html?event=__preview_${EVENT_ID}`;
+    } else {
+      frame.src = `landing.html?event=__preview_${EVENT_ID}`;
+    }
+  }
+
+  // If switching to landing, render sections list
+  if (mode === 'landing') {
+    renderSectionsList();
+    switchTab('sections', document.getElementById('tabSectionsBtn'));
+  } else {
+    switchTab('content', document.querySelector('.panel-tab'));
+  }
+
+  markDirty();
+}
+
+// ════════════════════════════════════════════════
+// SECTIONS MANAGEMENT (dealer blocks)
+// ════════════════════════════════════════════════
+
+function renderSectionsList() {
+  const container = document.getElementById('sectionsList');
+  if (!container) return;
+
+  if (LANDING_SECTIONS.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:16px;font-size:12px;color:var(--muted);">Žádné sekce. Klikněte na "+ Přidat sekci".</div>';
+    return;
+  }
+
+  container.innerHTML = LANDING_SECTIONS.map((s, i) => `
+    <div class="ctrl-section" style="margin-bottom:8px;border:1px solid var(--border);border-radius:6px;" id="section-block-${s.id}">
+      <div class="ctrl-section-head" onclick="toggleSection(this)">
+        <div class="ctrl-section-title" style="font-size:12px;">
+          <span style="color:var(--accent2);">▣</span>
+          ${s.name || `Sekce ${i+1}`}
+          ${s.brand ? `<span style="color:var(--muted);font-size:10px;margin-left:6px;">${s.brand}</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${i > 0 ? `<span onclick="moveSectionUp(${s.id});event.stopPropagation();" style="cursor:pointer;font-size:11px;color:var(--muted);">↑</span>` : ''}
+          ${i < LANDING_SECTIONS.length-1 ? `<span onclick="moveSectionDown(${s.id});event.stopPropagation();" style="cursor:pointer;font-size:11px;color:var(--muted);">↓</span>` : ''}
+          <span onclick="removeSection(${s.id});event.stopPropagation();" style="cursor:pointer;font-size:11px;color:var(--red);">✕</span>
+          <span class="chevron">⌄</span>
+        </div>
+      </div>
+      <div class="ctrl-section-body" style="padding:12px;display:flex;flex-direction:column;gap:10px;">
+        <div class="ctrl-row">
+          <label class="ctrl-label">Název sekce (dealer)</label>
+          <input type="text" class="ctrl-input" value="${s.name||''}"
+            oninput="updateSection(${s.id},'name',this.value)" placeholder="Albion Cars">
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Značka / podtitul</label>
+          <input type="text" class="ctrl-input" value="${s.brand||''}"
+            oninput="updateSection(${s.id},'brand',this.value)" placeholder="Land Rover / Jaguar">
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Logo URL</label>
+          <input type="text" class="ctrl-input" value="${s.logo_url||''}"
+            oninput="updateSection(${s.id},'logo_url',this.value)" placeholder="https://...">
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">YouTube / Vimeo URL</label>
+          <input type="text" class="ctrl-input" value="${s.video_url||''}"
+            oninput="updateSection(${s.id},'video_url',this.value)" placeholder="https://youtube.com/...">
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Text (popis)</label>
+          <textarea class="ctrl-input" rows="4"
+            oninput="updateSection(${s.id},'text',this.value)"
+            placeholder="Popis dealera, nabídky, vozů...">${s.text||''}</textarea>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addSection() {
+  const id = SECTION_COUNTER++;
+  LANDING_SECTIONS.push({ id, name: '', brand: '', logo_url: '', video_url: '', text: '' });
+  renderSectionsList();
+  markDirty();
+  applyLandingPreview();
+}
+
+function removeSection(id) {
+  if (!confirm('Smazat tuto sekci?')) return;
+  LANDING_SECTIONS = LANDING_SECTIONS.filter(s => s.id !== id);
+  renderSectionsList();
+  markDirty();
+  applyLandingPreview();
+}
+
+function updateSection(id, field, value) {
+  const s = LANDING_SECTIONS.find(s => s.id === id);
+  if (s) { s[field] = value; markDirty(); applyLandingPreview(); }
+  // Refresh just the section title in UI without full re-render
+  const block = document.getElementById(`section-block-${id}`);
+  if (block && (field === 'name' || field === 'brand')) {
+    const titleEl = block.querySelector('.ctrl-section-title');
+    if (titleEl) {
+      const s2 = LANDING_SECTIONS.find(s => s.id === id);
+      if (s2) titleEl.innerHTML = `<span style="color:var(--accent2);">▣</span> ${s2.name||'Sekce'} ${s2.brand?`<span style="color:var(--muted);font-size:10px;margin-left:6px;">${s2.brand}</span>`:''}`;
+    }
+  }
+}
+
+function moveSectionUp(id) {
+  const i = LANDING_SECTIONS.findIndex(s => s.id === id);
+  if (i <= 0) return;
+  [LANDING_SECTIONS[i-1], LANDING_SECTIONS[i]] = [LANDING_SECTIONS[i], LANDING_SECTIONS[i-1]];
+  renderSectionsList(); markDirty(); applyLandingPreview();
+}
+
+function moveSectionDown(id) {
+  const i = LANDING_SECTIONS.findIndex(s => s.id === id);
+  if (i >= LANDING_SECTIONS.length - 1) return;
+  [LANDING_SECTIONS[i], LANDING_SECTIONS[i+1]] = [LANDING_SECTIONS[i+1], LANDING_SECTIONS[i]];
+  renderSectionsList(); markDirty(); applyLandingPreview();
+}
+
+function applyLandingPreview() {
+  if (EDITOR_MODE !== 'landing') return;
+  const frame = document.getElementById('previewFrame');
+  const doc = frame.contentDocument || frame.contentWindow?.document;
+  if (!doc) return;
+  // Send landing page data via postMessage (landing.html listens for it)
+  frame.contentWindow?.postMessage({
+    type: 'autorion-landing-update',
+    theme: collectTheme(),
+    event: {
+      ...CURRENT_EVENT,
+      landing_page: collectLandingPage()
+    }
+  }, '*');
+}
+
+function collectLandingPage() {
+  return {
+    hero: {
+      title: document.getElementById('contentEventName')?.value || CURRENT_EVENT?.name || '',
+      intro_text: document.getElementById('contentIntroText')?.value || '',
+      video_url: document.getElementById('heroVideoUrl')?.value || '',
+    },
+    sections: LANDING_SECTIONS.map(s => ({ ...s }))
+  };
+}
+
+function populateSectionsTab(landingPage) {
+  const lp = landingPage || {};
+  LANDING_SECTIONS = (lp.sections || []).map((s, i) => ({
+    id: i + 1,
+    name: s.name || '',
+    brand: s.brand || '',
+    logo_url: s.logo_url || '',
+    video_url: s.video_url || '',
+    text: s.text || ''
+  }));
+  SECTION_COUNTER = LANDING_SECTIONS.length + 1;
+
+  // Hero video URL — add input to content tab if not there yet
+  const heroVideoInput = document.getElementById('heroVideoUrl');
+  if (!heroVideoInput) {
+    const contentTab = document.getElementById('tab-content');
+    const basicSection = contentTab?.querySelector('.ctrl-section-body');
+    if (basicSection) {
+      const row = document.createElement('div');
+      row.className = 'ctrl-row';
+      row.innerHTML = `<label class="ctrl-label">Hlavní video (YouTube/Vimeo URL)</label>
+        <input type="text" class="ctrl-input" id="heroVideoUrl"
+          value="${lp.hero?.video_url||''}"
+          oninput="markDirty(); applyLandingPreview();" placeholder="https://youtube.com/...">`;
+      basicSection.appendChild(row);
+    }
+  } else {
+    heroVideoInput.value = lp.hero?.video_url || '';
+  }
+
+  renderSectionsList();
+}
+
 function switchTab(name, el) {
   document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -2127,6 +2374,9 @@ async function saveTheme() {
       location: document.getElementById('contentEventLocation').value.trim() || undefined,
       intro_text: document.getElementById('contentIntroText').value,
     };
+    if (EDITOR_MODE === 'landing') {
+      payload.landing_page = collectLandingPage();
+    }
     try {
       const res = await fetch(`/api/events/${EVENT_ID}`, {
         method: 'PATCH',
