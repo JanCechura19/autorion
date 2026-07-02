@@ -114,6 +114,10 @@ class BookingItem(BaseModel):
     vehicle_name: Optional[str] = None
     time_slot: Optional[str] = None
 
+class EventArchiveRequest(BaseModel):
+    notes: Optional[str] = ""
+    vehicles: Optional[list] = None  # snapshot of vehicles at time of archiving
+
 class GuestCreate(BaseModel):
     first_name: str
     last_name: str
@@ -184,6 +188,10 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
+    # Migration: archive support (safe on existing tables — no-op if columns already exist)
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS archive_meta JSONB DEFAULT '{}';")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS vehicles JSONB DEFAULT '[]';")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -409,6 +417,26 @@ def get_events(user=Depends(get_current_user)):
     conn.close()
     return [dict(e) for e in events]
 
+@app.get("/api/events/archived")
+def get_archived_events(user=Depends(get_current_user)):
+    """Must be registered before /api/events/{event_id} so 'archived' isn't
+    mistaken for an event_id path parameter."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
+        SELECT e.*,
+            (SELECT COUNT(*) FROM guests g WHERE g.event_id = e.id) AS guest_count,
+            (SELECT COUNT(*) FROM guests g WHERE g.event_id = e.id AND g.status = 'confirmed') AS confirmed_count,
+            (SELECT COALESCE(SUM(jsonb_array_length(g.bookings)), 0) FROM guests g WHERE g.event_id = e.id) AS rides_count
+        FROM events e
+        WHERE e.status = 'archived'
+        ORDER BY e.archived_at DESC NULLS LAST
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
 @app.get("/api/events/public/{slug}")
 def get_event_public(slug: str):
     conn = get_db()
@@ -536,6 +564,53 @@ def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_us
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(f"UPDATE events SET {set_clause} WHERE id = %s RETURNING *", values)
+    updated = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    return dict(updated)
+
+@app.post("/api/events/{event_id}/archive")
+def archive_event(event_id: int, req: EventArchiveRequest, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT status FROM events WHERE id = %s", (event_id,))
+    ev = cur.fetchone()
+    if not ev:
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    if ev["status"] == "archived":
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=409, detail="Akce je již archivována")
+    meta = {"notes": req.notes or "", "vehicles": req.vehicles or []}
+    cur.execute("""
+        UPDATE events
+        SET status = 'archived', archived_at = NOW(), archive_meta = %s
+        WHERE id = %s
+        RETURNING *
+    """, (json.dumps(meta), event_id))
+    updated = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(updated)
+
+@app.post("/api/events/{event_id}/unarchive")
+def unarchive_event(event_id: int, user=Depends(get_current_user)):
+    if user["role"] not in ["super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
+        UPDATE events
+        SET status = 'active', archived_at = NULL
+        WHERE id = %s
+        RETURNING *
+    """, (event_id,))
     updated = cur.fetchone()
     cur.close()
     conn.close()
