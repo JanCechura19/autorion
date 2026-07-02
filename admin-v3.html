@@ -1511,94 +1511,23 @@ let VEHICLES = [
 ];
 
 // ═══════════════════════════════════════════════════════
-// ARCHIVE DATA
+// ARCHIVE DATA — loaded from backend (GET /api/events/archived)
 // ═══════════════════════════════════════════════════════
 
-const ARCHIVE = [
-  {
-    id: 101,
-    name: 'PPF Automotive Experience 2024',
-    date_from: '15. 6. 2024',
-    date_to: '16. 6. 2024',
-    location: 'Polygon Sosnová, Česká Lípa',
-    archived_at: '2024-06-17T18:00:00Z',
-    capacity: 100,
-    vehicles: [
-      { id:11, name:'Tesla Model S Plaid' },
-      { id:12, name:'Porsche Taycan Turbo S' },
-      { id:13, name:'Audi e-tron GT RS' },
-    ],
-    guests: generateArchiveGuests(38, 101),
-    theme: {
-      colors: { primary:'#0e0d0b', accent:'#b8924a', surface:'#ede9e1' },
-      typography: { fontDisplay:"'Cormorant Garamond', serif", titleSize:'72' },
-      bg: { type:'color', color:'#f7f4ef' },
-    },
-    notes: 'První ročník úspěšně proběhl. Celkem 38 hostů, 3 vozy, 82 jízd. Feedback velmi pozitivní.',
-  },
-  {
-    id: 102,
-    name: 'FBW Drive Day 2024',
-    date_from: '22. 9. 2024',
-    date_to: '22. 9. 2024',
-    location: 'Autodrom Most',
-    archived_at: '2024-09-23T12:00:00Z',
-    capacity: 60,
-    vehicles: [
-      { id:21, name:'BMW M3 Competition' },
-      { id:22, name:'BMW M5 CS' },
-      { id:23, name:'BMW XM Label Red' },
-      { id:24, name:'BMW iX M60' },
-    ],
-    guests: generateArchiveGuests(54, 102),
-    theme: {
-      colors: { primary:'#0a0a14', accent:'#1c6ef5', surface:'#13131f' },
-      typography: { fontDisplay:"'Syne', sans-serif", titleSize:'68' },
-      bg: { type:'color', color:'#0a0a14' },
-    },
-    notes: 'FBW Drive Day proběhl za skvělého počasí. Nejvyšší zájem byl o BMW M5 CS.',
-  },
-  {
-    id: 103,
-    name: 'PPF EV Summit 2023',
-    date_from: '10. 11. 2023',
-    date_to: '11. 11. 2023',
-    location: 'Prague Marriott Hotel',
-    archived_at: '2023-11-12T16:00:00Z',
-    capacity: 80,
-    vehicles: [
-      { id:31, name:'Mercedes EQS 580 4MATIC' },
-      { id:32, name:'Tesla Model X Plaid' },
-      { id:33, name:'Audi Q8 e-tron' },
-    ],
-    guests: generateArchiveGuests(71, 103),
-    theme: {
-      colors: { primary:'#1a3a2a', accent:'#4a8c5c', surface:'#e4ede0' },
-      typography: { fontDisplay:"'DM Serif Display', serif", titleSize:'64' },
-      bg: { type:'color', color:'#f0f4ee' },
-    },
-    notes: 'Konferenční formát doplněný o testovací jízdy. Velký zájem o přednášky.',
-  },
-];
+let ARCHIVE = [];
+let archiveLoaded = false;
+let archiveDetailGuests = []; // guests for the currently open archive detail (fetched lazily)
 
-function generateArchiveGuests(count, eventId) {
-  const firstNames = ['Petr','Jan','Martin','Pavel','Tomáš','Eva','Jana','Marie','Petra','Lenka','Kateřina','Lucie','Jiří','Lukáš','Ondřej'];
-  const lastNames  = ['Novák','Svoboda','Novotný','Dvořák','Procházka','Kučera','Veselý','Pokorný','Horáček','Fiala','Růžička','Marková','Čermák','Kolář','Vlček'];
-  const statuses   = ['confirmed','confirmed','confirmed','confirmed','declined','pending'];
-  return Array.from({ length: count }, (_, i) => ({
-    id: eventId * 1000 + i,
-    first_name: firstNames[i % firstNames.length],
-    last_name:  lastNames[i % lastNames.length],
-    email: `${firstNames[i%firstNames.length].toLowerCase()}.${lastNames[i%lastNames.length].toLowerCase()}@firma.cz`,
-    phone: `+420 ${600+Math.floor(Math.random()*400)} ${100+Math.floor(Math.random()*900)} ${100+Math.floor(Math.random()*900)}`,
-    status:     statuses[i % statuses.length],
-    companion:  Math.random() > 0.5,
-    email_sent: true,
-    checked_in: statuses[i % statuses.length] === 'confirmed' && Math.random() > 0.3,
-    registered_at: new Date(Date.now() - Math.random() * 60 * 86400000).toISOString(),
-    bookings: Math.random() > 0.3 ? [{ vehicle_id: eventId * 10 + (i%3), time_slot: `${10+(i%8)}:00–${10+(i%8)}:15` }] : [],
-    notes: '',
-  }));
+async function loadArchive(force = false) {
+  if (archiveLoaded && !force) return;
+  const data = await apiCall('/events/archived');
+  ARCHIVE = Array.isArray(data) ? data : [];
+  archiveLoaded = true;
+}
+
+async function openArchivePage() {
+  await loadArchive();
+  renderArchive();
 }
 
 let archiveDetailId = null; // currently open archive event
@@ -1714,7 +1643,13 @@ async function apiCall(endpoint, method='GET', body=null) {
   try {
     const res = await fetch(API_URL + endpoint, opts);
     if (res.status === 401) { doLogout(); return null; }
-    return await res.json();
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* empty/non-JSON body */ }
+    if (!res.ok) {
+      showToast((data && data.detail) || `Chyba serveru (${res.status})`, 'error');
+      return null;
+    }
+    return data;
   } catch(e) {
     showToast('Chyba připojení k serveru', 'error');
     return null;
@@ -1753,43 +1688,52 @@ async function loadUsersFromApi() {
   }
 }
 
+async function reloadEventsDB() {
+  // Replace EVENTS_DB entirely with current active (non-archived) events from the API.
+  const eventsData = await apiCall('/events');
+  if (!eventsData) return false;
+  EVENTS_DB.length = 0;
+  eventsData.forEach(ev => {
+    EVENTS_DB.push({
+      id:                ev.id,
+      name:              ev.name,
+      date_from:         ev.date_from || '',
+      date_to:           ev.date_to || '',
+      location:          ev.location || '',
+      capacity:          ev.capacity || 100,
+      registration_open: ev.registration_open,
+      icon:              ev.icon || '🎯',
+      status:            ev.status || 'active',
+      theme:             null,
+      registration_type: ev.registration_type || 'drives',
+      time_windows:      ev.time_windows || [],
+      slot_start:        ev.slot_start || '10:00',
+      slot_end:          ev.slot_end || '18:00',
+      slot_duration:     ev.slot_duration || 15,
+      consent_cs:        ev.consent_cs || '',
+      consent_en:        ev.consent_en || '',
+      slug:              ev.slug || '',
+      vehicles:          ev.vehicles || [],
+    });
+  });
+  return true;
+}
+
 async function initApp() {
   loadRolePermissions();
   await loadUsersFromApi();
   updateUserInfo();
   // Load events from API — replace mock EVENTS_DB entirely with real DB data
-  const eventsData = await apiCall('/events');
-  if (eventsData) {
-    EVENTS_DB.length = 0; // clear mock data
-    eventsData.forEach(ev => {
-      EVENTS_DB.push({
-        id:                ev.id,
-        name:              ev.name,
-        date_from:         ev.date_from || '',
-        date_to:           ev.date_to || '',
-        location:          ev.location || '',
-        capacity:          ev.capacity || 100,
-        registration_open: ev.registration_open,
-        icon:              ev.icon || '🎯',
-        status:            ev.status || 'active',
-        theme:             null,
-        registration_type: ev.registration_type || 'drives',
-        time_windows:      ev.time_windows || [],
-        slot_start:        ev.slot_start || '10:00',
-        slot_end:          ev.slot_end || '18:00',
-        slot_duration:     ev.slot_duration || 15,
-        consent_cs:        ev.consent_cs || '',
-        consent_en:        ev.consent_en || '',
-        slug:              ev.slug || '',
-        vehicles:          ev.vehicles || [],
-      });
-    });
+  const loaded = await reloadEventsDB();
+  if (loaded) {
     if (EVENTS_DB.length) EVENT = EVENTS_DB[0];
     guests = []; // no mock guests until a real event is selected
   }
+  await loadArchive(true);
   renderSidebarV2();
   showPage('events');
 }
+
 
 function updateNavBadge() {
   const el = document.getElementById('navBadgeTotal');
@@ -1837,7 +1781,7 @@ function showPage(name, navEl) {
   if (name === 'emails')    renderEmails();
   if (name === 'slots')     renderSlots();
   if (name === 'settings')  renderSettings();
-  if (name === 'archive')   renderArchive();
+  if (name === 'archive')   openArchivePage();
 }
 
 // ── ROLE-AWARE SIDEBAR ──────────────────────────────────
@@ -3076,31 +3020,11 @@ function readonlyNote() {
   return `<div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">🔒 Nemáte oprávnění k úpravám</div>`;
 }
 
-function saveSettings() {
-  EVENT.name     = document.getElementById('sName').value;
-  EVENT.date_from= document.getElementById('sDateFrom').value;
-  EVENT.capacity = parseInt(document.getElementById('sCapacity').value)||120;
-  EVENT.location = document.getElementById('sLocation').value;
-  showToast('Nastavení uloženo','success');
-}
-
-function saveVehicleName(id) {
-  const v = VEHICLES.find(v=>v.id===id); if(!v) return;
-  v.name = document.getElementById(`vname-${id}`).value.trim()||v.name;
-  showToast('Vůz upraven','success');
-}
-
-function removeVehicle(id) {
-  if (VEHICLES.length<=1) { showToast('Musí být alespoň jeden vůz','error'); return; }
-  const idx = VEHICLES.findIndex(v=>v.id===id); if(idx>=0) VEHICLES.splice(idx,1);
-  showToast('Vůz odebrán','success'); renderSettings();
-}
-
-function addVehicle() {
-  const name = prompt('Název nového vozu:'); if(!name) return;
-  VEHICLES.push({ id: Date.now(), name });
-  showToast('Vůz přidán','success'); renderSettings();
-}
+// saveSettings / saveVehicleName / removeVehicle / addVehicle:
+// real, backend-wired implementations live further down alongside
+// saveRegType / saveDrivesConfig / confirmAddWindow / confirmEditWindow /
+// deleteTimeWindow (the "EVENT SETTINGS" section, next to the multi-event
+// sidebar code) — that is the version actually called by the UI.
 
 // ═══════════════════════════════════════════════════════
 // MODAL HELPERS
@@ -3141,275 +3065,13 @@ function formatDate(iso) {
 
 // ═══════════════════════════════════════════════════════
 // ARCHIVE
+// Real implementation (renderArchive, renderArchiveDetail, archiveEvent,
+// restoreEventFromArchive, restoreThemeFromArchive, exportArchiveXLS) lives
+// further down in the "ARCHIVE FUNCTIONS" section, alongside the multi-event
+// sidebar code — that is the version actually wired to the backend API.
 // ═══════════════════════════════════════════════════════
 
-function renderArchive() {
-  archiveDetailId = null;
-  const el = document.getElementById('archiveContent');
 
-  // Stats across all archived events
-  const totalEvents = ARCHIVE.length;
-  const totalGuests = ARCHIVE.reduce((s, e) => s + e.guests.length, 0);
-  const totalConfirmed = ARCHIVE.reduce((s, e) => s + e.guests.filter(g => g.status === 'confirmed').length, 0);
-  const totalRides = ARCHIVE.reduce((s, e) => s + e.guests.reduce((ss, g) => ss + g.bookings.length, 0), 0);
-
-  el.innerHTML = `
-    
-    <div class="stats-grid" style="margin-bottom:28px;">
-      <div class="stat-card blue">
-        <div class="stat-label">Archivovaných akcí</div>
-        <div class="stat-value">${totalEvents}</div>
-      </div>
-      <div class="stat-card neutral">
-        <div class="stat-label">Celkem hostů (historie)</div>
-        <div class="stat-value">${totalGuests}</div>
-        <div class="stat-sub">${totalConfirmed} potvrzených</div>
-      </div>
-      <div class="stat-card neutral">
-        <div class="stat-label">Celkem testovacích jízd</div>
-        <div class="stat-value">${totalRides}</div>
-      </div>
-    </div>
-
-    
-    <div class="table-wrap">
-      <div class="table-header">
-        <span class="table-title">Proběhlé akce</span>
-        <span class="table-count">(${totalEvents})</span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Název akce</th>
-            <th>Datum</th>
-            <th>Místo</th>
-            <th>Hosté</th>
-            <th>Vozy</th>
-            <th>Jízdy</th>
-            <th>Archivováno</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${ARCHIVE.map(ev => {
-            const confirmed = ev.guests.filter(g => g.status === 'confirmed').length;
-            const rides = ev.guests.reduce((s, g) => s + g.bookings.length, 0);
-            return `
-              <tr style="cursor:pointer" onclick="renderArchiveDetail(${ev.id})">
-                <td class="name-cell">${ev.name}</td>
-                <td style="white-space:nowrap;color:var(--muted);font-size:12px">${ev.date_from}${ev.date_to !== ev.date_from ? '–'+ev.date_to : ''}</td>
-                <td style="color:var(--muted);font-size:12px">${ev.location}</td>
-                <td>
-                  <span style="font-weight:500">${ev.guests.length}</span>
-                  <span style="color:var(--muted);font-size:11px"> / ${ev.capacity}</span>
-                </td>
-                <td><span style="font-weight:500">${ev.vehicles.length}</span></td>
-                <td><span style="font-weight:500">${rides}</span></td>
-                <td style="color:var(--muted);font-size:12px">${formatDate(ev.archived_at)}</td>
-                <td>
-                  <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();renderArchiveDetail(${ev.id})">
-                    Detail →
-                  </button>
-                </td>
-              </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    
-    ${can('canEdit') ? `
-      <div style="margin-top:20px;">
-        <button class="btn btn-secondary" onclick="archiveCurrentEvent()">
-          🗂 Archivovat aktuální akci
-        </button>
-        <span style="font-size:12px;color:var(--muted);margin-left:12px;">Uloží aktuální akci (PPF 2025) do archivu</span>
-      </div>` : ''}
-  `;
-}
-
-function renderArchiveDetail(id) {
-  archiveDetailId = id;
-  const ev = ARCHIVE.find(e => e.id === id);
-  if (!ev) return;
-
-  const confirmed  = ev.guests.filter(g => g.status === 'confirmed').length;
-  const declined   = ev.guests.filter(g => g.status === 'declined').length;
-  const pending    = ev.guests.filter(g => g.status === 'pending').length;
-  const checkedIn  = ev.guests.filter(g => g.checked_in).length;
-  const companions = ev.guests.filter(g => g.companion && g.status === 'confirmed').length;
-  const rides      = ev.guests.reduce((s, g) => s + g.bookings.length, 0);
-
-  // Rides per vehicle
-  const vehicleRides = ev.vehicles.map(v => ({
-    name: v.name,
-    count: ev.guests.reduce((s, g) => s + g.bookings.filter(b => b.vehicle_id === v.id).length, 0),
-  }));
-  const maxRides = Math.max(...vehicleRides.map(v => v.count), 1);
-
-  // Theme preview swatches
-  const th = ev.theme || {};
-  const swatchBg     = th.bg?.color || '#f7f4ef';
-  const swatchPrimary= th.colors?.primary || '#0e0d0b';
-  const swatchAccent = th.colors?.accent  || '#b8924a';
-  const fontName = (th.typography?.fontDisplay || "'Cormorant Garamond'").replace(/'/g,'').split(',')[0].trim();
-
-  const el = document.getElementById('archiveContent');
-  el.innerHTML = `
-    
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;font-size:13px;color:var(--muted);">
-      <button class="btn btn-secondary btn-sm" onclick="renderArchive()">← Zpět na archiv</button>
-      <span>/</span>
-      <span style="color:var(--text);font-weight:500">${ev.name}</span>
-    </div>
-
-    
-    <div style="display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;margin-bottom:28px;">
-      <div>
-        <div style="font-family:'Inter',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.01em;margin-bottom:6px;">${ev.name}</div>
-        <div style="font-size:13px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
-          <span>📅 ${ev.date_from}${ev.date_to !== ev.date_from ? '–'+ev.date_to : ''}</span>
-          <span>📍 ${ev.location}</span>
-          <span>🗂 Archivováno ${formatDate(ev.archived_at)}</span>
-        </div>
-        ${ev.notes ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);background:var(--surface2);padding:10px 14px;border-radius:6px;border-left:3px solid var(--border2);">${ev.notes}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-secondary btn-sm" onclick="exportArchiveXLS(${ev.id})">⬇️ Export hostů</button>
-      </div>
-    </div>
-
-    
-    <div class="stats-grid" style="margin-bottom:28px;">
-      <div class="stat-card green"><div class="stat-label">Potvrzení</div><div class="stat-value">${confirmed}</div><div class="stat-sub">${Math.round(confirmed/Math.max(ev.guests.length,1)*100)}% z pozvaných</div></div>
-      <div class="stat-card red"><div class="stat-label">Nepřišli</div><div class="stat-value">${declined}</div><div class="stat-sub">${pending} bez odpovědi</div></div>
-      <div class="stat-card blue"><div class="stat-label">Testovací jízdy</div><div class="stat-value">${rides}</div><div class="stat-sub">průměr ${(rides/Math.max(confirmed,1)).toFixed(1)}/host</div></div>
-      <div class="stat-card yellow"><div class="stat-label">Check-in</div><div class="stat-value">${checkedIn}</div><div class="stat-sub">z ${confirmed} potvrzených</div></div>
-      <div class="stat-card neutral"><div class="stat-label">Doprovodné osoby</div><div class="stat-value">${companions}</div></div>
-      <div class="stat-card neutral"><div class="stat-label">Kapacita</div><div class="stat-value">${Math.round(confirmed/ev.capacity*100)}<span style="font-size:18px;font-weight:400">%</span></div><div class="stat-sub">${confirmed}/${ev.capacity}</div></div>
-    </div>
-
-    
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-
-      
-      <div class="table-wrap" style="padding:20px 24px;">
-        <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
-          🚗 Vozidla (${ev.vehicles.length})
-        </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          ${vehicleRides.map(v => `
-            <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-              <span style="flex:1;color:var(--text)">${v.name}</span>
-              <div style="width:80px;background:var(--surface2);border-radius:3px;height:6px;overflow:hidden;">
-                <div style="width:${Math.round(v.count/maxRides*100)}%;height:100%;background:var(--accent2);border-radius:3px;"></div>
-              </div>
-              <span style="width:24px;text-align:right;font-weight:500;font-size:12px;">${v.count}</span>
-            </div>`).join('')}
-        </div>
-      </div>
-
-      
-      <div class="table-wrap" style="padding:20px 24px;">
-        <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;">
-          🎨 Šablona registrace
-        </div>
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;">
-          <div style="width:44px;height:44px;border-radius:6px;background:${swatchBg};border:1px solid var(--border);flex-shrink:0;"></div>
-          <div style="width:44px;height:44px;border-radius:6px;background:${swatchPrimary};flex-shrink:0;"></div>
-          <div style="width:44px;height:44px;border-radius:6px;background:${swatchAccent};flex-shrink:0;"></div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.6;">
-            <div>Pozadí: <code style="font-size:11px">${swatchBg}</code></div>
-            <div>Primární: <code style="font-size:11px">${swatchPrimary}</code></div>
-            <div>Písmo: ${fontName}</div>
-          </div>
-        </div>
-        ${can('canOpenEditor') ? `<button class="btn btn-secondary btn-sm" onclick="restoreThemeFromArchive(${ev.id})">↩ Obnovit tuto šablonu</button>` : ''}
-      </div>
-    </div>
-
-    
-    <div class="table-wrap">
-      <div class="table-header">
-        <span class="table-title">Seznam hostů</span>
-        <span class="table-count">(${ev.guests.length})</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Příjmení</th><th>Jméno</th><th>E-mail</th><th>Odpověď</th><th>Doprovod</th><th>Check-in</th><th>Jízdy</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${ev.guests.map(g => `
-              <tr>
-                <td class="name-cell">${g.last_name}</td>
-                <td>${g.first_name}</td>
-                <td class="email-cell">${g.email}</td>
-                <td>${statusBadge(g.status)}</td>
-                <td>${g.companion ? '<span class="badge badge-blue">Ano</span>' : '<span class="badge badge-gray">Ne</span>'}</td>
-                <td>${g.checked_in ? '<span class="badge badge-green">✓</span>' : '<span class="badge badge-gray">Ne</span>'}</td>
-                <td style="font-weight:500">${g.bookings.length}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-function archiveCurrentEvent() {
-  if (!can('canEdit')) return;
-  const alreadyArchived = ARCHIVE.find(e => e.name === EVENT.name);
-  if (alreadyArchived) { showToast('Tato akce je již v archivu', 'error'); return; }
-  if (!confirm(`Archivovat akci "${EVENT.name}"?
-
-Akce bude uložena do archivu včetně všech hostů a vozidel.`)) return;
-
-  ARCHIVE.unshift({
-    id: Date.now(),
-    name: EVENT.name,
-    date_from: EVENT.date_from,
-    date_to: EVENT.date_to,
-    location: EVENT.location,
-    archived_at: new Date().toISOString(),
-    capacity: EVENT.capacity,
-    vehicles: VEHICLES.map(v => ({ ...v })),
-    guests: guests.map(g => ({ ...g })),
-    theme: JSON.parse(localStorage.getItem('eventTheme') || '{}'),
-    notes: '',
-  });
-
-  showToast(`Akce "${EVENT.name}" archivována`, 'success');
-  renderArchive();
-}
-
-function restoreThemeFromArchive(id) {
-  const ev = ARCHIVE.find(e => e.id === id);
-  if (!ev || !ev.theme) { showToast('Tato akce nemá uloženou šablonu', 'error'); return; }
-  if (!confirm('Obnovit šablonu z této akce? Tím přepíšeš aktuální nastavení Visual Editoru.')) return;
-  localStorage.setItem('eventTheme', JSON.stringify(ev.theme));
-  showToast('Šablona obnovena — otevři Visual Editor pro náhled', 'success');
-}
-
-function exportArchiveXLS(id) {
-  const ev = ARCHIVE.find(e => e.id === id);
-  if (!ev) return;
-  const rows = ev.guests.map(g => ({
-    'Příjmení': g.last_name, 'Jméno': g.first_name, 'E-mail': g.email, 'Telefon': g.phone||'',
-    'Odpověď': { confirmed:'Potvrzena', declined:'Odmítl', pending:'Bez odpovědi' }[g.status],
-    'Doprovod': g.companion?'Ano':'Ne', 'Check-in': g.checked_in?'Ano':'Ne',
-    'Počet jízd': g.bookings.length,
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Hosté');
-  XLSX.writeFile(wb, `archiv-${ev.name.replace(/\s+/g,'-')}.xlsx`);
-  showToast('Export dokončen', 'success');
-}
-
-// ═══════════════════════════════════════════════════════
 // USER MANAGEMENT (super_admin only)
 // ═══════════════════════════════════════════════════════
 
@@ -3696,33 +3358,51 @@ function readonlyNote() {
   return `<div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">🔒 Nemáte oprávnění k úpravám</div>`;
 }
 
-function saveSettings() {
-  EVENT.name     = document.getElementById('sName').value;
-  EVENT.date_from= document.getElementById('sDateFrom').value;
-  EVENT.capacity = parseInt(document.getElementById('sCapacity').value)||120;
-  EVENT.location = document.getElementById('sLocation').value;
+// Persists a partial set of event fields to the backend (PATCH /api/events/{id})
+// and keeps local EVENT / EVENTS_DB state in sync. Returns true on success.
+async function saveEventFields(fields) {
+  if (!EVENT || !EVENT.id) return false;
+  const updated = await apiCall(`/events/${EVENT.id}`, 'PATCH', fields);
+  if (!updated) return false; // apiCall already showed an error toast
+  Object.assign(EVENT, fields);
   const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) Object.assign(ev, { name: EVENT.name, date_from: EVENT.date_from, capacity: EVENT.capacity, location: EVENT.location });
-  showToast('Nastavení uloženo ✓', 'success');
-  renderSidebarEventContext();
+  if (ev) Object.assign(ev, fields);
+  return true;
 }
 
-function saveVehicleName(id) {
+async function saveSettings() {
+  const fields = {
+    name:      document.getElementById('sName').value,
+    date_from: document.getElementById('sDateFrom').value,
+    capacity:  parseInt(document.getElementById('sCapacity').value) || 120,
+    location:  document.getElementById('sLocation').value,
+  };
+  const ok = await saveEventFields(fields);
+  if (ok) { showToast('Nastavení uloženo ✓', 'success'); renderSidebarEventContext(); }
+}
+
+async function saveVehicleName(id) {
   const v = VEHICLES.find(v=>v.id===id); if(!v) return;
   const input = document.getElementById('vname-'+id);
   const newName = input?.value.trim();
   if (!newName) { showToast('Název nesmí být prázdný', 'error'); return; }
+  const prevName = v.name;
   v.name = newName;
-  showToast('Vůz upraven ✓', 'success');
+  const ok = await saveEventFields({ vehicles: VEHICLES });
+  if (ok) { showToast('Vůz upraven ✓', 'success'); }
+  else { v.name = prevName; if (input) input.value = prevName; }
 }
 
-function removeVehicle(id) {
+async function removeVehicle(id) {
   if (VEHICLES.length<=1) { showToast('Musí být alespoň jeden vůz', 'error'); return; }
-  const idx = VEHICLES.findIndex(v=>v.id===id); if(idx>=0) VEHICLES.splice(idx,1);
-  showToast('Vůz odebrán', 'success'); renderSettings();
+  const idx = VEHICLES.findIndex(v=>v.id===id); if(idx<0) return;
+  const [removed] = VEHICLES.splice(idx,1);
+  const ok = await saveEventFields({ vehicles: VEHICLES });
+  if (ok) { showToast('Vůz odebrán', 'success'); renderSettings(); }
+  else { VEHICLES.splice(idx,0,removed); }
 }
 
-function addVehicle() {
+async function addVehicle() {
   document.getElementById('modalTitle').textContent = 'Přidat vozidlo';
   document.getElementById('modalBody').innerHTML = `
     <div class="form-row"><label>Název vozidla</label><input id="newVehicleName" placeholder="např. Porsche Taycan Turbo S"></div>`;
@@ -3733,11 +3413,15 @@ function addVehicle() {
   setTimeout(() => document.getElementById('newVehicleName')?.focus(), 100);
 }
 
-function confirmAddVehicle() {
+async function confirmAddVehicle() {
   const name = document.getElementById('newVehicleName')?.value.trim();
   if (!name) { showToast('Zadejte název vozidla', 'error'); return; }
-  VEHICLES.push({ id: Date.now(), name });
-  closeModal(); showToast('Vůz přidán ✓', 'success'); renderSettings();
+  const newVehicle = { id: Date.now(), name };
+  VEHICLES.push(newVehicle);
+  const ok = await saveEventFields({ vehicles: VEHICLES });
+  closeModal();
+  if (ok) { showToast('Vůz přidán ✓', 'success'); renderSettings(); }
+  else { VEHICLES.pop(); }
 }
 
 // ── TIME WINDOWS ───────────────────────────────────────
@@ -3790,14 +3474,25 @@ function buildTimeWindowsList() {
       Žádná časová okna — přidejte první okno tlačítkem výše.
     </div>`;
   }
+  // Real booked counts per window, derived from actual guest data — mirrors
+  // the same "status != cancelled" rule the backend uses when checking
+  // window capacity on registration (see create_guest() in main.py).
+  const bookedByWindow = {};
+  guests.forEach(g => {
+    if (g.window_id != null && g.status !== 'cancelled') {
+      bookedByWindow[g.window_id] = (bookedByWindow[g.window_id] || 0) + 1;
+    }
+  });
+
   // Group by day if multi-day
   const days    = [...new Set(windows.map(w => w.day).filter(Boolean))];
   const multiDay= days.length > 1;
 
   function windowRow(w) {
-    const pct     = w.capacity > 0 ? Math.round(w.booked / w.capacity * 100) : 0;
-    const full    = w.capacity > 0 && w.booked >= w.capacity;
-    const capText = w.capacity > 0 ? `${w.booked}/${w.capacity}` : `${w.booked} (neomezeno)`;
+    const booked  = bookedByWindow[w.id] || 0;
+    const pct     = w.capacity > 0 ? Math.round(booked / w.capacity * 100) : 0;
+    const full    = w.capacity > 0 && booked >= w.capacity;
+    const capText = w.capacity > 0 ? `${booked}/${w.capacity}` : `${booked} (neomezeno)`;
     const dayBadge= w.day && !multiDay ? `<span style="font-size:11px;color:var(--muted)">📅 ${w.day} · </span>` : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;">
       <div style="flex:1;min-width:0;">
@@ -3840,28 +3535,21 @@ function onRegTypeChange(val) {
   if (drivesEd)  drivesEd.style.display  = val === 'drives'  ? '' : 'none';
 }
 
-function saveRegType() {
+async function saveRegType() {
   const val = document.getElementById('sRegType')?.value;
   if (!val) return;
-  EVENT.registration_type = val;
-  const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) ev.registration_type = val;
-  onRegTypeChange(val);
-  showToast('Typ registrace uložen ✓', 'success');
+  const ok = await saveEventFields({ registration_type: val });
+  if (ok) { onRegTypeChange(val); showToast('Typ registrace uložen ✓', 'success'); }
 }
 
-function saveDrivesConfig() {
+async function saveDrivesConfig() {
   const start    = document.getElementById('sSlotStart')?.value;
   const end      = document.getElementById('sSlotEnd')?.value;
   const duration = parseInt(document.getElementById('sSlotDuration')?.value) || 15;
   if (!start || !end) { showToast('Vyplňte čas začátku a konce', 'error'); return; }
   if (start >= end)   { showToast('Začátek musí být před koncem', 'error'); return; }
-  EVENT.slot_start    = start;
-  EVENT.slot_end      = end;
-  EVENT.slot_duration = duration;
-  const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) { ev.slot_start = start; ev.slot_end = end; ev.slot_duration = duration; }
-  showToast('Nastavení slotů uloženo ✓', 'success');
+  const ok = await saveEventFields({ slot_start: start, slot_end: end, slot_duration: duration });
+  if (ok) showToast('Nastavení slotů uloženo ✓', 'success');
 }
 
 function openAddWindowModal() {
@@ -3885,7 +3573,7 @@ function openAddWindowModal() {
   setTimeout(() => document.getElementById('wLabel')?.focus(), 100);
 }
 
-function confirmAddWindow() {
+async function confirmAddWindow() {
   const label    = document.getElementById('wLabel')?.value.trim();
   const day      = document.getElementById('wDay')?.value  || '';
   const from     = document.getElementById('wFrom')?.value;
@@ -3894,10 +3582,9 @@ function confirmAddWindow() {
   if (!label)   { showToast('Zadejte název okna', 'error'); return; }
   if (!from||!to){ showToast('Zadejte čas od a do', 'error'); return; }
   if (from >= to){ showToast('Čas "od" musí být před "do"', 'error'); return; }
-  const windows = EVENT.time_windows = EVENT.time_windows || [];
-  windows.push({ id: Date.now(), label, day, from, to, capacity, booked: 0 });
-  const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) ev.time_windows = windows;
+  const windows = [...(EVENT.time_windows || []), { id: Date.now(), label, day, from, to, capacity }];
+  const ok = await saveEventFields({ time_windows: windows });
+  if (!ok) return;
   closeModal();
   showToast(`Okno „${label}" přidáno ✓`, 'success');
   refreshTimeWindowsList();
@@ -3924,7 +3611,7 @@ function openEditWindowModal(id) {
   openModal();
 }
 
-function confirmEditWindow(id) {
+async function confirmEditWindow(id) {
   const w = (EVENT.time_windows || []).find(w => w.id === id); if (!w) return;
   const label    = document.getElementById('wLabel')?.value.trim();
   const day      = document.getElementById('wDay')?.value || '';
@@ -3933,21 +3620,21 @@ function confirmEditWindow(id) {
   const capacity = parseInt(document.getElementById('wCapacity')?.value) || 0;
   if (!label)    { showToast('Zadejte název okna', 'error'); return; }
   if (from >= to){ showToast('Čas "od" musí být před "do"', 'error'); return; }
-  Object.assign(w, { label, day, from, to, capacity });
-  const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) ev.time_windows = [...(EVENT.time_windows||[])];
+  const windows = (EVENT.time_windows || []).map(win =>
+    win.id === id ? { ...win, label, day, from, to, capacity } : win
+  );
+  const ok = await saveEventFields({ time_windows: windows });
+  if (!ok) return;
   closeModal();
   showToast('Okno upraveno ✓', 'success');
   refreshTimeWindowsList();
 }
 
-function deleteTimeWindow(id) {
+async function deleteTimeWindow(id) {
   if (!confirm('Smazat toto časové okno?')) return;
-  const windows = EVENT.time_windows || [];
-  const idx = windows.findIndex(w => w.id === id);
-  if (idx >= 0) windows.splice(idx, 1);
-  const ev = EVENTS_DB.find(e => e.id === EVENT.id);
-  if (ev) ev.time_windows = windows;
+  const windows = (EVENT.time_windows || []).filter(w => w.id !== id);
+  const ok = await saveEventFields({ time_windows: windows });
+  if (!ok) return;
   showToast('Okno smazáno', 'success');
   refreshTimeWindowsList();
 }
@@ -4390,9 +4077,9 @@ function formatDate(iso) {
 function renderArchive() {
   archiveDetailId=null;
   const el=document.getElementById('archiveContent');
-  const totalGuests=ARCHIVE.reduce((s,e)=>s+e.guests.length,0);
-  const totalConfirmed=ARCHIVE.reduce((s,e)=>s+e.guests.filter(g=>g.status==='confirmed').length,0);
-  const totalRides=ARCHIVE.reduce((s,e)=>s+e.guests.reduce((ss,g)=>ss+g.bookings.length,0),0);
+  const totalGuests=ARCHIVE.reduce((s,e)=>s+(e.guest_count||0),0);
+  const totalConfirmed=ARCHIVE.reduce((s,e)=>s+(e.confirmed_count||0),0);
+  const totalRides=ARCHIVE.reduce((s,e)=>s+(e.rides_count||0),0);
   el.innerHTML=`
     <div class="stats-grid" style="margin-bottom:28px;">
       <div class="stat-card blue"><div class="stat-label">Archivovaných akcí</div><div class="stat-value">${ARCHIVE.length}</div></div>
@@ -4402,90 +4089,123 @@ function renderArchive() {
     <div class="table-wrap">
       <div class="table-header"><span class="table-title">Proběhlé akce</span><span class="table-count">(${ARCHIVE.length})</span></div>
       <table><thead><tr><th>Název</th><th>Datum</th><th>Hosté</th><th>Jízdy</th><th>Archivováno</th><th></th></tr></thead>
-      <tbody>${ARCHIVE.map(ev=>{
-        const rides=ev.guests.reduce((s,g)=>s+g.bookings.length,0);
+      <tbody>${ARCHIVE.length ? ARCHIVE.map(ev=>{
         return `<tr style="cursor:pointer" onclick="renderArchiveDetail(${ev.id})">
           <td class="name-cell">${ev.name}</td>
           <td style="color:var(--muted);font-size:12px">${ev.date_from}</td>
-          <td><span style="font-weight:500">${ev.guests.length}</span></td>
-          <td><span style="font-weight:500">${rides}</span></td>
+          <td><span style="font-weight:500">${ev.guest_count||0}</span></td>
+          <td><span style="font-weight:500">${ev.rides_count||0}</span></td>
           <td style="color:var(--muted);font-size:12px">${formatDate(ev.archived_at)}</td>
           <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();renderArchiveDetail(${ev.id})">Detail →</button></td>
         </tr>`;
-      }).join('')}</tbody></table>
+      }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">Zatím žádné archivované akce</td></tr>`}</tbody></table>
     </div>`;
 }
 
 archiveDetailId=null;
 
-function renderArchiveDetail(id) {
+async function renderArchiveDetail(id) {
   archiveDetailId=id;
   const ev=ARCHIVE.find(e=>e.id===id); if(!ev) return;
-  const confirmed=ev.guests.filter(g=>g.status==='confirmed').length;
-  const rides=ev.guests.reduce((s,g)=>s+g.bookings.length,0);
+
   const el=document.getElementById('archiveContent');
+  el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted);">Načítám hosty…</div>`;
+
+  const guestsData = await apiCall(`/events/${id}/guests`);
+  if (archiveDetailId !== id) return; // user navigated away while loading
+  archiveDetailGuests = Array.isArray(guestsData) ? guestsData.map(g => ({
+    ...g,
+    bookings: g.bookings || [],
+  })) : [];
+
+  const confirmed = archiveDetailGuests.filter(g=>g.status==='confirmed').length;
+  const rides = archiveDetailGuests.reduce((s,g)=>s+g.bookings.length,0);
+  const vehicles = (ev.archive_meta && ev.archive_meta.vehicles) || [];
+
   el.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;font-size:13px;color:var(--muted);">
       <button class="btn btn-secondary btn-sm" onclick="renderArchive()">← Zpět na archiv</button>
       <span>/</span><span style="color:var(--text);font-weight:500">${ev.name}</span>
     </div>
     <div style="font-family:'Inter',sans-serif;font-size:22px;font-weight:800;margin-bottom:6px;">${ev.name}</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">📅 ${ev.date_from} · 📍 ${ev.location} · Archivováno ${formatDate(ev.archived_at)}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">📅 ${ev.date_from} · 📍 ${ev.location||''} · Archivováno ${formatDate(ev.archived_at)}</div>
+    ${vehicles.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">🚗 Vozy v době konání: ${vehicles.map(v=>v.name).join(', ')}</div>` : ''}
     <div class="stats-grid" style="margin-bottom:24px;">
       <div class="stat-card green"><div class="stat-label">Potvrzení</div><div class="stat-value">${confirmed}</div></div>
       <div class="stat-card blue"><div class="stat-label">Testovací jízdy</div><div class="stat-value">${rides}</div></div>
-      <div class="stat-card neutral"><div class="stat-label">Celkem hostů</div><div class="stat-value">${ev.guests.length}</div></div>
+      <div class="stat-card neutral"><div class="stat-label">Celkem hostů</div><div class="stat-value">${archiveDetailGuests.length}</div></div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:20px;">
       <button class="btn btn-secondary btn-sm" onclick="exportArchiveXLS(${ev.id})">⬇️ Export hostů</button>
+      ${can('canOpenEditor') ? `<button class="btn btn-secondary btn-sm" onclick="restoreThemeFromArchive(${ev.id})">↩ Obnovit šablonu</button>` : ''}
+      ${can('canRestoreEvent') ? `<button class="btn btn-secondary btn-sm" onclick="restoreEventFromArchive(${ev.id})">📤 Obnovit jako aktivní akci</button>` : ''}
     </div>
     <div class="table-wrap">
-      <div class="table-header"><span class="table-title">Seznam hostů</span><span class="table-count">(${ev.guests.length})</span></div>
+      <div class="table-header"><span class="table-title">Seznam hostů</span><span class="table-count">(${archiveDetailGuests.length})</span></div>
       <table><thead><tr><th>Příjmení</th><th>Jméno</th><th>E-mail</th><th>Odpověď</th><th>Check-in</th><th>Jízdy</th></tr></thead>
-      <tbody>${ev.guests.map(g=>`<tr>
+      <tbody>${archiveDetailGuests.length ? archiveDetailGuests.map(g=>`<tr>
         <td class="name-cell">${g.last_name}</td><td>${g.first_name}</td>
         <td class="email-cell">${g.email}</td><td>${statusBadge(g.status)}</td>
         <td>${g.checked_in?'<span class="badge badge-green">✓</span>':'<span class="badge badge-gray">Ne</span>'}</td>
         <td style="font-weight:500">${g.bookings.length}</td>
-      </tr>`).join('')}</tbody></table>
+      </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">Žádní hosté</td></tr>`}</tbody></table>
     </div>`;
 }
 
 function archiveCurrentEvent() { if(currentEventId&&typeof currentEventId==='number') archiveEvent(currentEventId); }
 
-function archiveEvent(id) {
+async function archiveEvent(id) {
   if(!can('canArchiveEvent')){showToast('Nemáte oprávnění archivovat akce.','error');return;}
   const ev=EVENTS_DB.find(e=>e.id===id); if(!ev) return;
   if(!confirm(`Archivovat akci „${ev.name}"?\n\nAkce bude přesunuta do archivu.`)) return;
-  const idx=EVENTS_DB.findIndex(e=>e.id===id);
-  if(idx>=0) EVENTS_DB.splice(idx,1);
-  ARCHIVE.unshift({id:ev.id,name:ev.name,date_from:ev.date_from,date_to:ev.date_to,location:ev.location,archived_at:new Date().toISOString(),capacity:ev.capacity,vehicles:VEHICLES.map(v=>({...v})),guests:guests.map(g=>({...g})),theme:ev.theme||null,notes:'',icon:ev.icon});
-  if(currentEventId===id){currentEventId=null;EVENT=EVENTS_DB[0]||ev;}
+
+  const result = await apiCall(`/events/${id}/archive`, 'POST', {
+    notes: '',
+    vehicles: VEHICLES.map(v => ({ ...v })),
+  });
+  if (!result) return; // apiCall already showed an error toast
+
+  if(currentEventId===id){ currentEventId=null; }
+  await reloadEventsDB();
+  await loadArchive(true);
+  if (!EVENT || !EVENTS_DB.find(e=>e.id===EVENT.id)) EVENT = EVENTS_DB[0] || null;
+
   showToast(`Akce „${ev.name}" archivována`,'success');
   renderSidebarV2(); showPage('events');
 }
 
-function restoreEventFromArchive(id) {
+async function restoreEventFromArchive(id) {
   if(!can('canRestoreEvent')){showToast('Nemáte oprávnění obnovovat akce.','error');return;}
   const ev=ARCHIVE.find(e=>e.id===id); if(!ev) return;
   if(!confirm(`Obnovit akci „${ev.name}" jako aktivní?`)) return;
-  ARCHIVE.splice(ARCHIVE.findIndex(e=>e.id===id),1);
-  EVENTS_DB.push({id:ev.id,name:ev.name,date_from:ev.date_from,date_to:ev.date_to,location:ev.location,capacity:ev.capacity,icon:ev.icon||'🎯',registration_open:true,status:'active',theme:ev.theme||null,registration_type:ev.registration_type||'drives',time_windows:ev.time_windows||[]});
+
+  const result = await apiCall(`/events/${id}/unarchive`, 'POST');
+  if (!result) return;
+
+  await reloadEventsDB();
+  await loadArchive(true);
+
   showToast(`Akce „${ev.name}" obnovena`,'success');
   renderSidebarV2(); showPage('events');
 }
 
 function restoreThemeFromArchive(id) {
   const ev=ARCHIVE.find(e=>e.id===id);
-  if(!ev||!ev.theme){showToast('Tato akce nemá uloženou šablonu','error');return;}
+  if(!ev||!ev.theme || (typeof ev.theme==='object' && !Object.keys(ev.theme).length)){showToast('Tato akce nemá uloženou šablonu','error');return;}
   if(!confirm('Obnovit šablonu z této akce?')) return;
   localStorage.setItem('eventTheme',JSON.stringify(ev.theme));
   showToast('Šablona obnovena','success');
 }
 
-function exportArchiveXLS(id) {
+async function exportArchiveXLS(id) {
   const ev=ARCHIVE.find(e=>e.id===id); if(!ev) return;
-  const rows=ev.guests.map(g=>({'Příjmení':g.last_name,'Jméno':g.first_name,'E-mail':g.email,'Odpověď':{confirmed:'Potvrzena',declined:'Odmítl',pending:'Bez odpovědi'}[g.status],'Check-in':g.checked_in?'Ano':'Ne','Počet jízd':g.bookings.length}));
+  // Reuse already-loaded detail guests if we're viewing this event's detail; otherwise fetch fresh.
+  let guestsForExport = (archiveDetailId === id) ? archiveDetailGuests : null;
+  if (!guestsForExport) {
+    const data = await apiCall(`/events/${id}/guests`);
+    guestsForExport = Array.isArray(data) ? data.map(g => ({ ...g, bookings: g.bookings || [] })) : [];
+  }
+  const rows=guestsForExport.map(g=>({'Příjmení':g.last_name,'Jméno':g.first_name,'E-mail':g.email,'Odpověď':{confirmed:'Potvrzena',declined:'Odmítl',pending:'Bez odpovědi'}[g.status]||g.status,'Check-in':g.checked_in?'Ano':'Ne','Počet jízd':g.bookings.length}));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Hosté');
