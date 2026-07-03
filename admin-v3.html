@@ -4451,11 +4451,66 @@ function renderEventsPage() {
     ${archivedSection}`;
 }
 
+let neSlugManuallyEdited = false;
+let neSlugCheckTimer = null;
+
+function slugifyClientSide(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip diacritics (á→a, š→s...)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function onNeNameInput() {
+  if (neSlugManuallyEdited) return; // admin already took control of the slug field
+  const slugInput = document.getElementById('neSlug');
+  slugInput.value = slugifyClientSide(document.getElementById('neName').value);
+  scheduleSlugCheck();
+}
+
+function onNeSlugInput() {
+  neSlugManuallyEdited = true;
+  scheduleSlugCheck();
+}
+
+function scheduleSlugCheck() {
+  clearTimeout(neSlugCheckTimer);
+  neSlugCheckTimer = setTimeout(checkNeSlugAvailability, 400);
+}
+
+async function checkNeSlugAvailability() {
+  const raw = document.getElementById('neSlug')?.value || '';
+  const slug = slugifyClientSide(raw);
+  const preview = document.getElementById('neSlugPreview');
+  const warning = document.getElementById('neSlugWarning');
+  if (!slug) { preview.textContent = 'event.autorion.net/?event=…'; warning.style.display = 'none'; return; }
+  preview.textContent = `event.autorion.net/?event=${slug}`;
+  const result = await apiCall(`/events/check-slug/${encodeURIComponent(slug)}`);
+  if (result && result.available === false) {
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
 function openNewEventModal() {
   if(!currentUser||!['super_admin','manager'].includes(currentUser.role)){showToast('Nemáte oprávnění vytvářet nové akce.','error');return;}
+  neSlugManuallyEdited = false;
+  clearTimeout(neSlugCheckTimer);
   document.getElementById('modalTitle').textContent='Vytvořit novou akci';
   document.getElementById('modalBody').innerHTML=`
-    <div class="form-row"><label>Název akce</label><input id="neName" placeholder="PPF Automotive Experience 2026"></div>
+    <div class="form-row"><label>Název akce</label><input id="neName" placeholder="PPF Automotive Experience 2026" oninput="onNeNameInput()"></div>
+    <div class="form-row">
+      <label>Adresa akce (URL)</label>
+      <input id="neSlug" placeholder="ppf-automotive-experience-2026" oninput="onNeSlugInput()">
+      <div id="neSlugPreview" style="font-size:11px;color:var(--muted);margin-top:4px;">
+        event.autorion.net/?event=…
+      </div>
+      <div id="neSlugWarning" style="display:none;font-size:11px;color:var(--red);margin-top:4px;">
+        ⚠ Tato adresa už je obsazená — při vytvoření se automaticky použije volná varianta (např. s „-2" na konci).
+      </div>
+    </div>
     <div style="font-size:12px;color:var(--muted);padding:7px 12px;background:var(--surface2);border-radius:6px;margin-bottom:4px;">
       📅 Formát data: <strong>D. M. YYYY</strong> — např. <strong>14. 6. 2026</strong>
     </div>
@@ -4513,6 +4568,7 @@ function validateDateField(input, errId) {
 
 async function createNewEvent() {
   const name     = document.getElementById('neName').value.trim();
+  const slugRaw  = document.getElementById('neSlug').value.trim();
   const dateFrom = document.getElementById('neDateFrom').value.trim();
   const dateTo   = document.getElementById('neDateTo').value.trim();
   const location = document.getElementById('neLocation').value.trim();
@@ -4546,21 +4602,28 @@ async function createNewEvent() {
     }
   }
 
+  const requestedSlug = slugifyClientSide(slugRaw || name);
+
   // Save to API
   const apiEvent = await apiCall('/events', 'POST', {
     name, date_from: dateFrom, date_to: dateTo||dateFrom,
-    location, capacity, registration_type: regType, icon
+    location, capacity, registration_type: regType, icon, slug: requestedSlug
   });
-  const newEvent = apiEvent ? {
+  if (!apiEvent) return; // apiCall already showed an error toast — don't fake a local event
+  const newEvent = {
     id: apiEvent.id, name, date_from: dateFrom, date_to: dateTo||dateFrom,
     location, capacity, icon, registration_open: true, status: 'active',
     theme: null, registration_type: regType, time_windows: [],
     slot_start: '10:00', slot_end: '18:00', slot_duration: 15,
     consent_cs: '', consent_en: '', slug: apiEvent.slug || ''
-  } : {id:Date.now(),name,date_from:dateFrom,date_to:dateTo||dateFrom,location,capacity,icon,registration_open:true,status:'active',theme:null,registration_type:regType,time_windows:[],slot_start:'10:00',slot_end:'18:00',slot_duration:15};
+  };
   EVENTS_DB.push(newEvent);
   closeModal();
-  showToast(`Akce „${name}" vytvořena`,'success');
+  if (apiEvent.slug && apiEvent.slug !== requestedSlug) {
+    showToast(`Akce vytvořena — adresa „${requestedSlug}" byla obsazená, použita „${apiEvent.slug}"`, 'success');
+  } else {
+    showToast(`Akce „${name}" vytvořena`,'success');
+  }
   renderSidebarV2(); selectEvent(newEvent.id);
 }
 

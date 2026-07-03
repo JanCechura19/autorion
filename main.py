@@ -86,6 +86,7 @@ class EventCreate(BaseModel):
     capacity: int
     registration_type: str = "drives"
     icon: str = "🎯"
+    slug: Optional[str] = None  # admin-chosen public URL slug; auto-generated from name if omitted
 
 class EventUpdate(BaseModel):
     name: Optional[str] = None
@@ -515,20 +516,49 @@ def get_event_availability(slug: str):
         "booked_by_window": booked_by_window
     }
 
+@app.get("/api/events/check-slug/{slug}")
+def check_slug_available(slug: str, user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT 1 FROM events WHERE slug = %s", (slug,))
+    taken = cur.fetchone() is not None
+    cur.close()
+    conn.close()
+    return {"slug": slug, "available": not taken}
+
 @app.post("/api/events")
 def create_event(event: EventCreate, user=Depends(get_current_user)):
     if user["role"] not in ["super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
     import re
-    slug = re.sub(r'[^a-z0-9]+', '-', event.name.lower()).strip('-')
+
+    # Use the admin-chosen slug if provided, otherwise derive one from the name.
+    raw_source = event.slug if (event.slug and event.slug.strip()) else event.name
+    base_slug = re.sub(r'[^a-z0-9]+', '-', raw_source.lower()).strip('-')
+    if not base_slug:
+        base_slug = "akce"
+
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Fail-safe: if the slug is already taken (active or archived event),
+    # append -2, -3, ... until a free one is found. This guarantees event
+    # creation never hard-fails on a slug collision, even if the admin didn't
+    # notice the collision warning on the frontend.
+    final_slug = base_slug
+    cur.execute("SELECT 1 FROM events WHERE slug = %s", (final_slug,))
+    n = 2
+    while cur.fetchone():
+        final_slug = f"{base_slug}-{n}"
+        cur.execute("SELECT 1 FROM events WHERE slug = %s", (final_slug,))
+        n += 1
+
     cur.execute("""
         INSERT INTO events (name, date_from, date_to, location, capacity, registration_type, icon, slug)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING *
     """, (event.name, event.date_from, event.date_to, event.location,
-          event.capacity, event.registration_type, event.icon, slug))
+          event.capacity, event.registration_type, event.icon, final_slug))
     new_event = cur.fetchone()
     cur.close()
     conn.close()
