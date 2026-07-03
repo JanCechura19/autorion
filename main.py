@@ -68,6 +68,23 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # Sessions storage (in-memory for now)
 sessions = {}
 
+# ── LOGIN RATE LIMITING ─────────────────────────────────
+# After too many failed attempts for one account, the account is locked
+# PERMANENTLY (persisted in the DB, survives restarts) until a super_admin
+# explicitly unlocks it — see POST /api/users/{id}/unlock. Failed-attempt
+# counting itself lives in memory (losing the count on a server restart is
+# an acceptable, safe-direction failure — worst case someone gets 5 fresh
+# attempts, they don't get an already-locked account un-locked).
+LOGIN_MAX_ATTEMPTS = 5
+failed_login_counts = {}  # email -> int
+
+def _register_failed_login(email: str) -> int:
+    failed_login_counts[email] = failed_login_counts.get(email, 0) + 1
+    return failed_login_counts[email]
+
+def _reset_failed_logins(email: str):
+    failed_login_counts.pop(email, None)
+
 # ── MODELS ──────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
@@ -181,6 +198,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS events (
             id SERIAL PRIMARY KEY,
@@ -253,14 +271,37 @@ init_db()
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
+    email = req.email.lower()
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM users WHERE email = %s", (req.email.lower(),))
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cur.fetchone()
+
+    if user and user["locked"]:
+        cur.close()
+        conn.close()
+        raise HTTPException(
+            status_code=423,
+            detail="Účet je zamčen kvůli opakovaným neúspěšným pokusům o přihlášení. Požádejte super admina o odemčení."
+        )
+
     if not user or not verify_password(req.password, user["password_hash"]):
+        if user:  # only track/lock attempts against real accounts
+            attempts = _register_failed_login(email)
+            if attempts >= LOGIN_MAX_ATTEMPTS:
+                cur.execute("UPDATE users SET locked = TRUE WHERE id = %s", (user["id"],))
+                cur.close()
+                conn.close()
+                _reset_failed_logins(email)
+                raise HTTPException(
+                    status_code=423,
+                    detail="Účet byl po 5 neúspěšných pokusech zamčen. Požádejte super admina o odemčení."
+                )
         cur.close()
         conn.close()
         raise HTTPException(status_code=401, detail="Nesprávný email nebo heslo")
+
+    _reset_failed_logins(email)
     # Transparent migration: if this account still has a legacy sha256 hash,
     # upgrade it to bcrypt now that we have the plaintext password in hand.
     if _is_legacy_sha256_hash(user["password_hash"]):
@@ -428,6 +469,21 @@ def delete_user(user_id: int, user=Depends(get_current_user)):
         if sess_user["id"] == user_id:
             del sessions[token]
     return {"status": "deleted", "id": user_id}
+
+@app.post("/api/users/{user_id}/unlock")
+def unlock_user(user_id: int, user=Depends(get_current_user)):
+    if user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Pouze super admin může odemykat účty")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("UPDATE users SET locked = FALSE WHERE id = %s RETURNING id, email", (user_id,))
+    updated = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    _reset_failed_logins(updated["email"].lower())
+    return {"status": "unlocked", "id": user_id}
 
 # ── EVENTS ──────────────────────────────────────────────
 

@@ -3852,17 +3852,21 @@ function buildSystemSettingsHTML(isSuperAdmin) {
           ${can('canManageUsers') ? `<button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ Přidat uživatele</button>` : ''}
         </div>
         <table style="width:100%">
-          <thead><tr><th>Jméno</th><th>E-mail</th><th>Role</th><th>Check-in</th><th>Akce</th>${can('canManageUsers')?'<th></th>':''}</tr></thead>
+          <thead><tr><th>Jméno</th><th>E-mail</th><th>Role</th><th>Check-in</th><th>Akce</th><th>Stav</th>${can('canManageUsers')?'<th></th>':''}</tr></thead>
           <tbody>
             ${USERS.map(u => {
               const rm = ROLE_META[u.role];
               const accessLabel = (u.event_access==null) ? '<span class="badge badge-green">Všechny</span>' : u.event_access.length===0 ? '<span class="badge badge-gray">Žádné</span>' : `<span class="badge badge-yellow">${u.event_access.length} akce</span>`;
+              const statusLabel = u.locked
+                ? `<span class="badge" style="background:rgba(200,60,60,0.12);color:var(--red);">🔒 Zamčeno</span>`
+                : `<span class="badge badge-green">Aktivní</span>`;
               return `<tr>
                 <td class="name-cell">${u.name}</td>
                 <td class="email-cell">${u.email}</td>
                 <td><span class="badge ${rm.badge}">${rm.label}</span></td>
                 <td>${u.checkin_access?'<span class="badge badge-blue">🎫 Ano</span>':'<span class="badge badge-gray">Ne</span>'}</td>
                 <td>${accessLabel}</td>
+                <td>${statusLabel}${u.locked && isSuperAdmin ? ` <button class="btn btn-secondary btn-sm" style="margin-left:6px;" onclick="unlockUser(${u.id})">Odemknout</button>` : ''}</td>
                 ${can('canManageUsers')?`<td><button class="btn btn-secondary btn-sm" onclick="openEditUserModal(${u.id})">Upravit</button></td>`:''}
               </tr>`;
             }).join('')}
@@ -4044,6 +4048,16 @@ async function deleteUser(id) {
   USERS.splice(USERS.findIndex(u=>u.id===id),1);
   closeModal();
   showToast(`Uživatel ${u.name} smazán`,'success');
+  renderSystemSettings();
+}
+
+async function unlockUser(id) {
+  if (currentUser?.role !== 'super_admin') { showToast('Pouze super admin může odemykat účty.', 'error'); return; }
+  const u = USERS.find(u => u.id === id); if (!u) return;
+  const result = await apiCall(`/users/${id}/unlock`, 'POST');
+  if (!result || result.status !== 'unlocked') return; // apiCall already showed an error toast
+  u.locked = false;
+  showToast(`Účet ${u.name} odemčen ✓`, 'success');
   renderSystemSettings();
 }
 
