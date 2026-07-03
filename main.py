@@ -6,6 +6,7 @@ from typing import Optional, List
 import psycopg2
 import psycopg2.extras
 import hashlib
+import bcrypt
 import secrets
 import json
 import os
@@ -46,7 +47,23 @@ def get_db():
     return conn
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Bcrypt hash for NEW passwords (any password being set/changed from now on)."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def _is_legacy_sha256_hash(stored_hash: str) -> bool:
+    # Old hashes are raw sha256 hexdigests: exactly 64 hex characters.
+    # Bcrypt hashes start with $2a$/$2b$/$2y$ and are ~60 chars — never match this.
+    return len(stored_hash) == 64 and all(c in "0123456789abcdef" for c in stored_hash.lower())
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verifies a password against either a bcrypt hash (current) or a
+    legacy unsalted-sha256 hash (pre-migration accounts)."""
+    if _is_legacy_sha256_hash(stored_hash):
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+    try:
+        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    except ValueError:
+        return False  # malformed hash — never authenticate
 
 # Sessions storage (in-memory for now)
 sessions = {}
@@ -238,13 +255,19 @@ init_db()
 def login(req: LoginRequest):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM users WHERE email = %s AND password_hash = %s",
-                (req.email.lower(), hash_password(req.password)))
+    cur.execute("SELECT * FROM users WHERE email = %s", (req.email.lower(),))
     user = cur.fetchone()
+    if not user or not verify_password(req.password, user["password_hash"]):
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=401, detail="Nesprávný email nebo heslo")
+    # Transparent migration: if this account still has a legacy sha256 hash,
+    # upgrade it to bcrypt now that we have the plaintext password in hand.
+    if _is_legacy_sha256_hash(user["password_hash"]):
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s",
+                    (hash_password(req.password), user["id"]))
     cur.close()
     conn.close()
-    if not user:
-        raise HTTPException(status_code=401, detail="Nesprávný email nebo heslo")
     token = secrets.token_hex(32)
     sessions[token] = dict(user)
     return {"token": token, "user": {
@@ -272,7 +295,7 @@ def change_password(req: PasswordChangeRequest, user=Depends(get_current_user)):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute("SELECT * FROM users WHERE id = %s", (user["id"],))
     current = cur.fetchone()
-    if not current or current["password_hash"] != hash_password(req.current_password):
+    if not current or not verify_password(req.current_password, current["password_hash"]):
         cur.close()
         conn.close()
         raise HTTPException(status_code=401, detail="Současné heslo není správné")
@@ -316,8 +339,8 @@ def get_users(user=Depends(get_current_user)):
 def create_user(req: UserCreate, user=Depends(get_current_user)):
     if user["role"] not in ["super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="Nedostatecna opravneni")
-    if len(req.password) < 6:
-        raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 6 znaků")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 8 znaků")
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
@@ -351,8 +374,8 @@ def update_user(user_id: int, req: UserUpdate, user=Depends(get_current_user)):
     if req.name is not None: fields["name"] = req.name
     if req.email is not None: fields["email"] = req.email.lower()
     if req.password:
-        if len(req.password) < 6:
-            raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 6 znaků")
+        if len(req.password) < 8:
+            raise HTTPException(status_code=400, detail="Heslo musí mít alespoň 8 znaků")
         fields["password_hash"] = hash_password(req.password)
     if req.role is not None: fields["role"] = req.role
     if req.checkin_access is not None: fields["checkin_access"] = req.checkin_access
