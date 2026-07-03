@@ -491,7 +491,14 @@ def unlock_user(user_id: int, user=Depends(get_current_user)):
 def get_events(user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM events WHERE status = 'active' ORDER BY created_at DESC")
+    cur.execute("""
+        SELECT e.*,
+            (SELECT COUNT(*) FROM guests g WHERE g.event_id = e.id) AS guest_count,
+            (SELECT COUNT(*) FROM guests g WHERE g.event_id = e.id AND g.checked_in = TRUE) AS checked_in_count
+        FROM events e
+        WHERE e.status = 'active'
+        ORDER BY e.created_at DESC
+    """)
     events = cur.fetchall()
     cur.close()
     conn.close()

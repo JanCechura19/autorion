@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Check-in</title>
+<title>Autorion Events – Check-in</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -853,7 +853,7 @@ canvas#sigCanvas {
 <!-- ══ LOGIN SCREEN ══ -->
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
-    <div class="login-logo">PPF Automotive</div>
+    <div class="login-logo">Autorion Events</div>
     <div class="login-title">Check-in</div>
     <div class="login-sub">Přihlaste se pro přístup</div>
     <div class="login-field">
@@ -866,11 +866,6 @@ canvas#sigCanvas {
     </div>
     <button class="login-btn" id="loginBtn">Přihlásit se</button>
     <div class="login-error" id="loginError"></div>
-    <div class="login-demo">
-      <strong>Demo přihlášení:</strong><br>
-      hostess@event.cz / checkin1<br>
-      admin@event.cz / heslo123
-    </div>
   </div>
 </div>
 
@@ -944,104 +939,45 @@ canvas#sigCanvas {
 
 <script>
 // ══════════════════════════════════════════════════════
-// API CONFIG
+// API CLIENT
 // ══════════════════════════════════════════════════════
 
-const API_BASE = 'https://autorion.net/api';
+const API_URL = 'https://autorion.net/api';
 
-let EVENTS = [];
-let ALL_GUESTS = {};
+let authToken   = localStorage.getItem('checkinAuthToken') || null;
+let checkinUser = null;
+try {
+  const storedUser = localStorage.getItem('checkinUser');
+  if (storedUser) checkinUser = JSON.parse(storedUser);
+} catch(e) { checkinUser = null; }
 
-async function loadEventsFromApi() {
+async function apiCall(endpoint, method = 'GET', body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
   try {
-    const res = await fetch(`${API_BASE}/events`, { headers: authHeaders() });
+    const res = await fetch(API_URL + endpoint, opts);
+    if (res.status === 401) { doCheckinLogout(); return null; }
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* empty body */ }
     if (!res.ok) {
-      if (res.status === 401) { doCheckinLogout(); return; }
-      showToast('Nepodařilo se načíst akce');
-      return;
-    }
-    const events = await res.json();
-    EVENTS = events.map(ev => ({
-      id: ev.id,
-      name: ev.name,
-      date: formatEventDateRange(ev.date_from, ev.date_to),
-      location: ev.location,
-      icon: ev.icon || '🏎',
-      vehicles: (ev.vehicles || []).map(v => ({ id: v.id, name: v.name })),
-    }));
-    ALL_GUESTS = {};
-    renderEventList();
-  } catch (e) {
-    console.error(e);
-    showToast('Nepodařilo se připojit k serveru');
-  }
-}
-
-function formatEventDateRange(from, to) {
-  if (!from) return '';
-  if (to && to !== from) return `${from} – ${to}`;
-  return from;
-}
-
-async function loadGuestsForEvent(eventId) {
-  try {
-    const res = await fetch(`${API_BASE}/events/${eventId}/guests`, { headers: authHeaders() });
-    if (!res.ok) {
-      if (res.status === 401) { doCheckinLogout(); return []; }
-      showToast('Nepodařilo se načíst hosty');
-      return [];
-    }
-    const guests = await res.json();
-    const event = EVENTS.find(e => e.id === eventId);
-    const mapped = guests.map(g => ({
-      id: g.id,
-      event_id: g.event_id,
-      first_name: g.first_name,
-      last_name: g.last_name,
-      email: g.email,
-      status: g.status,
-      companion: g.companion,
-      companion_name: '',
-      rides: (g.bookings || []).map(b => ({
-        vehicle_id: b.vehicle_id,
-        vehicle_name: b.vehicle_name || event?.vehicles.find(v=>v.id===b.vehicle_id)?.name || 'Vůz',
-        time_slot: b.time_slot,
-        day_label: '',
-      })),
-      checked_in: g.checked_in,
-      consent_signed: g.consent_signed,
-      consent_paper: g.consent_paper,
-      consent_license: g.consent_license || '',
-    }));
-    ALL_GUESTS[eventId] = mapped;
-    return mapped;
-  } catch (e) {
-    console.error(e);
-    showToast('Nepodařilo se připojit k serveru');
-    return [];
-  }
-}
-
-async function patchGuest(guestId, fields) {
-  try {
-    const res = await fetch(`${API_BASE}/guests/${guestId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify(fields)
-    });
-    if (!res.ok) {
-      if (res.status === 401) { doCheckinLogout(); return null; }
-      const data = await res.json().catch(() => ({}));
-      showToast(data.detail || 'Nepodařilo se uložit změnu');
+      showToast((data && data.detail) || `Chyba serveru (${res.status})`);
       return null;
     }
-    return await res.json();
+    return data;
   } catch (e) {
-    console.error(e);
-    showToast('Nepodařilo se připojit k serveru');
+    showToast('Chyba připojení k serveru');
     return null;
   }
 }
+
+// ══════════════════════════════════════════════════════
+// STATE — populated from the real backend, no mock data
+// ══════════════════════════════════════════════════════
+
+let EVENTS        = [];  // active events this user can access
+let currentGuests = [];  // guests for the currently selected event
 
 // ── STATE ──
 let currentEvent  = null;
@@ -1049,6 +985,21 @@ let currentGuest  = null;
 let guestFilter   = 'all';
 let sigHasContent = false;
 let sigConsented  = false;
+
+async function loadEvents() {
+  const data = await apiCall('/events');
+  if (!data) { EVENTS = []; return; }
+  // Respect per-user event access, same rule as the admin panel:
+  // null/absent event_access => all events; otherwise only the listed ids.
+  const access = checkinUser?.event_access;
+  EVENTS = Array.isArray(access) ? data.filter(e => access.includes(e.id)) : data;
+}
+
+async function loadGuestsForCurrentEvent() {
+  if (!currentEvent) return;
+  const data = await apiCall(`/events/${currentEvent.id}/guests`);
+  currentGuests = Array.isArray(data) ? data : [];
+}
 
 // ══════════════════════════════════════════════════════
 // NAVIGATION
@@ -1065,8 +1016,9 @@ function goToEvents() {
   showScreen('screenEvents');
 }
 
-function goToGuests() {
+async function goToGuests() {
   currentGuest = null;
+  await loadGuestsForCurrentEvent(); // pick up check-ins done by other staff/devices
   renderGuestList();
   showScreen('screenGuests');
 }
@@ -1082,19 +1034,24 @@ function goToDetail() {
 
 function renderEventList() {
   const el = document.getElementById('eventList');
+  if (!EVENTS.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Žádné aktivní akce nejsou dostupné pro váš účet.</div></div>`;
+    return;
+  }
   el.innerHTML = EVENTS.map(ev => {
-    const guests  = ALL_GUESTS[ev.id] || [];
-    const checked = guests.filter(g => g.checked_in).length;
-    const pct = guests.length ? Math.round(checked / guests.length * 100) : 0;
+    const total   = ev.guest_count || 0;
+    const checked = ev.checked_in_count || 0;
+    const pct = total ? Math.round(checked / total * 100) : 0;
+    const dateLabel = ev.date_to && ev.date_to !== ev.date_from ? `${ev.date_from} – ${ev.date_to}` : ev.date_from;
     return `
       <div class="event-card" onclick="selectEvent(${ev.id})">
-        <div class="event-card-icon">${ev.icon}</div>
+        <div class="event-card-icon">${ev.icon || '🎯'}</div>
         <div class="event-card-info">
           <div class="event-card-name">${ev.name}</div>
-          <div class="event-card-meta">📅 ${ev.date}<br>📍 ${ev.location}</div>
+          <div class="event-card-meta">📅 ${dateLabel}<br>📍 ${ev.location}</div>
         </div>
         <div class="event-card-stats">
-          <div class="event-card-count">${checked}<span style="font-size:14px;font-weight:400;color:var(--muted)">/${guests.length}</span></div>
+          <div class="event-card-count">${checked}<span style="font-size:14px;font-weight:400;color:var(--muted)">/${total}</span></div>
           <div class="event-card-count-label">check-in</div>
           <div class="event-card-progress">
             <div class="event-card-progress-fill" style="width:${pct}%"></div>
@@ -1108,9 +1065,9 @@ async function selectEvent(id) {
   currentEvent = EVENTS.find(e => e.id === id);
   guestFilter = 'all';
   document.getElementById('guestSearch').value = '';
+  document.getElementById('guestList').innerHTML = `<div class="empty-state"><div class="empty-text">Načítám hosty…</div></div>`;
   showScreen('screenGuests');
-  document.getElementById('guestList').innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">Načítání hostů…</div></div>`;
-  await loadGuestsForEvent(id);
+  await loadGuestsForCurrentEvent();
   renderGuestList();
 }
 
@@ -1120,7 +1077,7 @@ async function selectEvent(id) {
 
 function renderGuestList() {
   if (!currentEvent) return;
-  const guests = ALL_GUESTS[currentEvent.id] || [];
+  const guests = currentGuests;
   const checked = guests.filter(g => g.checked_in).length;
 
   document.getElementById('guestListTitle').textContent = currentEvent.name;
@@ -1155,11 +1112,11 @@ function setFilter(f, btn) {
 function filterGuests() {
   if (!currentEvent) return;
   const q = document.getElementById('guestSearch').value.toLowerCase();
-  let guests = ALL_GUESTS[currentEvent.id] || [];
+  let guests = currentGuests;
 
   if (guestFilter === 'pending')  guests = guests.filter(g => !g.checked_in);
   if (guestFilter === 'checked')  guests = guests.filter(g =>  g.checked_in);
-  if (guestFilter === 'rides')    guests = guests.filter(g =>  g.rides.length > 0);
+  if (guestFilter === 'rides')    guests = guests.filter(g =>  (g.bookings||[]).length > 0);
   if (q) guests = guests.filter(g =>
     `${g.first_name} ${g.last_name}`.toLowerCase().includes(q) ||
     `${g.last_name} ${g.first_name}`.toLowerCase().includes(q)
@@ -1168,7 +1125,7 @@ function filterGuests() {
   // Sort: not checked-in first, then alphabetically
   guests = [...guests].sort((a, b) => {
     if (a.checked_in !== b.checked_in) return a.checked_in ? 1 : -1;
-    return a.last_name.localeCompare(b.last_name);
+    return (a.last_name||'').localeCompare(b.last_name||'');
   });
 
   const el = document.getElementById('guestList');
@@ -1178,8 +1135,9 @@ function filterGuests() {
   }
 
   el.innerHTML = guests.map(g => {
-    const initials = (g.first_name[0] + g.last_name[0]).toUpperCase();
+    const initials = ((g.first_name[0]||'') + (g.last_name[0]||'')).toUpperCase();
     const consentOk = g.consent_signed || g.consent_paper;
+    const rideCount = (g.bookings||[]).length;
     let chip = '';
     if (g.checked_in)      chip = '<span class="status-chip chip-green">✓ Odbaven</span>';
     else if (consentOk)    chip = '<span class="status-chip chip-blue">Souhlas ✓</span>';
@@ -1192,7 +1150,7 @@ function filterGuests() {
           <div class="guest-name">${g.last_name} ${g.first_name}</div>
           <div class="guest-meta">
             ${g.companion ? `👥 s doprovodem` : '👤 bez doprovodu'}
-            ${g.rides.length ? ` · 🚗 ${g.rides.length} jízd${g.rides.length > 1 ? 'y' : 'a'}` : ''}
+            ${rideCount ? ` · 🚗 ${rideCount} jízd${rideCount > 1 ? 'y' : 'a'}` : ''}
           </div>
         </div>
         <div class="guest-status">${chip}</div>
@@ -1205,8 +1163,7 @@ function filterGuests() {
 // ══════════════════════════════════════════════════════
 
 function selectGuest(id) {
-  const guests = ALL_GUESTS[currentEvent.id] || [];
-  currentGuest = guests.find(g => g.id === id);
+  currentGuest = currentGuests.find(g => g.id === id);
   if (!currentGuest) return;
   renderGuestDetail();
   showScreen('screenDetail');
@@ -1227,13 +1184,14 @@ function renderGuestDetail() {
   else                    statusChip = '<span class="status-chip chip-gray"  style="font-size:14px;padding:6px 14px">⏳ Čeká na souhlas</span>';
 
   // Rides
-  const ridesHtml = g.rides.length
-    ? g.rides.map(r => `
+  const bookings = g.bookings || [];
+  const ridesHtml = bookings.length
+    ? bookings.map(r => `
         <div class="ride-item">
           <div class="ride-icon">🚗</div>
           <div class="ride-info">
-            <div class="ride-vehicle">${r.vehicle_name}</div>
-            <div class="ride-time">${r.day_label} · ${r.time_slot}</div>
+            <div class="ride-vehicle">${r.vehicle_name || 'Vůz'}</div>
+            <div class="ride-time">${r.time_slot || ''}</div>
           </div>
         </div>`).join('')
     : `<div style="padding:14px 18px;font-size:14px;color:var(--muted)">Žádné testovací jízdy</div>`;
@@ -1267,13 +1225,13 @@ function renderGuestDetail() {
       </div>
       <div class="detail-row">
         <span class="detail-row-label">Doprovod</span>
-        <span class="detail-row-value">${g.companion ? `Ano — ${g.companion_name || '—'}` : 'Ne'}</span>
+        <span class="detail-row-value">${g.companion ? 'Ano' : 'Ne'}</span>
       </div>
     </div>
 
     <!-- Rides -->
     <div class="detail-section">
-      <div class="detail-section-head">Testovací jízdy (${g.rides.length})</div>
+      <div class="detail-section-head">Testovací jízdy (${bookings.length})</div>
       ${ridesHtml}
     </div>
 
@@ -1327,15 +1285,14 @@ function statusChipSmall(status) {
 
 async function togglePaperConsent() {
   if (!currentGuest || currentGuest.checked_in) return;
-  const newVal = !currentGuest.consent_paper;
-  const updated = await patchGuest(currentGuest.id, { consent_paper: newVal });
-  if (updated) {
-    currentGuest.consent_paper = updated.consent_paper;
-    // Sync into list cache
-    const list = ALL_GUESTS[currentEvent.id] || [];
-    const idx = list.findIndex(g => g.id === currentGuest.id);
-    if (idx >= 0) list[idx].consent_paper = updated.consent_paper;
-  }
+  const prev = currentGuest.consent_paper;
+  currentGuest.consent_paper = !prev;
+  renderGuestDetail(); // optimistic UI
+  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', { consent_paper: currentGuest.consent_paper });
+  if (!result) { currentGuest.consent_paper = prev; renderGuestDetail(); return; } // revert on failure
+  Object.assign(currentGuest, result);
+  const idx = currentGuests.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) currentGuests[idx] = currentGuest;
   renderGuestDetail();
 }
 
@@ -1440,7 +1397,7 @@ function renderConsentForm() {
 
   document.getElementById('consentFormContent').innerHTML = `
     <div class="consent-form-header">
-      <div class="consent-form-logo">PPF Automotive</div>
+      <div class="consent-form-logo">Autorion Events</div>
       <div class="consent-form-title">${ev.name}</div>
       <div class="consent-form-guest">${g.first_name} ${g.last_name}</div>
     </div>
@@ -1588,29 +1545,24 @@ function updateSubmitBtn() {
 
 async function submitConsent() {
   if (!currentGuest) return;
-  const license = document.getElementById('licenseInput')?.value.trim() || '';
-  const submitBtn = document.querySelector('#screenConsent .confirm-btn, #screenConsent button[onclick="submitConsent()"]');
+  const license = document.getElementById('licenseInput')?.value.trim();
+  const btn = document.getElementById('submitConsentBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Ukládám…'; }
 
-  const updated = await patchGuest(currentGuest.id, {
+  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', {
     consent_signed: true,
     consent_paper: false,
-    consent_license: license
+    consent_license: license,
   });
 
-  if (!updated) return; // error already toasted by patchGuest
+  if (!result) {
+    if (btn) { btn.disabled = false; btn.textContent = ct('submitBtn'); }
+    return; // apiCall already showed an error toast
+  }
 
-  currentGuest.consent_signed  = updated.consent_signed;
-  currentGuest.consent_paper   = updated.consent_paper;
-  currentGuest.consent_license = updated.consent_license;
-
-  // Sync into list cache
-  const list = ALL_GUESTS[currentEvent.id] || [];
-  const idx = list.findIndex(g => g.id === currentGuest.id);
-  if (idx >= 0) Object.assign(list[idx], {
-    consent_signed: updated.consent_signed,
-    consent_paper: updated.consent_paper,
-    consent_license: updated.consent_license
-  });
+  Object.assign(currentGuest, result);
+  const idx = currentGuests.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) currentGuests[idx] = currentGuest;
 
   showToast('Souhlas byl podepsán ✓');
   goToDetail();
@@ -1624,15 +1576,17 @@ async function confirmCheckin() {
   if (!currentGuest || currentGuest.checked_in) return;
   if (!currentGuest.consent_signed && !currentGuest.consent_paper) return;
 
-  const updated = await patchGuest(currentGuest.id, { checked_in: true });
-  if (!updated) return; // error already toasted
+  const btn = document.getElementById('confirmBtn');
+  if (btn) { btn.disabled = true; }
 
-  currentGuest.checked_in = updated.checked_in;
+  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', { checked_in: true });
+  if (!result) { if (btn) btn.disabled = false; return; } // apiCall already showed an error toast
 
-  // Sync into list cache
-  const list = ALL_GUESTS[currentEvent.id] || [];
-  const idx = list.findIndex(g => g.id === currentGuest.id);
-  if (idx >= 0) list[idx].checked_in = updated.checked_in;
+  Object.assign(currentGuest, result);
+  const idx = currentGuests.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) currentGuests[idx] = currentGuest;
+
+  const rideCount = (currentGuest.bookings || []).length;
 
   // Flash success overlay
   const overlay = document.getElementById('checkinSuccess');
@@ -1640,18 +1594,17 @@ async function confirmCheckin() {
     `${currentGuest.first_name} ${currentGuest.last_name}`;
   document.getElementById('successGuestSub').textContent =
     currentGuest.companion
-      ? `Přišel(a) s doprovodem · ${currentGuest.rides.length} jízd${currentGuest.rides.length !== 1 ? (currentGuest.rides.length > 1 ? 'y':'') : 'a'}`
-      : `Bez doprovodu · ${currentGuest.rides.length} jízd${currentGuest.rides.length > 1 ? 'y' : currentGuest.rides.length === 1 ? 'a' : ''}`;
+      ? `Přišel(a) s doprovodem · ${rideCount} jízd${rideCount !== 1 ? (rideCount > 1 ? 'y':'') : 'a'}`
+      : `Bez doprovodu · ${rideCount} jízd${rideCount > 1 ? 'y' : rideCount === 1 ? 'a' : ''}`;
 
   overlay.classList.add('show');
-  setTimeout(() => {
+  setTimeout(async () => {
     overlay.classList.remove('show');
     renderGuestDetail();
-    renderEventList();  // update progress bar
-    // Also update badge
-    const guests  = ALL_GUESTS[currentEvent.id] || [];
-    const checked = guests.filter(g => g.checked_in).length;
-    document.getElementById('checkinBadge').textContent = `${checked} / ${guests.length}`;
+    const checked = currentGuests.filter(g => g.checked_in).length;
+    document.getElementById('checkinBadge').textContent = `${checked} / ${currentGuests.length}`;
+    // Refresh event list totals in the background for when the user goes back
+    await loadEvents();
   }, 2200);
 }
 
@@ -1680,76 +1633,75 @@ function showToast(msg) {
 // AUTH
 // ══════════════════════════════════════════════════════
 
-let checkinUser  = null;
-let checkinToken = null;
-
 async function doCheckinLogin() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
   errEl.textContent = '';
 
-  const loginBtn = document.getElementById('loginBtn');
-  const originalText = loginBtn.textContent;
-  loginBtn.disabled = true;
-  loginBtn.textContent = 'Přihlašování…';
+  if (!email || !pass) { errEl.textContent = 'Vyplňte e-mail i heslo.'; return; }
+
+  btn.disabled = true;
+  const originalBtnText = btn.textContent;
+  btn.textContent = 'Přihlašuji…';
 
   try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(API_URL + '/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
     });
-
+    const data = await res.json();
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
       errEl.textContent = data.detail || 'Nesprávný e-mail nebo heslo.';
-      loginBtn.disabled = false;
-      loginBtn.textContent = originalText;
       return;
     }
-
-    const data = await res.json();
     if (!data.user.checkin_access) {
       errEl.textContent = 'Váš účet nemá přístup do Check-in aplikace.';
-      loginBtn.disabled = false;
-      loginBtn.textContent = originalText;
       return;
     }
-
-    checkinUser  = data.user;
-    checkinToken = data.token;
-    document.getElementById('loginScreen').style.display = 'none';
-    await loadEventsFromApi();
+    authToken   = data.token;
+    checkinUser = data.user;
+    localStorage.setItem('checkinAuthToken', authToken);
+    localStorage.setItem('checkinUser', JSON.stringify(checkinUser));
+    await enterApp();
   } catch (e) {
-    console.error(e);
-    errEl.textContent = 'Nepodařilo se připojit k serveru.';
+    errEl.textContent = 'Chyba připojení k serveru.';
   } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = originalText;
+    btn.disabled = false;
+    btn.textContent = originalBtnText;
   }
 }
 
+async function enterApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('eventList').innerHTML = `<div class="empty-state"><div class="empty-text">Načítám akce…</div></div>`;
+  showScreen('screenEvents');
+  await loadEvents();
+  renderEventList();
+}
+
 function doCheckinLogout() {
-  checkinUser  = null;
-  checkinToken = null;
+  authToken     = null;
+  checkinUser   = null;
+  EVENTS        = [];
+  currentGuests = [];
+  currentEvent  = null;
+  currentGuest  = null;
+  localStorage.removeItem('checkinAuthToken');
+  localStorage.removeItem('checkinUser');
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value  = '';
   document.getElementById('loginError').textContent = '';
   document.getElementById('loginScreen').style.display = 'flex';
-  // Reset to event list
   showScreen('screenEvents');
-}
-
-function authHeaders() {
-  return checkinToken ? { 'Authorization': `Bearer ${checkinToken}` } : {};
 }
 
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
 
-// Show logout button in event list topbar
 document.addEventListener('DOMContentLoaded', () => {
   // Login handlers
   document.getElementById('loginBtn').addEventListener('click', doCheckinLogin);
@@ -1767,6 +1719,12 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.style.marginLeft = 'auto';
     logoutBtn.addEventListener('click', doCheckinLogout);
     topbar.appendChild(logoutBtn);
+  }
+
+  // Resume session if a token from a previous visit is already stored
+  // (handy for a tablet left logged in at a check-in desk all day).
+  if (authToken && checkinUser) {
+    enterApp();
   }
 });
 </script>
