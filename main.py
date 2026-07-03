@@ -648,6 +648,38 @@ def unarchive_event(event_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Akce nenalezena")
     return dict(updated)
 
+@app.delete("/api/events/{event_id}")
+def delete_event(event_id: int, user=Depends(get_current_user)):
+    # Deliberately more restrictive than archive/unarchive: this permanently
+    # destroys the event AND every guest registered to it. Super admin only.
+    if user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Pouze super admin může trvale smazat akci")
+    conn = get_db()
+    conn.autocommit = False
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("SELECT id, name FROM events WHERE id = %s", (event_id,))
+        ev = cur.fetchone()
+        if not ev:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=404, detail="Akce nenalezena")
+        cur.execute("DELETE FROM guests WHERE event_id = %s", (event_id,))
+        deleted_guests = cur.rowcount
+        cur.execute("DELETE FROM events WHERE id = %s", (event_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "deleted", "id": event_id, "name": ev["name"], "deleted_guests": deleted_guests}
+    except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail="Smazání akce se nezdařilo, žádná data nebyla změněna")
+
 # ── GUESTS ──────────────────────────────────────────────
 
 @app.get("/api/events/{event_id}/guests")

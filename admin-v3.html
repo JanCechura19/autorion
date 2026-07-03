@@ -3257,8 +3257,34 @@ function renderSettings() {
 }
 
 function buildSettingsHTML(readonly, ro, isSuperAdmin) {
+  const landingUrl      = EVENT.slug ? `https://event.autorion.net/?event=${EVENT.slug}` : '';
+  const registrationUrl = EVENT.slug ? `https://registration.autorion.net/?event=${EVENT.slug}` : '';
   return `
     <div style="max-width:760px;display:flex;flex-direction:column;gap:24px;">
+
+      <div class="table-wrap" style="padding:24px;">
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;">Odkazy na akci</div>
+        ${EVENT.slug ? `
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Landing page</label>
+            <div style="display:flex;gap:8px;">
+              <input readonly value="${landingUrl}" onclick="this.select()" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:12px;background:var(--surface2);">
+              <button class="btn btn-secondary btn-sm" onclick="copyEventLink('${landingUrl}','Odkaz na landing page')">📋 Kopírovat</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Registrace</label>
+            <div style="display:flex;gap:8px;">
+              <input readonly value="${registrationUrl}" onclick="this.select()" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:12px;background:var(--surface2);">
+              <button class="btn btn-secondary btn-sm" onclick="copyEventLink('${registrationUrl}','Odkaz na registraci')">📋 Kopírovat</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.6;">
+            Tip: pro dealer-specifické zásady ochrany osobních údajů přidejte na konec adresy <code>&amp;dealer=albion</code>, <code>&amp;dealer=cardion</code> nebo <code>&amp;dealer=orbion</code>.
+          </div>
+        </div>` : `<div style="font-size:13px;color:var(--muted);">Tato akce nemá nastavenou adresu (slug) — kontaktujte podporu.</div>`}
+      </div>
 
       
       <div class="table-wrap" style="padding:24px;">
@@ -3351,6 +3377,25 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
         </table>
       </div>
 
+      ${can('canArchiveEvent') && EVENT.status === 'active' ? `
+      <div class="table-wrap" style="padding:24px;">
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px;">Archivace</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+          Přesune akci do archivu — zmizí ze seznamu aktivních akcí, ale všechna data (hosté, registrace) zůstanou zachovaná a dají se kdykoli obnovit.
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="archiveEvent(${EVENT.id})">🗂 Archivovat akci</button>
+      </div>` : ''}
+
+      ${isSuperAdmin ? `
+      <div class="table-wrap" style="padding:24px;border:1px solid var(--red);">
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px;color:var(--red);">⚠ Nebezpečná zóna</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+          Trvale smaže tuto akci a všechny její hosty/registrace z databáze. Tuto akci nelze vzít zpět.
+          Pokud chcete akci jen dočasně skrýt ze seznamu, použijte místo toho archivaci.
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="openDeleteEventModal()">Smazat akci natrvalo</button>
+      </div>` : ''}
+
     </div>`;
 }
 
@@ -3368,6 +3413,52 @@ async function saveEventFields(fields) {
   const ev = EVENTS_DB.find(e => e.id === EVENT.id);
   if (ev) Object.assign(ev, fields);
   return true;
+}
+
+function copyEventLink(url, label) {
+  if (!url) return;
+  navigator.clipboard.writeText(url)
+    .then(() => showToast(`${label} zkopírován ✓`, 'success'))
+    .catch(() => showToast('Nepodařilo se zkopírovat — označte a zkopírujte adresu ručně', 'error'));
+}
+
+function openDeleteEventModal() {
+  if (!EVENT || !EVENT.id) return;
+  if (currentUser?.role !== 'super_admin') { showToast('Pouze super admin může trvale smazat akci.', 'error'); return; }
+  document.getElementById('modalTitle').textContent = 'Trvale smazat akci';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:13px;color:var(--red);line-height:1.6;margin-bottom:14px;">
+      ⚠ Tímto trvale smažete akci <strong>„${EVENT.name}"</strong> a všechny její hosty/registrace z databáze.
+      Tuto akci nelze vzít zpět. Pokud si nejste jistí, zvažte místo toho archivaci.
+    </div>
+    <div class="form-row">
+      <label>Pro potvrzení napište přesný název akce</label>
+      <input id="delEventConfirmName" placeholder="${EVENT.name}">
+    </div>`;
+  document.getElementById('modalFoot').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+    <button class="btn btn-danger" onclick="confirmDeleteEvent()">Smazat natrvalo</button>`;
+  openModal();
+  setTimeout(() => document.getElementById('delEventConfirmName')?.focus(), 100);
+}
+
+async function confirmDeleteEvent() {
+  if (!EVENT || !EVENT.id) return;
+  const typed = document.getElementById('delEventConfirmName')?.value.trim();
+  if (typed !== EVENT.name) { showToast('Zadaný název akce nesouhlasí', 'error'); return; }
+
+  const deletedName = EVENT.name;
+  const result = await apiCall(`/events/${EVENT.id}`, 'DELETE');
+  if (!result || result.status !== 'deleted') return; // apiCall already showed an error toast
+
+  closeModal();
+  currentEventId = null;
+  await reloadEventsDB();
+  await loadArchive(true);
+  if (!EVENT || !EVENTS_DB.find(e => e.id === EVENT.id)) EVENT = EVENTS_DB[0] || null;
+
+  showToast(`Akce „${deletedName}" trvale smazána (${result.deleted_guests} hostů)`, 'success');
+  renderSidebarV2(); showPage('events');
 }
 
 async function saveSettings() {
