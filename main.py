@@ -7,6 +7,7 @@ import psycopg2
 import psycopg2.extras
 import hashlib
 import bcrypt
+import requests
 import secrets
 import json
 import os
@@ -40,6 +41,82 @@ if not DB_CONFIG["password"]:
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@autorion.net")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+
+# ── ECOMAIL TRANSACTIONAL EMAIL ─────────────────────────
+# Registration confirmations. Silently disabled until a real API key is
+# configured in .env — until then this is a safe no-op, nothing breaks.
+ECOMAIL_API_KEY    = os.environ.get("ECOMAIL_API_KEY", "")
+ECOMAIL_FROM_EMAIL  = os.environ.get("ECOMAIL_FROM_EMAIL", "event@info.autorion.net")
+ECOMAIL_REPLY_TO    = os.environ.get("ECOMAIL_REPLY_TO", "marketing@autorion.cz")
+ECOMAIL_SEND_URL    = "https://api2.ecomailapp.cz/transactional/send-message"
+
+def _build_confirmation_email_html(guest: dict, event: dict) -> str:
+    date_from = event.get("date_from") or ""
+    date_to   = event.get("date_to") or ""
+    date_label = f"{date_from} – {date_to}" if (date_to and date_to != date_from) else date_from
+
+    bookings = guest.get("bookings") or []
+    rides_html = ""
+    if bookings:
+        rows = "".join(
+            f'<tr>'
+            f'<td style="padding:6px 0;color:#181612;font-size:14px;">{b.get("vehicle_name") or "Vůz"}</td>'
+            f'<td style="padding:6px 0;color:#8c8577;font-size:14px;text-align:right;">{b.get("time_slot") or ""}</td>'
+            f'</tr>'
+            for b in bookings
+        )
+        rides_html = f'''
+        <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Vaše testovací jízdy</td></tr>
+        {rows}'''
+
+    return f"""
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #ddd9d0;">
+      <div style="background:#181612;padding:26px 32px;">
+        <span style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:0.02em;">Autorion Events</span>
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:21px;color:#181612;margin:0 0 16px;">Registrace potvrzena ✓</h1>
+        <p style="color:#181612;font-size:15px;line-height:1.6;margin:0 0 20px;">
+          Dobrý den {guest.get('first_name','')},<br><br>
+          děkujeme za registraci na akci <strong>{event.get('name','')}</strong>. Těšíme se na vás!
+        </p>
+        <table style="width:100%;border-top:1px solid #ddd9d0;border-bottom:1px solid #ddd9d0;padding:14px 0;border-collapse:collapse;">
+          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Akce</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{event.get('name','')}</td></tr>
+          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Datum</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{date_label}</td></tr>
+          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Místo</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{event.get('location','')}</td></tr>
+          {rides_html}
+        </table>
+        <p style="color:#8c8577;font-size:13px;line-height:1.5;margin-top:22px;">
+          Na místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.
+        </p>
+      </div>
+    </div>
+    """
+
+def send_registration_confirmation_email(guest: dict, event: dict):
+    """Best-effort send — a failure here must never break guest registration."""
+    if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
+        return
+    try:
+        guest_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip()
+        payload = {
+            "message": {
+                "subject": f"Potvrzení registrace – {event.get('name','')}",
+                "from_name": "Autorion Events",
+                "from_email": ECOMAIL_FROM_EMAIL,
+                "reply_to": ECOMAIL_REPLY_TO,
+                "html": _build_confirmation_email_html(guest, event),
+                "to": [{"email": guest["email"], "name": guest_name}],
+            }
+        }
+        requests.post(
+            ECOMAIL_SEND_URL,
+            json=payload,
+            headers={"key": ECOMAIL_API_KEY, "Content-Type": "application/json"},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"[ecomail] Odeslání potvrzovacího e-mailu selhalo: {e}")
 
 def get_db():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -840,9 +917,15 @@ def create_guest(event_id: int, guest: GuestCreate):
             json.dumps(bookings_list), guest.consent_signed, guest.company or ''
         ))
         new_guest = cur.fetchone()
+        cur.execute("SELECT name, date_from, date_to, location FROM events WHERE id = %s", (event_id,))
+        event_row = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
+
+        if event_row:
+            send_registration_confirmation_email(dict(new_guest), dict(event_row))
+
         return dict(new_guest)
     except HTTPException:
         raise
