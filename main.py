@@ -219,6 +219,8 @@ class EventUpdate(BaseModel):
     consent_en: Optional[str] = None
     vehicles: Optional[list] = None
     landing_page: Optional[dict] = None
+    email_templates: Optional[list] = None
+    email_design: Optional[dict] = None
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
 
 class BookingItem(BaseModel):
@@ -305,6 +307,8 @@ def init_db():
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL;")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS archive_meta JSONB DEFAULT '{}';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS vehicles JSONB DEFAULT '[]';")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_templates JSONB DEFAULT '[]';")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_design JSONB DEFAULT '{}';")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -746,7 +750,7 @@ def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_us
     fields = {k: v for k, v in update.dict().items() if v is not None}
     if not fields:
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
-    json_fields = {"theme", "time_windows", "vehicles", "landing_page"}
+    json_fields = {"theme", "time_windows", "vehicles", "landing_page", "email_templates", "email_design"}
     set_parts = []
     values = []
     for k, v in fields.items():

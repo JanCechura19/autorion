@@ -1496,7 +1496,7 @@ const ROLE_META = {
 };
 
 const EVENTS_DB = [
-  { id:1, name:'PPF Automotive Experience 2025', date_from:'14. 6. 2025', date_to:'15. 6. 2025', location:'Polygon Sosnová, Česká Lípa', capacity:120, registration_open:true, icon:'🏎', status:'active', theme:null, registration_type:'drives', time_windows:[], slot_start:'10:00', slot_end:'18:00', slot_duration:15 },
+  { id:1, name:'Nová akce', date_from:'14. 6. 2025', date_to:'15. 6. 2025', location:'Polygon Sosnová, Česká Lípa', capacity:120, registration_open:true, icon:'🏎', status:'active', theme:null, registration_type:'drives', time_windows:[], slot_start:'10:00', slot_end:'18:00', slot_duration:15 },
   { id:2, name:'FBW Drive Day 2025',             date_from:'10. 9. 2025', date_to:'10. 9. 2025', location:'Autodrom Most',              capacity:60,  registration_open:true, icon:'🚗', status:'active', theme:null, registration_type:'drives', time_windows:[], slot_start:'09:00', slot_end:'17:00', slot_duration:15 },
 ];
 
@@ -1714,6 +1714,8 @@ async function reloadEventsDB() {
       consent_en:        ev.consent_en || '',
       slug:              ev.slug || '',
       vehicles:          ev.vehicles || [],
+      email_templates:   ev.email_templates || [],
+      email_design:      ev.email_design || {},
     });
   });
   return true;
@@ -2244,7 +2246,7 @@ function exportXLS(subset) {
 // EMAILS
 // ═══════════════════════════════════════════════════════
 
-const EMAIL_TEMPLATES = [
+const DEFAULT_EMAIL_TEMPLATES = [
   { id:'save_date',  name:'Save the Date', icon:'📅', subject:'Save the Date — {{event_name}}', body:'Vážený pane/paní {{last_name}},\n\ndovolujeme si Vás s předstihem informovat o plánované akci {{event_name}}, která se uskuteční {{event_date}} v {{event_location}}.\n\nPodrobné informace a registrační odkaz Vám zašleme v nadcházejících týdnech.\n\nS přátelským pozdravem', design:null },
   { id:'invitation', name:'Pozvánka',      icon:'✉️', subject:'Pozvánka — {{event_name}}',          body:'Vážený pane/paní {{last_name}},\n\nse potěšením Vás zveme na exkluzivní akci {{event_name}}, která se koná {{event_date}} v {{event_location}}.\n\nPro potvrzení Vaší účasti prosím klikněte na odkaz:\n{{registration_link}}\n\nTěšíme se na setkání s Vámi.', design:null },
   { id:'reminder',   name:'Připomenutí',   icon:'🔔', subject:'Připomenutí — {{event_name}} se blíží', body:'Vážený pane/paní {{last_name}},\n\npřipomínáme, že akce {{event_name}} se koná {{event_date}} v {{event_location}}.\n\nPotvrďte prosím svou účast:\n{{registration_link}}', design:null },
@@ -2252,15 +2254,23 @@ const EMAIL_TEMPLATES = [
   { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast — {{event_name}}',   body:'Vážený pane/paní {{last_name}},\n\ndíky za Vaši účast na akci {{event_name}}. Byl(a) jste pro nás velmi cenným hostem.\n\nBudeme rádi, pokud se s námi podělíte o svůj dojem.', design:null },
 ];
 
-let emailDesign = {
-  bgColor:'#f4f4f4', containerBg:'#ffffff', headerBg:'#1a1816', headerColor:'#ffffff',
-  accentColor:'#b8924a', bodyColor:'#1a1816', mutedColor:'#666666',
-  fontFamily:"'Helvetica Neue', Arial, sans-serif", fontSize:'15px', borderRadius:'8px',
-  logoUrl:'', logoHeight:'40', logoAlign:'center',
-  showDivider:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
-  footerText:'PPF Automotive Experience 2025 · Polygon Sosnová, Česká Lípa',
-  showHero:false, heroUrl:'', heroHeight:'200',
-};
+// Per-event copy — loaded from EVENT.email_templates in selectEvent(), falls
+// back to the defaults above for events that haven't saved anything yet.
+let EMAIL_TEMPLATES = DEFAULT_EMAIL_TEMPLATES.map(t => ({...t}));
+
+function defaultEmailDesign() {
+  return {
+    bgColor:'#f4f4f4', containerBg:'#ffffff', headerBg:'#1a1816', headerColor:'#ffffff',
+    accentColor:'#b8924a', bodyColor:'#1a1816', mutedColor:'#666666',
+    fontFamily:"'Helvetica Neue', Arial, sans-serif", fontSize:'15px', borderRadius:'8px',
+    logoUrl:'', logoHeight:'40', logoAlign:'center',
+    showDivider:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
+    footerText: (EVENT ? `${EVENT.name} · ${EVENT.location}` : ''),
+    showHero:false, heroUrl:'', heroHeight:'200',
+  };
+}
+
+let emailDesign = defaultEmailDesign();
 
 let activeEmailTemplateId = 'invitation';
 
@@ -2832,16 +2842,8 @@ function copyEmailHTML() {
   navigator.clipboard.writeText(html).then(() => showToast('HTML zkopírováno do schránky ✓', 'success'));
 }
 
-function saveEmailDesign() {
-  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId);
-  if (tmpl) {
-    tmpl.design  = { ...emailDesign };
-    tmpl.subject = document.getElementById('eSubjectEdit')?.value || tmpl.subject;
-    tmpl.body    = document.getElementById('eBodyEdit')?.value    || tmpl.body;
-  }
-  localStorage.setItem('emailDesign', JSON.stringify(emailDesign));
-  showToast('Design uložen ✓', 'success');
-}
+// saveEmailDesign(): the real, backend-wired implementation lives further
+// down the file, next to the other per-event save functions.
 
 // ═══════════════════════════════════════════════════════
 // SLOTS PAGE
@@ -4416,6 +4418,12 @@ async function selectEvent(id) {
   const ev=EVENTS_DB.find(e=>e.id===id); if(!ev) return;
   EVENT=ev;
   VEHICLES = (ev.vehicles && ev.vehicles.length) ? ev.vehicles.map(v=>({...v})) : [];
+  EMAIL_TEMPLATES = (ev.email_templates && ev.email_templates.length)
+    ? ev.email_templates.map(t=>({...t}))
+    : DEFAULT_EMAIL_TEMPLATES.map(t=>({...t}));
+  emailDesign = (ev.email_design && Object.keys(ev.email_design).length)
+    ? {...ev.email_design}
+    : defaultEmailDesign();
   renderSidebarV2();
   await loadGuestsFromApi(id);
   updateNavBadge();
@@ -4605,7 +4613,7 @@ function openNewEventModal() {
   clearTimeout(neSlugCheckTimer);
   document.getElementById('modalTitle').textContent='Vytvořit novou akci';
   document.getElementById('modalBody').innerHTML=`
-    <div class="form-row"><label>Název akce</label><input id="neName" placeholder="PPF Automotive Experience 2026" oninput="onNeNameInput()"></div>
+    <div class="form-row"><label>Název akce</label><input id="neName" placeholder="Autorion Drive Day 2026" oninput="onNeNameInput()"></div>
     <div class="form-row">
       <label>Adresa akce (URL)</label>
       <input id="neSlug" placeholder="ppf-automotive-experience-2026" oninput="onNeSlugInput()">
@@ -4732,13 +4740,18 @@ async function createNewEvent() {
   renderSidebarV2(); selectEvent(newEvent.id);
 }
 
-const _origSaveEmailDesign2=saveEmailDesign;
-function saveEmailDesign() {
-  _origSaveEmailDesign2();
-  if(currentEventId&&typeof currentEventId==='number'){
-    const ev=EVENTS_DB.find(e=>e.id===currentEventId);
-    if(ev) ev.theme={...emailDesign};
+async function saveEmailDesign() {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId);
+  if (tmpl) {
+    tmpl.design  = { ...emailDesign };
+    tmpl.subject = document.getElementById('eSubjectEdit')?.value || tmpl.subject;
+    tmpl.body    = document.getElementById('eBodyEdit')?.value    || tmpl.body;
   }
+  const ok = await saveEventFields({
+    email_templates: EMAIL_TEMPLATES,
+    email_design: emailDesign,
+  });
+  if (ok) showToast('Design uložen ✓', 'success');
 }
 
 function updateUserInfo() {
