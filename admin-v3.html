@@ -2067,6 +2067,15 @@ function openDetail(id) {
       ${slotLabels.length?slotLabels.map(l=>`<div class="detail-row"><span style="font-size:12px">🚗 ${l}</span></div>`).join(''):'<div style="font-size:13px;color:var(--muted);padding:8px 0">Žádné rezervace</div>'}
     </div>
     <div>
+      <div class="detail-section-title">Souhlas s účastí</div>
+      <div class="detail-row"><span class="detail-row-label">Stav</span><span class="detail-row-value">${
+        g.consent_signed ? '<span class="badge badge-green">✅ Digitální</span>' :
+        g.consent_paper  ? '<span class="badge badge-yellow">📄 Papírový</span>' :
+        '<span class="badge badge-gray">⚠ Chybí</span>'
+      }</span></div>
+      ${g.consent_signed ? `<button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="viewGuestSignature(${g.id})">🖊 Zobrazit podpis</button>` : ''}
+    </div>
+    <div>
       <div class="detail-section-title">Poznámky</div>
       <textarea id="detailNotes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:13px;min-height:70px;background:var(--bg);color:var(--text);outline:none;resize:vertical;" placeholder="Přidat poznámku…">${g.notes||''}</textarea>
     </div>`;
@@ -2079,6 +2088,24 @@ function openDetail(id) {
 }
 
 function closeDetail() { document.getElementById('detailPanel').classList.remove('open'); }
+
+async function viewGuestSignature(guestId) {
+  document.getElementById('modalTitle').textContent = 'Podpis souhlasu';
+  document.getElementById('modalBody').innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);">Načítám…</div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">Zavřít</button>`;
+  openModal();
+
+  const data = await apiCall(`/guests/${guestId}/signature`);
+  if (!data) { closeModal(); return; } // apiCall already showed an error toast (e.g. no signature on file)
+
+  const signedAt = data.signed_at ? new Date(data.signed_at).toLocaleString('cs-CZ') : '';
+  document.getElementById('modalTitle').textContent = `Podpis — ${data.first_name} ${data.last_name}`;
+  document.getElementById('modalBody').innerHTML = `
+    ${signedAt ? `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Podepsáno ${signedAt}</div>` : ''}
+    <div style="text-align:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <img src="${data.signature}" alt="Podpis" style="max-width:100%;">
+    </div>`;
+}
 
 async function checkIn(id) {
   if (!requirePermission('canCheckin')) return;

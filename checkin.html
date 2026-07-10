@@ -691,6 +691,32 @@ canvas#sigCanvas {
   100% { transform: scale(1); }
 }
 
+/* ── SIGNATURE VIEWER OVERLAY ── */
+.signature-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 250; opacity: 0; pointer-events: none; transition: opacity 0.2s; padding: 20px;
+}
+.signature-overlay.show { opacity: 1; pointer-events: all; }
+.signature-overlay-card {
+  background: #fff; border-radius: var(--radius); max-width: 480px; width: 100%;
+  max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.signature-overlay-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.signature-overlay-title { font-size: 16px; font-weight: 700; }
+.signature-overlay-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.signature-overlay-close {
+  background: var(--bg); border: none; border-radius: 8px; width: 32px; height: 32px;
+  font-size: 15px; cursor: pointer; color: var(--muted); flex-shrink: 0;
+}
+.signature-overlay-body { padding: 20px; text-align: center; }
+.signature-overlay-body img {
+  max-width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+}
+
 /* ── EMPTY STATE ── */
 .empty-state {
   text-align: center;
@@ -935,6 +961,20 @@ canvas#sigCanvas {
   <div class="checkin-success-icon">✅</div>
   <div class="checkin-success-name" id="successGuestName"></div>
   <div class="checkin-success-sub" id="successGuestSub"></div>
+</div>
+
+<!-- ══ SIGNATURE VIEWER OVERLAY (for showing a signed consent, e.g. to an inspector) ══ -->
+<div class="signature-overlay" id="signatureOverlay">
+  <div class="signature-overlay-card">
+    <div class="signature-overlay-head">
+      <div>
+        <div class="signature-overlay-title" id="sigViewName"></div>
+        <div class="signature-overlay-sub" id="sigViewDate"></div>
+      </div>
+      <button class="signature-overlay-close" onclick="closeSignatureViewer()">✕</button>
+    </div>
+    <div class="signature-overlay-body" id="sigViewBody"></div>
+  </div>
 </div>
 
 <script>
@@ -1252,6 +1292,11 @@ function renderGuestDetail() {
               style="background:var(--ink);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;">
               ✍️ Podepsat digitálně
             </button>` : ''}
+          ${g.consent_signed ? `
+            <button class="btn-consent-digital" onclick="viewSignature(${g.id})"
+              style="background:var(--surface2);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;">
+              🖊 Zobrazit podpis
+            </button>` : ''}
           <label class="paper-check-wrap ${paperActiveClass}" id="paperCheckWrap" onclick="togglePaperConsent()">
             <div class="paper-check-box">${g.consent_paper ? '✓' : ''}</div>
             <span class="paper-check-label">Souhlas v papírové podobě</span>
@@ -1543,17 +1588,46 @@ function updateSubmitBtn() {
   btn.disabled = !ok;
 }
 
+async function viewSignature(guestId) {
+  const overlay = document.getElementById('signatureOverlay');
+  document.getElementById('sigViewName').textContent = 'Načítám…';
+  document.getElementById('sigViewDate').textContent  = '';
+  document.getElementById('sigViewBody').innerHTML    = '';
+  overlay.classList.add('show');
+
+  const data = await apiCall(`/guests/${guestId}/signature`);
+  if (!data) { overlay.classList.remove('show'); return; } // apiCall already showed an error toast
+
+  document.getElementById('sigViewName').textContent = `${data.last_name} ${data.first_name}`;
+  document.getElementById('sigViewDate').textContent  = data.signed_at
+    ? `Podepsáno ${new Date(data.signed_at).toLocaleString('cs-CZ')}`
+    : '';
+  document.getElementById('sigViewBody').innerHTML = `<img src="${data.signature}" alt="Podpis">`;
+}
+
+function closeSignatureViewer() {
+  document.getElementById('signatureOverlay').classList.remove('show');
+}
+
 async function submitConsent() {
   if (!currentGuest) return;
   const license = document.getElementById('licenseInput')?.value.trim();
   const btn = document.getElementById('submitConsentBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Ukládám…'; }
 
-  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', {
+  const payload = {
     consent_signed: true,
     consent_paper: false,
     consent_license: license,
-  });
+  };
+  // Export the drawn signature as a PNG data URL — this is what gets
+  // encrypted and stored server-side, so it can be shown later if needed
+  // (e.g. an inspector asking to see the signed consent).
+  if (sigCanvas && sigHasContent) {
+    payload.consent_signature = sigCanvas.toDataURL('image/png');
+  }
+
+  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', payload);
 
   if (!result) {
     if (btn) { btn.disabled = false; btn.textContent = ct('submitBtn'); }

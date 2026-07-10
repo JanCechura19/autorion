@@ -8,6 +8,7 @@ import psycopg2.extras
 import hashlib
 import bcrypt
 import requests
+from cryptography.fernet import Fernet, InvalidToken
 import secrets
 import json
 import os
@@ -49,6 +50,37 @@ ECOMAIL_API_KEY    = os.environ.get("ECOMAIL_API_KEY", "")
 ECOMAIL_FROM_EMAIL  = os.environ.get("ECOMAIL_FROM_EMAIL", "event@info.autorion.net")
 ECOMAIL_REPLY_TO    = os.environ.get("ECOMAIL_REPLY_TO", "marketing@autorion.cz")
 ECOMAIL_SEND_URL    = "https://api2.ecomailapp.cz/transactional/send-message"
+
+# ── CONSENT SIGNATURE ENCRYPTION ────────────────────────
+# A handwritten signature is sensitive personal data. It is encrypted at
+# rest (Fernet/AES) and NEVER included in bulk guest listings or in the
+# response of any endpoint except the dedicated GET .../signature route.
+_SIG_KEY = os.environ.get("SIGNATURE_ENCRYPTION_KEY", "")
+_signature_cipher = Fernet(_SIG_KEY.encode()) if _SIG_KEY else None
+
+def encrypt_signature(data_url: str) -> str:
+    if not _signature_cipher:
+        raise HTTPException(
+            status_code=503,
+            detail="Ukládání podpisů není nakonfigurováno (chybí SIGNATURE_ENCRYPTION_KEY na serveru)."
+        )
+    return _signature_cipher.encrypt(data_url.encode()).decode()
+
+def decrypt_signature(token: str) -> str:
+    if not _signature_cipher:
+        raise HTTPException(status_code=503, detail="Ukládání podpisů není nakonfigurováno.")
+    try:
+        return _signature_cipher.decrypt(token.encode()).decode()
+    except InvalidToken:
+        raise HTTPException(status_code=500, detail="Podpis se nepodařilo dešifrovat (poškozená data nebo změněný klíč).")
+
+# Columns returned by every "normal" guest endpoint — consent_signature is
+# deliberately excluded so it never rides along in list/update responses.
+GUEST_SAFE_COLUMNS = """
+    id, event_id, first_name, last_name, email, phone, company, status,
+    checked_in, companion, window_id, bookings, consent_signed, consent_paper,
+    consent_license, consent_signature_at, walk_in, created_at
+"""
 
 def _build_confirmation_email_html(guest: dict, event: dict) -> str:
     date_from = event.get("date_from") or ""
@@ -257,6 +289,7 @@ class GuestUpdate(BaseModel):
     consent_signed: Optional[bool] = None
     consent_paper: Optional[bool] = None
     consent_license: Optional[str] = None
+    consent_signature: Optional[str] = None  # base64 PNG data URL from the signature pad
     walk_in: Optional[bool] = None
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
 
@@ -326,10 +359,15 @@ def init_db():
             consent_signed BOOLEAN DEFAULT FALSE,
             consent_paper BOOLEAN DEFAULT FALSE,
             consent_license VARCHAR(50) DEFAULT '',
+            consent_signature TEXT DEFAULT NULL,
+            consent_signature_at TIMESTAMP DEFAULT NULL,
             walk_in BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
+    # Migration: signature storage on already-existing guest tables
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS consent_signature TEXT DEFAULT NULL;")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS consent_signature_at TIMESTAMP DEFAULT NULL;")
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
@@ -853,7 +891,7 @@ def delete_event(event_id: int, user=Depends(get_current_user)):
 def get_guests(event_id: int, user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM guests WHERE event_id = %s ORDER BY last_name", (event_id,))
+    cur.execute(f"SELECT {GUEST_SAFE_COLUMNS} FROM guests WHERE event_id = %s ORDER BY last_name", (event_id,))
     guests = cur.fetchall()
     cur.close()
     conn.close()
@@ -911,10 +949,10 @@ def create_guest(event_id: int, guest: GuestCreate):
                     conn.close()
                     raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
 
-        cur.execute("""
+        cur.execute(f"""
             INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed, company)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING *
+            RETURNING {GUEST_SAFE_COLUMNS}
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
@@ -946,17 +984,56 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
     if "email" in fields:
         fields["email"] = fields["email"].lower()
-    set_clause = ", ".join([f"{k} = %s" for k in fields.keys()])
-    values = list(fields.values()) + [guest_id]
+
+    # The signature is encrypted before it ever touches the database, and is
+    # timestamped separately. It's popped out of the generic fields loop so
+    # it gets special (encrypted) handling instead of being stored raw.
+    raw_signature = fields.pop("consent_signature", None)
+
+    set_parts = [f"{k} = %s" for k in fields.keys()]
+    values = list(fields.values())
+    if raw_signature is not None:
+        set_parts.append("consent_signature = %s")
+        set_parts.append("consent_signature_at = NOW()")
+        values.append(encrypt_signature(raw_signature))
+
+    set_clause = ", ".join(set_parts)
+    values.append(guest_id)
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(f"UPDATE guests SET {set_clause} WHERE id = %s RETURNING *", values)
+    cur.execute(f"UPDATE guests SET {set_clause} WHERE id = %s RETURNING {GUEST_SAFE_COLUMNS}", values)
     updated = cur.fetchone()
     cur.close()
     conn.close()
     if not updated:
         raise HTTPException(status_code=404, detail="Host nenalezen")
     return dict(updated)
+
+@app.get("/api/guests/{guest_id}/signature")
+def get_guest_signature(guest_id: int, user=Depends(get_current_user)):
+    """Dedicated, explicit-only route for viewing a guest's signed consent
+    (e.g. when an inspector asks to see it). Deliberately separate from
+    every other guest endpoint so the signature is never fetched by accident."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT consent_signature, consent_signature_at, first_name, last_name FROM guests WHERE id = %s",
+        (guest_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Host nenalezen")
+    if not row["consent_signature"]:
+        raise HTTPException(status_code=404, detail="Tento host nemá uložený digitální podpis.")
+    return {
+        "guest_id": guest_id,
+        "first_name": row["first_name"],
+        "last_name": row["last_name"],
+        "signed_at": row["consent_signature_at"],
+        "signature": decrypt_signature(row["consent_signature"]),
+    }
 
 @app.delete("/api/guests/{guest_id}")
 def delete_guest(guest_id: int, user=Depends(get_current_user)):
