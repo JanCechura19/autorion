@@ -1028,6 +1028,7 @@ const T = {
     // Summary labels
     summaryName:    'Jméno',
     summaryRides:   'Jízdy',
+    summaryWindow:  'Čas příchodu',
     summaryEvent:   'Akce',
     summaryNoRides: 'Bez rezervace',
     // Salutation labels in summary
@@ -1082,6 +1083,7 @@ const T = {
     successText:    (name) => `Thank you, ${name}. We have sent your registration confirmation to your email. We look forward to seeing you.`,
     summaryName:    'Name',
     summaryRides:   'Drives',
+    summaryWindow:  'Arrival time',
     summaryEvent:   'Event',
     summaryNoRides: 'No booking',
     salLabels: { pan:'Mr.', pani:'Mrs.', slecna:'Ms.' },
@@ -1726,7 +1728,12 @@ async function handleSubmit(e) {
     document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
 
     let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
-    if (slots.length) {
+    if (REGISTRATION_TYPE === 'windows') {
+      const w = TIME_WINDOWS.find(w => w.id === selectedWindowId);
+      if (w) {
+        summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryWindow')}</span><span class="summary-value" style="font-size:15px">${w.label}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${w.from}–${w.to}</span></span></div>`;
+      }
+    } else if (slots.length) {
       const rideText = slots.map(s=>{
         const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
         return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;

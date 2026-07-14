@@ -89,7 +89,17 @@ def _build_confirmation_email_html(guest: dict, event: dict) -> str:
 
     bookings = guest.get("bookings") or []
     rides_html = ""
-    if bookings:
+    if event.get("registration_type") == "windows":
+        windows = event.get("time_windows") or []
+        window = next((w for w in windows if w.get("id") == guest.get("window_id")), None)
+        if window:
+            rides_html = f'''
+            <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Čas příchodu</td></tr>
+            <tr>
+              <td style="padding:6px 0;color:#181612;font-size:14px;">{window.get("label") or ""}</td>
+              <td style="padding:6px 0;color:#8c8577;font-size:14px;text-align:right;">{window.get("from") or ""}–{window.get("to") or ""}</td>
+            </tr>'''
+    elif bookings:
         rows = "".join(
             f'<tr>'
             f'<td style="padding:6px 0;color:#181612;font-size:14px;">{b.get("vehicle_name") or "Vůz"}</td>'
@@ -986,7 +996,7 @@ def create_guest(event_id: int, guest: GuestCreate):
             json.dumps(bookings_list), guest.consent_signed, guest.company or ''
         ))
         new_guest = cur.fetchone()
-        cur.execute("SELECT name, date_from, date_to, location FROM events WHERE id = %s", (event_id,))
+        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
         conn.commit()
         cur.close()
