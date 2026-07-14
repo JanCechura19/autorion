@@ -2182,7 +2182,12 @@ function openGuestForm(g) {
           <option value="declined"  ${g?.status==='declined' ?'selected':''}>Odmítl</option>
         </select>
       </div>
-    </div>`;
+    </div>
+    ${!g ? `
+    <label style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="fSendConfirmation">
+      Odeslat potvrzovací e-mail (jako při veřejné registraci)
+    </label>` : ''}`;
   document.getElementById('modalFoot').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
     <button class="btn btn-primary" onclick="saveGuest(${g?.id||'null'})">${g?'Uložit':'Přidat hosta'}</button>`;
@@ -2204,7 +2209,8 @@ async function saveGuest(id) {
     if (g) Object.assign(g, payload);
     showToast('Host upraven','success');
   } else {
-    const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', { ...payload, event_id: currentEventId });
+    const sendConfirmation = document.getElementById('fSendConfirmation')?.checked || false;
+    const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', { ...payload, event_id: currentEventId, send_confirmation: sendConfirmation });
     if (!created) { showToast('Nepodařilo se přidat hosta','error'); return; }
     guests.push({
       id: created.id, event_id: created.event_id,
@@ -2237,6 +2243,11 @@ function openImportModal() {
       <div class="import-hint">nebo klikněte pro výběr souboru</div>
       <input type="file" id="fileInput" accept=".xls,.xlsx,.csv" style="display:none" onchange="handleFileSelect(this)">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="fImportSendConfirmation">
+      Odeslat potvrzovací e-mail všem importovaným hostům
+    </label>
+    <div style="font-size:11px;color:var(--muted);margin-top:-4px;">Doporučujeme nechat vypnuté — obvykle nechcete rozeslat "registrace potvrzena" celému importovanému seznamu naráz.</div>
     <div style="font-size:12px;color:var(--muted);line-height:1.6;"><strong>Sloupce:</strong> Jméno, Příjmení, E-mail, Telefon, Doprovod (Ano/Ne)</div>
     <div id="importPreview"></div>`;
   document.getElementById('modalFoot').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">Zavřít</button>`;
@@ -2247,6 +2258,7 @@ function handleDrop(e) { e.preventDefault(); document.getElementById('importZone
 function handleFileSelect(input) { if(input.files[0]) processImportFile(input.files[0]); }
 
 async function processImportFile(file) {
+  const sendConfirmation = document.getElementById('fImportSendConfirmation')?.checked || false;
   const reader = new FileReader();
   reader.onload = async e => {
     const wb = XLSX.read(e.target.result, {type:'array'});
@@ -2263,7 +2275,7 @@ async function processImportFile(file) {
         first_name: String(r[0]).trim(), last_name: String(r[1]).trim(), email,
         phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
         company: String(r[5]||'').trim().toLowerCase(),
-        status: 'pending', event_id: currentEventId
+        status: 'pending', event_id: currentEventId, send_confirmation: sendConfirmation
       };
       const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', payload);
       if (created) {

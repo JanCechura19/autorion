@@ -299,6 +299,7 @@ class GuestCreate(BaseModel):
     bookings: List[BookingItem] = []
     consent_signed: bool = False
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
+    send_confirmation: bool = True  # public registration always wants this; admin "add guest" forms can opt out
 
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -987,7 +988,7 @@ def create_guest(event_id: int, guest: GuestCreate):
         cur.close()
         conn.close()
 
-        if event_row:
+        if event_row and guest.send_confirmation:
             send_registration_confirmation_email(dict(new_guest), dict(event_row))
 
         return dict(new_guest)
