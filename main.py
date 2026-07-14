@@ -125,30 +125,43 @@ def _build_confirmation_email_html(guest: dict, event: dict) -> str:
     </div>
     """
 
-def send_registration_confirmation_email(guest: dict, event: dict):
-    """Best-effort send — a failure here must never break guest registration."""
+def send_ecomail_transactional(to_email: str, to_name: str, subject: str, html: str) -> bool:
+    """Low-level Ecomail transactional send. Returns True/False, never raises —
+    callers decide how to handle/report a failure."""
     if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
-        return
+        return False
     try:
-        guest_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip()
         payload = {
             "message": {
-                "subject": f"Potvrzení registrace – {event.get('name','')}",
+                "subject": subject,
                 "from_name": "Autorion Events",
                 "from_email": ECOMAIL_FROM_EMAIL,
                 "reply_to": ECOMAIL_REPLY_TO,
-                "html": _build_confirmation_email_html(guest, event),
-                "to": [{"email": guest["email"], "name": guest_name}],
+                "html": html,
+                "to": [{"email": to_email, "name": to_name}],
             }
         }
-        requests.post(
+        res = requests.post(
             ECOMAIL_SEND_URL,
             json=payload,
             headers={"key": ECOMAIL_API_KEY, "Content-Type": "application/json"},
             timeout=10,
         )
+        return res.ok
     except Exception as e:
-        print(f"[ecomail] Odeslání potvrzovacího e-mailu selhalo: {e}")
+        print(f"[ecomail] Odeslání selhalo ({to_email}): {e}")
+        return False
+
+def send_registration_confirmation_email(guest: dict, event: dict):
+    """Best-effort send — a failure here must never break guest registration."""
+    if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
+        return
+    guest_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip()
+    send_ecomail_transactional(
+        guest["email"], guest_name,
+        f"Potvrzení registrace – {event.get('name','')}",
+        _build_confirmation_email_html(guest, event),
+    )
 
 def get_db():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -263,6 +276,15 @@ class BookingItem(BaseModel):
 class EventArchiveRequest(BaseModel):
     notes: Optional[str] = ""
     vehicles: Optional[list] = None  # snapshot of vehicles at time of archiving
+
+class EmailItem(BaseModel):
+    email: str
+    name: str
+    subject: str
+    html: str
+
+class BulkEmailRequest(BaseModel):
+    items: list[EmailItem]
 
 class GuestCreate(BaseModel):
     first_name: str
@@ -1048,6 +1070,21 @@ def delete_guest(guest_id: int, user=Depends(get_current_user)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Host nenalezen")
     return {"status": "deleted", "id": guest_id}
+
+@app.post("/api/send-bulk-email")
+def send_bulk_email(req: BulkEmailRequest, user=Depends(get_current_user)):
+    """Each item already has its per-recipient subject/HTML fully resolved
+    by the frontend (merge tags substituted) — this endpoint just relays
+    each one to Ecomail and reports back how many actually went out."""
+    if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
+        raise HTTPException(status_code=503, detail="Ecomail není nakonfigurovaný (chybí API klíč na serveru).")
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Žádní příjemci k odeslání")
+    sent = 0
+    for item in req.items:
+        if send_ecomail_transactional(item.email, item.name, item.subject, item.html):
+            sent += 1
+    return {"sent": sent, "failed": len(req.items) - sent, "total": len(req.items)}
 
 @app.get("/api/health")
 def health():

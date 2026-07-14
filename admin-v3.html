@@ -2083,11 +2083,41 @@ function openDetail(id) {
     can('canEdit')      ? `<button class="btn btn-secondary btn-sm" onclick="openEditGuest(${g.id})">✏️ Upravit</button>` : '',
     can('canSendEmail') ? `<button class="btn btn-secondary btn-sm" onclick="openEmailComposer([${g.id}])">✉️ E-mail</button>` : '',
     can('canCheckin') && !g.checked_in ? `<button class="btn btn-primary btn-sm" onclick="checkIn(${g.id})">✓ Check-in</button>` : '',
+    (currentUser?.role === 'super_admin' || currentUser?.role === 'manager')
+      ? `<button class="btn btn-danger btn-sm" onclick="deleteGuestConfirm(${g.id})">🗑 Smazat</button>` : '',
   ].join('');
   document.getElementById('detailPanel').classList.add('open');
 }
 
 function closeDetail() { document.getElementById('detailPanel').classList.remove('open'); }
+
+function deleteGuestConfirm(id) {
+  const g = guests.find(g => g.id === id); if (!g) return;
+  document.getElementById('modalTitle').textContent = 'Smazat účastníka';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:14px;line-height:1.6;">
+      Opravdu chcete trvale smazat <strong>${g.first_name} ${g.last_name}</strong> z této akce?
+      Smaže se i jeho registrace, rezervace jízd a případný podpis souhlasu. Tuto akci nelze vzít zpět.
+    </div>`;
+  document.getElementById('modalFoot').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+    <button class="btn btn-danger" onclick="confirmDeleteGuest(${id})">Smazat</button>`;
+  openModal();
+}
+
+async function confirmDeleteGuest(id) {
+  const g = guests.find(g => g.id === id); if (!g) return;
+  const result = await apiCall(`/guests/${id}`, 'DELETE');
+  if (!result || result.status !== 'deleted') return; // apiCall already showed an error toast
+
+  const idx = guests.findIndex(g => g.id === id);
+  if (idx >= 0) guests.splice(idx, 1);
+
+  closeModal();
+  closeDetail();
+  showToast(`${g.first_name} ${g.last_name} smazán/a`, 'success');
+  renderGuests();
+}
 
 async function viewGuestSignature(guestId) {
   document.getElementById('modalTitle').textContent = 'Podpis souhlasu';
@@ -2293,7 +2323,7 @@ function defaultEmailDesign() {
     logoUrl:'', logoHeight:'40', logoAlign:'center',
     showDivider:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
     footerText: (EVENT ? `${EVENT.name} · ${EVENT.location}` : ''),
-    showHero:false, heroUrl:'', heroHeight:'200',
+    showHero:false, heroUrl:'', heroUrlOriginal:'', heroCrop:null, heroHeight:'200',
   };
 }
 
@@ -2531,7 +2561,7 @@ function onEmailTmplChange(id) {
   renderEmailComposerModal(tmpl, newDefault, state?.customIds || null);
 }
 
-function sendEmailToGroup() {
+async function sendEmailToGroup() {
   if (!requirePermission('canSendEmail')) return;
   const state   = window._emailComposerState || {};
   const group   = state.group;
@@ -2541,20 +2571,40 @@ function sendEmailToGroup() {
 
   if (!recip.length) { showToast('Žádní příjemci ve vybrané skupině', 'error'); return; }
 
+  const sendBtn = document.getElementById('sendEmailBtn');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = `Odesílám…`; }
+
+  const items = recip
+    .filter(g => g.email) // skip guests with no email on file
+    .map(g => ({
+      email:   g.email,
+      name:    `${g.first_name || ''} ${g.last_name || ''}`.trim(),
+      subject: getResolvedSubject(state.tmplId, true, g),
+      html:    buildEmailHTML(state.tmplId, true, g),
+    }));
+
+  const result = await apiCall('/send-bulk-email', 'POST', { items });
+
+  if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = `📤 Odeslat ${recip.length} e-mailům`; }
+  if (!result) return; // apiCall already showed an error toast (e.g. Ecomail not configured yet)
+
   recip.forEach(g => { g.email_sent = true; });
 
-  // Log to history (mock)
   const tmpl = EMAIL_TEMPLATES.find(t => t.id === state.tmplId);
   emailSendHistory.unshift({
     tmplName: tmpl?.name || '—',
-    count:    recip.length,
+    count:    result.sent,
     group:    RECIPIENT_GROUPS.find(g=>g.key===group)?.label || 'Vlastní výběr',
     date:     new Date().toLocaleDateString('cs-CZ', {day:'numeric',month:'numeric',year:'numeric'}),
     time:     new Date().toLocaleTimeString('cs-CZ', {hour:'2-digit',minute:'2-digit'}),
   });
 
   closeModal();
-  showToast(`✓ E-mail „${tmpl?.name}" odeslán ${recip.length} příjemcům`, 'success');
+  if (result.failed > 0) {
+    showToast(`Odesláno ${result.sent}/${result.total} — ${result.failed} selhalo`, 'error');
+  } else {
+    showToast(`✓ E-mail „${tmpl?.name}" odeslán ${result.sent} příjemcům`, 'success');
+  }
   renderGuests(); // refresh email_sent badges
 }
 
@@ -2694,6 +2744,7 @@ function buildEmailEditorControls(tmpl) {
             ${d.heroUrl ? `<img src="${d.heroUrl}" style="max-height:80px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Nahrát hero obrázek'}
           </div>
           <input type="file" id="eHeroInput" accept="image/*" style="display:none" onchange="handleEmailHeroUpload(this)">
+          ${d.heroUrlOriginal ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;" onclick="openHeroCropper()">✂️ Upravit výřez</button>` : ''}
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Výška <span class="ctrl-value-display">${d.heroHeight}px</span></div>
           <input type="range" min="80" max="400" value="${d.heroHeight}" style="width:100%;accent-color:var(--text)" oninput="emailDesign.heroHeight=this.value;this.previousElementSibling.querySelector('.ctrl-value-display').textContent=this.value+'px';updateEmailPreview()">
@@ -2792,22 +2843,184 @@ function handleEmailLogoUpload(input) {
 function handleEmailHeroUpload(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => { emailDesign.heroUrl = e.target.result; emailDesign.showHero = true; updateEmailPreview(); renderEmailEditor(); };
+  reader.onload = e => {
+    emailDesign.heroUrlOriginal = e.target.result;
+    emailDesign.heroCrop = null; // reset any previous crop for a freshly uploaded image
+    emailDesign.showHero = true;
+    openHeroCropper();
+  };
   reader.readAsDataURL(file);
 }
 
-function buildEmailHTML(templateId, preview) {
+// ══════════════════════════════════════════════════════
+// HERO IMAGE CROPPER — zoom + drag to pick the visible
+// portion of the image, then bake it into a flat, fixed
+// image. Needed because email clients (esp. Outlook) don't
+// reliably support CSS object-fit/object-position — the
+// crop has to be "real" pixels, not a live CSS effect.
+// ══════════════════════════════════════════════════════
+
+let heroCropState = null; // { natW, natH, frameW, frameH, scaleBase, zoom, offsetX, offsetY, dragging, dragStartX, dragStartY, startOffsetX, startOffsetY }
+
+function openHeroCropper() {
+  const src = emailDesign.heroUrlOriginal;
+  if (!src) return;
+
+  const frameW = 440;
+  const frameH = Math.round(440 * (parseInt(emailDesign.heroHeight) / 600));
+
+  document.getElementById('modalTitle').textContent = 'Upravit výřez hero obrázku';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <div id="cropFrame" style="position:relative;overflow:hidden;width:${frameW}px;height:${frameH}px;background:#1a1a1a;border-radius:6px;cursor:grab;touch-action:none;">
+        <img id="cropImg" src="${src}" draggable="false" style="position:absolute;left:0;top:0;user-select:none;pointer-events:none;">
+      </div>
+      <div style="width:${frameW}px;">
+        <label style="font-size:12px;color:var(--muted);">Přiblížení</label>
+        <input type="range" id="cropZoomSlider" min="100" max="300" value="100" style="width:100%;accent-color:var(--text)" oninput="onCropZoomChange(this.value)">
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center;width:${frameW}px;">Přetažením obrázku vyberte, která část bude v e-mailu vidět</div>
+    </div>`;
+  document.getElementById('modalFoot').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+    <button class="btn btn-primary" onclick="applyHeroCrop()">Použít výřez</button>`;
+  openModal();
+
+  const img = new Image();
+  img.onload = () => {
+    const natW = img.naturalWidth, natH = img.naturalHeight;
+    const scaleBase = Math.max(frameW / natW, frameH / natH); // minimum scale to fully cover the frame
+
+    const saved = emailDesign.heroCrop;
+    const zoom = saved ? saved.zoom : 1;
+    let offsetX, offsetY;
+    if (saved) {
+      offsetX = saved.offsetX; offsetY = saved.offsetY;
+    } else {
+      // Centered by default
+      const dispW = natW * scaleBase, dispH = natH * scaleBase;
+      offsetX = (frameW - dispW) / 2;
+      offsetY = (frameH - dispH) / 2;
+    }
+
+    heroCropState = { natW, natH, frameW, frameH, scaleBase, zoom, offsetX, offsetY };
+    document.getElementById('cropZoomSlider').value = Math.round(zoom * 100);
+    renderCropImage();
+
+    const frame = document.getElementById('cropFrame');
+    frame.addEventListener('pointerdown', onCropPointerDown);
+    window.addEventListener('pointermove', onCropPointerMove);
+    window.addEventListener('pointerup', onCropPointerUp);
+  };
+  img.src = src;
+}
+
+function renderCropImage() {
+  const s = heroCropState; if (!s) return;
+  const scale = s.scaleBase * s.zoom;
+  const dispW = s.natW * scale, dispH = s.natH * scale;
+  // Clamp so the image always fully covers the frame (no empty gaps)
+  s.offsetX = Math.min(0, Math.max(s.offsetX, s.frameW - dispW));
+  s.offsetY = Math.min(0, Math.max(s.offsetY, s.frameH - dispH));
+  const imgEl = document.getElementById('cropImg');
+  if (!imgEl) return;
+  imgEl.style.width  = dispW + 'px';
+  imgEl.style.height = dispH + 'px';
+  imgEl.style.left   = s.offsetX + 'px';
+  imgEl.style.top    = s.offsetY + 'px';
+}
+
+function onCropZoomChange(val) {
+  const s = heroCropState; if (!s) return;
+  const oldScale = s.scaleBase * s.zoom;
+  const newZoom  = parseInt(val) / 100;
+  const newScale = s.scaleBase * newZoom;
+  // Keep the frame's visual center anchored to the same image point while zooming
+  const centerXFrac = (s.frameW / 2 - s.offsetX) / (s.natW * oldScale);
+  const centerYFrac = (s.frameH / 2 - s.offsetY) / (s.natH * oldScale);
+  s.zoom = newZoom;
+  s.offsetX = s.frameW / 2 - centerXFrac * s.natW * newScale;
+  s.offsetY = s.frameH / 2 - centerYFrac * s.natH * newScale;
+  renderCropImage();
+}
+
+function onCropPointerDown(e) {
+  const s = heroCropState; if (!s) return;
+  s.dragging = true;
+  s.dragStartX = e.clientX; s.dragStartY = e.clientY;
+  s.startOffsetX = s.offsetX; s.startOffsetY = s.offsetY;
+  document.getElementById('cropFrame').style.cursor = 'grabbing';
+}
+function onCropPointerMove(e) {
+  const s = heroCropState; if (!s || !s.dragging) return;
+  s.offsetX = s.startOffsetX + (e.clientX - s.dragStartX);
+  s.offsetY = s.startOffsetY + (e.clientY - s.dragStartY);
+  renderCropImage();
+}
+function onCropPointerUp() {
+  const s = heroCropState; if (!s) return;
+  s.dragging = false;
+  const frame = document.getElementById('cropFrame');
+  if (frame) frame.style.cursor = 'grab';
+}
+
+function applyHeroCrop() {
+  const s = heroCropState; if (!s) return;
+  const img = document.getElementById('cropImg');
+
+  // Export at 2x the real email width (600px) for a crisp result on retina screens.
+  const targetW = 1200;
+  const targetH = Math.round(1200 * (s.frameH / s.frameW));
+  const displayedScale = s.scaleBase * s.zoom;
+
+  // Convert the visible frame area (in displayed px) back into source-image px.
+  const sx = -s.offsetX / displayedScale;
+  const sy = -s.offsetY / displayedScale;
+  const sW = s.frameW / displayedScale;
+  const sH = s.frameH / displayedScale;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW; canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, sx, sy, sW, sH, 0, 0, targetW, targetH);
+
+  emailDesign.heroUrl  = canvas.toDataURL('image/jpeg', 0.88);
+  emailDesign.heroCrop = { zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY };
+
+  window.removeEventListener('pointermove', onCropPointerMove);
+  window.removeEventListener('pointerup', onCropPointerUp);
+  heroCropState = null;
+
+  closeModal();
+  updateEmailPreview();
+  renderEmailEditor();
+  showToast('Výřez uložen ✓', 'success');
+}
+
+function resolveMergeTags(text, guest) {
+  const lastName = guest ? (guest.last_name || '') : 'Novák';
+  const registrationUrl = (guest && EVENT.slug) ? `https://registration.autorion.net/?event=${EVENT.slug}` : '#';
+  return text
+    .replace(/{{last_name}}/g,      lastName)
+    .replace(/{{event_name}}/g,     EVENT.name)
+    .replace(/{{event_date}}/g,     EVENT.date_from)
+    .replace(/{{event_location}}/g, EVENT.location)
+    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${emailDesign.accentColor}">Odkaz na registraci</a>`);
+}
+
+function getResolvedSubject(templateId, preview, guest) {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
+  const raw  = (preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject;
+  return resolveMergeTags(raw, guest);
+}
+
+function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
   const d      = emailDesign;
-  const subject= (preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject;
+  const subject= resolveMergeTags((preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject, guest);
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
-  const bodyLines = body
-    .replace(/{{last_name}}/g,         'Novák')
-    .replace(/{{event_name}}/g,        EVENT.name)
-    .replace(/{{event_date}}/g,        EVENT.date_from)
-    .replace(/{{event_location}}/g,    EVENT.location)
-    .replace(/{{registration_link}}/g, '<a href="#" style="color:'+d.accentColor+'">Odkaz na registraci</a>')
+  const bodyLines = resolveMergeTags(body, guest)
     .split('\n')
     .map(l => l.trim() ? `<p style="margin:0 0 14px 0">${l}</p>` : '<p style="margin:0 0 8px 0">&nbsp;</p>')
     .join('');
@@ -2830,7 +3043,7 @@ function buildEmailHTML(templateId, preview) {
   </td></tr>
 
   
-  ${d.showHero && d.heroUrl ? `<tr><td style="padding:0;"><img src="${d.heroUrl}" width="600" style="display:block;width:100%;height:${d.heroHeight}px;object-fit:cover;" alt=""></td></tr>` : ''}
+  ${d.showHero && d.heroUrl ? `<tr><td style="padding:0;"><img src="${d.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>` : ''}
 
   
   ${d.showDivider ? `<tr><td style="height:4px;background:${d.accentColor};"></td></tr>` : ''}
