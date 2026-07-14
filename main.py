@@ -377,7 +377,7 @@ def init_db():
             status VARCHAR(50) DEFAULT 'pending',
             checked_in BOOLEAN DEFAULT FALSE,
             companion BOOLEAN DEFAULT FALSE,
-            window_id INTEGER,
+            window_id BIGINT,
             bookings JSONB DEFAULT '[]',
             consent_signed BOOLEAN DEFAULT FALSE,
             consent_paper BOOLEAN DEFAULT FALSE,
@@ -391,6 +391,10 @@ def init_db():
     # Migration: signature storage on already-existing guest tables
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS consent_signature TEXT DEFAULT NULL;")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS consent_signature_at TIMESTAMP DEFAULT NULL;")
+    # Migration: time-window IDs are generated client-side via JS Date.now()
+    # (millisecond timestamps, ~13 digits) which overflow a plain INTEGER
+    # (max ~2.1 billion, ~10 digits) — widen to BIGINT to fit them safely.
+    cur.execute("ALTER TABLE guests ALTER COLUMN window_id TYPE BIGINT;")
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
