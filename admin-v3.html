@@ -2061,6 +2061,7 @@ function openDetail(id) {
       <div class="detail-row"><span class="detail-row-label">E-mail odeslán</span><span class="detail-row-value">${g.email_sent?'<span class="badge badge-green">Ano</span>':'Ne'}</span></div>
       <div class="detail-row"><span class="detail-row-label">Check-in</span><span class="detail-row-value">${g.checked_in?'<span class="badge badge-green">✓ Přítomen</span>':'<span class="badge badge-gray">Ne</span>'}</span></div>
       <div class="detail-row"><span class="detail-row-label">Registrace</span><span class="detail-row-value" style="font-size:12px">${formatDate(g.registered_at)}</span></div>
+      ${g.invite_token ? `<div style="margin-top:8px;"><button class="btn btn-secondary btn-sm" style="width:100%" onclick="copyGuestInviteLink(${g.id})">📋 Kopírovat osobní odkaz</button></div>` : ''}
     </div>
     <div>
       <div class="detail-section-title">Testovací jízdy (${slotLabels.length}/3)</div>
@@ -3011,7 +3012,11 @@ function applyHeroCrop() {
 
 function resolveMergeTags(text, guest) {
   const lastName = guest ? (guest.last_name || '') : 'Novák';
-  const registrationUrl = (guest && EVENT.slug) ? `https://registration.autorion.net/?event=${EVENT.slug}` : '#';
+  let registrationUrl = '#';
+  if (guest && EVENT.slug) {
+    registrationUrl = `https://registration.autorion.net/?event=${EVENT.slug}`;
+    if (guest.invite_token) registrationUrl += `&invite=${guest.invite_token}`;
+  }
   return text
     .replace(/{{last_name}}/g,      lastName)
     .replace(/{{event_name}}/g,     EVENT.name)
@@ -3674,6 +3679,13 @@ function copyEventLink(url, label) {
   navigator.clipboard.writeText(url)
     .then(() => showToast(`${label} zkopírován ✓`, 'success'))
     .catch(() => showToast('Nepodařilo se zkopírovat — označte a zkopírujte adresu ručně', 'error'));
+}
+
+function copyGuestInviteLink(guestId) {
+  const g = guests.find(g => g.id === guestId);
+  if (!g || !g.invite_token || !EVENT.slug) return;
+  const url = `https://registration.autorion.net/?event=${EVENT.slug}&invite=${g.invite_token}`;
+  copyEventLink(url, 'Osobní odkaz');
 }
 
 function openDeleteEventModal() {
@@ -4707,6 +4719,7 @@ async function loadGuestsFromApi(eventId) {
     consent_signed: !!g.consent_signed,
     consent_paper: !!g.consent_paper,
     company: g.company || '',
+    invite_token: g.invite_token || null,
     unique_token: 'guest-' + g.id,
   }));
   filteredGuests = [...guests];

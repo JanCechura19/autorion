@@ -79,7 +79,7 @@ def decrypt_signature(token: str) -> str:
 GUEST_SAFE_COLUMNS = """
     id, event_id, first_name, last_name, email, phone, company, status,
     checked_in, companion, window_id, bookings, consent_signed, consent_paper,
-    consent_license, consent_signature_at, walk_in, created_at
+    consent_license, consent_signature_at, walk_in, created_at, invite_token
 """
 
 def _build_confirmation_email_html(guest: dict, event: dict) -> str:
@@ -311,6 +311,13 @@ class GuestCreate(BaseModel):
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
     send_confirmation: bool = True  # public registration always wants this; admin "add guest" forms can opt out
 
+class InviteCompleteRequest(BaseModel):
+    phone: Optional[str] = None
+    companion: bool = False
+    window_id: Optional[int] = None
+    bookings: List[BookingItem] = []
+    consent_signed: bool = False
+
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -395,6 +402,7 @@ def init_db():
             consent_signature TEXT DEFAULT NULL,
             consent_signature_at TIMESTAMP DEFAULT NULL,
             walk_in BOOLEAN DEFAULT FALSE,
+            invite_token VARCHAR(64) UNIQUE,
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -405,6 +413,9 @@ def init_db():
     # (millisecond timestamps, ~13 digits) which overflow a plain INTEGER
     # (max ~2.1 billion, ~10 digits) — widen to BIGINT to fit them safely.
     cur.execute("ALTER TABLE guests ALTER COLUMN window_id TYPE BIGINT;")
+    # Personal invite links: lets us pre-fill + update an admin-added guest's
+    # own record instead of creating a duplicate when they use their link.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS invite_token VARCHAR(64) UNIQUE;")
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
@@ -934,6 +945,47 @@ def get_guests(event_id: int, user=Depends(get_current_user)):
     conn.close()
     return [dict(g) for g in guests]
 
+def _check_booking_and_window_availability(cur, event_id, bookings_list, window_id, exclude_guest_id=None):
+    """Raises HTTPException(409, ...) on a real conflict. Shared by both the
+    'new guest' (create) and 'complete my invite' (update) flows so a guest
+    completing their own invite doesn't collide with a slot/window that
+    only THEY already provisionally hold."""
+    guest_filter = "AND id != %s" if exclude_guest_id is not None else ""
+    guest_filter_params = (exclude_guest_id,) if exclude_guest_id is not None else ()
+
+    if bookings_list:
+        cur.execute(
+            f"SELECT bookings FROM guests WHERE event_id = %s AND status != 'cancelled' {guest_filter}",
+            (event_id, *guest_filter_params)
+        )
+        existing = cur.fetchall()
+        taken = set()
+        for row in existing:
+            for b in (row["bookings"] or []):
+                if b.get("vehicle_id") is not None and b.get("time_slot"):
+                    taken.add((str(b["vehicle_id"]), b["time_slot"]))
+        for b in bookings_list:
+            key = (str(b.get("vehicle_id")), b.get("time_slot"))
+            if key in taken:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Termín {b.get('time_slot')} pro toto vozidlo je již obsazen. Obnovte stránku a vyberte jiný."
+                )
+
+    if window_id is not None:
+        cur.execute("SELECT time_windows FROM events WHERE id = %s", (event_id,))
+        ev = cur.fetchone()
+        windows = ev["time_windows"] if ev else []
+        window_def = next((w for w in windows if w.get("id") == window_id), None)
+        if window_def and window_def.get("capacity", 0) > 0:
+            cur.execute(
+                f"SELECT COUNT(*) AS cnt FROM guests WHERE event_id = %s AND window_id = %s AND status != 'cancelled' {guest_filter}",
+                (event_id, window_id, *guest_filter_params)
+            )
+            cnt = cur.fetchone()["cnt"]
+            if cnt >= window_def["capacity"]:
+                raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
+
 @app.post("/api/events/{event_id}/guests")
 def create_guest(event_id: int, guest: GuestCreate):
     conn = get_db()
@@ -944,56 +996,17 @@ def create_guest(event_id: int, guest: GuestCreate):
         cur.execute("LOCK TABLE guests IN SHARE ROW EXCLUSIVE MODE")
 
         bookings_list = [b.dict() for b in guest.bookings]
+        _check_booking_and_window_availability(cur, event_id, bookings_list, guest.window_id)
 
-        if bookings_list:
-            # Check vehicle+time_slot collisions
-            cur.execute(
-                "SELECT bookings FROM guests WHERE event_id = %s AND status != 'cancelled'",
-                (event_id,)
-            )
-            existing = cur.fetchall()
-            taken = set()
-            for row in existing:
-                for b in (row["bookings"] or []):
-                    if b.get("vehicle_id") is not None and b.get("time_slot"):
-                        taken.add((str(b["vehicle_id"]), b["time_slot"]))
-            for b in bookings_list:
-                key = (str(b.get("vehicle_id")), b.get("time_slot"))
-                if key in taken:
-                    conn.rollback()
-                    cur.close()
-                    conn.close()
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Termín {b.get('time_slot')} pro toto vozidlo je již obsazen. Obnovte stránku a vyberte jiný."
-                    )
-
-        if guest.window_id is not None:
-            # Check window capacity
-            cur.execute("SELECT time_windows FROM events WHERE id = %s", (event_id,))
-            ev = cur.fetchone()
-            windows = ev["time_windows"] if ev else []
-            window_def = next((w for w in windows if w.get("id") == guest.window_id), None)
-            if window_def and window_def.get("capacity", 0) > 0:
-                cur.execute(
-                    "SELECT COUNT(*) AS cnt FROM guests WHERE event_id = %s AND window_id = %s AND status != 'cancelled'",
-                    (event_id, guest.window_id)
-                )
-                cnt = cur.fetchone()["cnt"]
-                if cnt >= window_def["capacity"]:
-                    conn.rollback()
-                    cur.close()
-                    conn.close()
-                    raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
-
+        invite_token = secrets.token_urlsafe(24)
         cur.execute(f"""
-            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed, company)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed, company, invite_token)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
-            json.dumps(bookings_list), guest.consent_signed, guest.company or ''
+            json.dumps(bookings_list), guest.consent_signed, guest.company or '', invite_token
         ))
         new_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows FROM events WHERE id = %s", (event_id,))
@@ -1006,6 +1019,84 @@ def create_guest(event_id: int, guest: GuestCreate):
             send_registration_confirmation_email(dict(new_guest), dict(event_row))
 
         return dict(new_guest)
+    except HTTPException:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/events/public/{slug}/invite/{token}")
+def get_invite_prefill(slug: str, token: str):
+    """Public, unauthenticated: returns just enough to pre-fill the
+    registration form for a specific pre-loaded contact. Never exposes
+    other guests or anything beyond this one invite."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id FROM events WHERE slug = %s", (slug,))
+    ev = cur.fetchone()
+    if not ev:
+        cur.close(); conn.close()
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    cur.execute(
+        "SELECT first_name, last_name, email, phone, company, status FROM guests WHERE event_id = %s AND invite_token = %s",
+        (ev["id"], token)
+    )
+    guest = cur.fetchone()
+    cur.close(); conn.close()
+    if not guest:
+        raise HTTPException(status_code=404, detail="Pozvánka nenalezena nebo již není platná.")
+    return dict(guest)
+
+@app.post("/api/events/public/{slug}/invite/{token}/complete")
+def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
+    """Completes an admin-pre-loaded guest's registration in place — updates
+    their existing record instead of creating a duplicate one."""
+    conn = get_db()
+    conn.autocommit = False
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("LOCK TABLE guests IN SHARE ROW EXCLUSIVE MODE")
+
+        cur.execute("SELECT id FROM events WHERE slug = %s", (slug,))
+        ev = cur.fetchone()
+        if not ev:
+            conn.rollback(); cur.close(); conn.close()
+            raise HTTPException(status_code=404, detail="Akce nenalezena")
+        event_id = ev["id"]
+
+        cur.execute("SELECT id FROM guests WHERE event_id = %s AND invite_token = %s", (event_id, token))
+        existing_guest = cur.fetchone()
+        if not existing_guest:
+            conn.rollback(); cur.close(); conn.close()
+            raise HTTPException(status_code=404, detail="Pozvánka nenalezena nebo již není platná.")
+        guest_id = existing_guest["id"]
+
+        bookings_list = [b.dict() for b in req.bookings]
+        _check_booking_and_window_availability(cur, event_id, bookings_list, req.window_id, exclude_guest_id=guest_id)
+
+        cur.execute(f"""
+            UPDATE guests
+            SET phone = %s, companion = %s, window_id = %s, bookings = %s,
+                consent_signed = %s, status = 'confirmed'
+            WHERE id = %s
+            RETURNING {GUEST_SAFE_COLUMNS}
+        """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.consent_signed, guest_id))
+        updated_guest = cur.fetchone()
+        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows FROM events WHERE id = %s", (event_id,))
+        event_row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if event_row:
+            send_registration_confirmation_email(dict(updated_guest), dict(event_row))
+
+        return dict(updated_guest)
     except HTTPException:
         raise
     except Exception as e:
