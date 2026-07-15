@@ -1218,6 +1218,42 @@ let TIME_WINDOWS = [];
 // Selected window (for 'windows' mode)
 let selectedWindowId = null;
 
+// Personal invite link support: ?invite=TOKEN pre-fills + updates an
+// existing admin-added guest instead of creating a new one.
+let INVITE_TOKEN = null;
+let INVITE_PREFILL = null;
+
+function getInviteTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('invite');
+}
+
+function applyInvitePrefill(prefill) {
+  const fnEl = document.getElementById('firstName');
+  const lnEl = document.getElementById('lastName');
+  const emEl = document.getElementById('email');
+
+  if (fnEl) { fnEl.value = prefill.first_name || ''; fnEl.readOnly = true; }
+  if (lnEl) { lnEl.value = prefill.last_name  || ''; lnEl.readOnly = true; }
+  if (emEl) { emEl.value = prefill.email      || ''; emEl.readOnly = true; }
+  [fnEl, lnEl, emEl].forEach(el => {
+    if (!el) return;
+    el.style.background = 'var(--bg)';
+    el.style.color = 'var(--muted)';
+    el.style.cursor = 'not-allowed';
+  });
+
+  // Respect an explicit ?dealer= in the URL; otherwise use the dealer
+  // already on file for this contact.
+  if (!DEALER && prefill.company) {
+    const c = prefill.company.toLowerCase();
+    if (['albion','cardion','orbion'].includes(c)) {
+      DEALER = c;
+      applyGdprUrl();
+    }
+  }
+}
+
 function getEventSlugFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get('event');
@@ -1288,6 +1324,26 @@ async function loadEventConfig() {
     } catch (e) {
       // Availability is non-critical; proceed without it
       console.warn('Nepodařilo se načíst obsazenost:', e);
+    }
+
+    // Personal invite link (?invite=TOKEN): pre-fill name/e-mail for an
+    // already-known contact so we update their record instead of creating
+    // a duplicate one. Silently falls back to a normal blank form if the
+    // token is missing/invalid — never blocks the page from working.
+    const inviteToken = isPreview ? null : getInviteTokenFromUrl();
+    if (inviteToken) {
+      try {
+        const inviteRes = await fetch(`${API_BASE}/events/public/${slug}/invite/${inviteToken}`);
+        if (inviteRes.ok) {
+          const prefill = await inviteRes.json();
+          INVITE_TOKEN = inviteToken;
+          INVITE_PREFILL = prefill;
+          applyInvitePrefill(prefill);
+        }
+        // If the token is invalid/expired, we just proceed with a normal blank form.
+      } catch (e) {
+        console.warn('Nepodařilo se načíst pozvánku:', e);
+      }
     }
 
     // Populate header with real event data
@@ -1697,10 +1753,21 @@ async function handleSubmit(e) {
   hideSubmitError();
 
   try {
-    const res = await fetch(`${API_BASE}/events/${EVENT_ID}/guests`, {
+    // Personal invite link: update the existing pre-loaded contact instead
+    // of creating a new guest record.
+    const submitUrl = INVITE_TOKEN
+      ? `${API_BASE}/events/public/${EVENT_SLUG}/invite/${INVITE_TOKEN}/complete`
+      : `${API_BASE}/events/${EVENT_ID}/guests`;
+    const submitPayload = INVITE_TOKEN
+      ? { companion: false, consent_signed: true,
+          bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
+          window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null }
+      : payload;
+
+    const res = await fetch(submitUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(submitPayload)
     });
 
     if (!res.ok) {
