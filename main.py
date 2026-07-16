@@ -945,11 +945,25 @@ def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_us
     if not fields:
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
     json_fields = {"theme", "time_windows", "vehicles", "landing_page", "email_templates", "email_design"}
+    # landing_page is edited independently from two different screens (Visual
+    # Editor's hero/sections, and the Nastavení "show register button"
+    # toggle). A plain overwrite lets whichever one saves last silently wipe
+    # out the other's changes if its local copy is stale. A shallow JSONB
+    # merge (old || new) keeps existing top-level keys the caller didn't
+    # touch, instead of relying on the client to have a fully up-to-date copy.
+    shallow_merge_fields = {"landing_page"}
     set_parts = []
     values = []
     for k, v in fields.items():
-        set_parts.append(f"{k} = %s")
-        values.append(json.dumps(v) if k in json_fields else v)
+        if k in shallow_merge_fields:
+            set_parts.append(f"{k} = COALESCE({k}, '{{}}'::jsonb) || %s::jsonb")
+            values.append(json.dumps(v))
+        elif k in json_fields:
+            set_parts.append(f"{k} = %s")
+            values.append(json.dumps(v))
+        else:
+            set_parts.append(f"{k} = %s")
+            values.append(v)
     set_clause = ", ".join(set_parts)
     values.append(event_id)
     conn = get_db()
