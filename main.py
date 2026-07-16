@@ -8,6 +8,7 @@ import psycopg2.extras
 import hashlib
 import bcrypt
 import requests
+import re
 from cryptography.fernet import Fernet, InvalidToken
 import secrets
 import json
@@ -121,6 +122,16 @@ def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: s
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
     )
 
+def _linkify_markdown(text: str, color: str) -> str:
+    """Lets the admin type a plain [odkaz](https://...) in the template body
+    and get a real clickable link in the sent e-mail — mirrors the same
+    syntax supported in the Editor e-mailů's manual sends."""
+    return re.sub(
+        r'\[([^\]]+)\]\((https?://[^\s)]+)\)',
+        lambda m: f'<a href="{m.group(2)}" style="color:{color}">{m.group(1)}</a>',
+        text or ""
+    )
+
 def _build_booking_details_html(guest: dict, event: dict) -> str:
     """The 'what you booked' block (time window OR vehicle rides) —
     always shown as a fixed structural section, not editable free text,
@@ -161,7 +172,10 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
     hero_source = template if (template.get("heroMode") == "custom") else d
     registration_url = _get_registration_url(guest, event)
 
-    body_resolved = _resolve_merge_tags(template.get("body") or "", guest, event, registration_url)
+    body_resolved = _linkify_markdown(
+        _resolve_merge_tags(template.get("body") or "", guest, event, registration_url),
+        d.get("accentColor") or "#b8924a"
+    )
     body_html = "".join(
         f'<p style="margin:0 0 14px 0">{line}</p>' if line.strip() else '<p style="margin:0 0 8px 0">&nbsp;</p>'
         for line in body_resolved.split("\n")

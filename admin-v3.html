@@ -2722,6 +2722,7 @@ function buildEmailEditorControls(tmpl) {
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
           <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code></div>
         </div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:12px;">Zobrazit tlačítko</span>
@@ -3123,6 +3124,16 @@ function getResolvedSubject(templateId, preview, guest) {
   return resolveMergeTags(raw, guest);
 }
 
+function linkifyMarkdown(text, color) {
+  // Lets the admin type a plain [odkaz](https://...) in the body text and
+  // get a real clickable link in the rendered e-mail, without needing any
+  // special editor UI.
+  return text.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_, label, url) => `<a href="${url}" style="color:${color}">${label}</a>`
+  );
+}
+
 function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
   const d      = emailDesign;
@@ -3130,7 +3141,7 @@ function buildEmailHTML(templateId, preview, guest) {
   const subject= resolveMergeTags((preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject, guest);
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
-  const bodyLines = resolveMergeTags(body, guest)
+  const bodyLines = linkifyMarkdown(resolveMergeTags(body, guest), d.accentColor)
     .split('\n')
     .map(l => l.trim() ? `<p style="margin:0 0 14px 0">${l}</p>` : '<p style="margin:0 0 8px 0">&nbsp;</p>')
     .join('');
