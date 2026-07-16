@@ -155,6 +155,10 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
     confirmation) using the SAME customizable subject/body/design an admin
     can edit in the Editor e-mailů — instead of a fixed Python-only template."""
     d = {**DEFAULT_EMAIL_DESIGN, **(design or {})}
+    # Hero image can be shared across all templates ("unified", default) or
+    # be its own independent image just for this template ("custom") — mirrors
+    # the same choice available in the Editor e-mailů.
+    hero_source = template if (template.get("heroMode") == "custom") else d
     registration_url = _get_registration_url(guest, event)
 
     body_resolved = _resolve_merge_tags(template.get("body") or "", guest, event, registration_url)
@@ -169,8 +173,8 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         f'<span style="color:{d["headerColor"]};font-size:19px;font-weight:700;letter-spacing:0.02em;">Autorion Events</span>'
     )
     hero_html = (
-        f'<tr><td style="padding:0;"><img src="{d["heroUrl"]}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>'
-        if (d.get("showHero") and d.get("heroUrl")) else ""
+        f'<tr><td style="padding:0;"><img src="{hero_source.get("heroUrl")}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>'
+        if (hero_source.get("showHero") and hero_source.get("heroUrl")) else ""
     )
     booking_html = _build_booking_details_html(guest, event)
     button_html = (

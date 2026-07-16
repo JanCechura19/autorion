@@ -2329,6 +2329,21 @@ const DEFAULT_EMAIL_TEMPLATES = [
 // back to the defaults above for events that haven't saved anything yet.
 let EMAIL_TEMPLATES = DEFAULT_EMAIL_TEMPLATES.map(t => ({...t}));
 
+// Each template can either share ONE hero image (unified, the default) or
+// have its own independent image (custom) — set per template via heroMode.
+function isHeroUnified(tmpl) {
+  return (tmpl?.heroMode || 'unified') === 'unified';
+}
+function getHeroTarget(tmpl) {
+  return isHeroUnified(tmpl) ? emailDesign : tmpl;
+}
+function setHeroMode(unified) {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+  tmpl.heroMode = unified ? 'unified' : 'custom';
+  renderEmailEditor();
+  updateEmailPreview();
+}
+
 function defaultEmailDesign() {
   return {
     bgColor:'#f4f4f4', containerBg:'#ffffff', headerBg:'#1a1816', headerColor:'#ffffff',
@@ -2693,6 +2708,7 @@ function renderEmailEditor() {
 
 function buildEmailEditorControls(tmpl) {
   const d = emailDesign;
+  const heroT = getHeroTarget(tmpl);
   return `
     
     <div style="border-bottom:1px solid var(--border);">
@@ -2755,19 +2771,24 @@ function buildEmailEditorControls(tmpl) {
         <span style="color:var(--muted);font-size:10px;">▾</span>
       </div>
       <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:10px;">
+        <div class="ctrl-row" style="display:flex;gap:6px;">
+          <button type="button" class="btn btn-sm" style="flex:1;${isHeroUnified(tmpl)?'background:var(--text);color:var(--surface);':'background:var(--surface2);color:var(--text);border:1px solid var(--border);'}" onclick="setHeroMode(true)">Jednotný obrázek</button>
+          <button type="button" class="btn btn-sm" style="flex:1;${!isHeroUnified(tmpl)?'background:var(--text);color:var(--surface);':'background:var(--surface2);color:var(--text);border:1px solid var(--border);'}" onclick="setHeroMode(false)">Vlastní pro tuto šablonu</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:-4px;">${isHeroUnified(tmpl) ? 'Stejný obrázek se použije ve všech šablonách.' : 'Tenhle obrázek se použije jen v šabloně „'+tmpl.name+'".'}</div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:12px;">Zobrazit hero obrázek</span>
-          <label class="toggle"><input type="checkbox" ${d.showHero?'checked':''} onchange="emailDesign.showHero=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
+          <label class="toggle"><input type="checkbox" ${heroT.showHero?'checked':''} onchange="getHeroTarget(EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId)).showHero=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="ctrl-row">
           <div style="border:1px dashed var(--border2);border-radius:6px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:var(--muted);" onclick="document.getElementById('eHeroInput').click()">
-            ${d.heroUrl ? `<img src="${d.heroUrl}" style="max-height:80px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Nahrát hero obrázek'}
+            ${heroT.heroUrl ? `<img src="${heroT.heroUrl}" style="max-height:80px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Nahrát hero obrázek'}
           </div>
           <input type="file" id="eHeroInput" accept="image/*" style="display:none" onchange="handleEmailHeroUpload(this)">
-          ${d.heroUrlOriginal ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;" onclick="openHeroCropper()">✂️ Upravit výřez</button>` : ''}
+          ${heroT.heroUrlOriginal ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;" onclick="openHeroCropper()">✂️ Upravit výřez</button>` : ''}
         </div>
-        <div class="ctrl-row"><div class="ctrl-label">Výška <span class="ctrl-value-display">${d.heroHeight}px</span></div>
-          <input type="range" min="80" max="400" value="${d.heroHeight}" style="width:100%;accent-color:var(--text)" oninput="emailDesign.heroHeight=this.value;this.previousElementSibling.querySelector('.ctrl-value-display').textContent=this.value+'px';updateEmailPreview()">
+        <div class="ctrl-row"><div class="ctrl-label">Výška <span class="ctrl-value-display">${heroT.heroHeight||200}px</span></div>
+          <input type="range" min="80" max="400" value="${heroT.heroHeight||200}" style="width:100%;accent-color:var(--text)" oninput="getHeroTarget(EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId)).heroHeight=this.value;this.previousElementSibling.querySelector('.ctrl-value-display').textContent=this.value+'px';updateEmailPreview()">
         </div>
       </div>
     </div>
@@ -2864,9 +2885,11 @@ function handleEmailHeroUpload(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    emailDesign.heroUrlOriginal = e.target.result;
-    emailDesign.heroCrop = null; // reset any previous crop for a freshly uploaded image
-    emailDesign.showHero = true;
+    const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+    const target = getHeroTarget(tmpl);
+    target.heroUrlOriginal = e.target.result;
+    target.heroCrop = null; // reset any previous crop for a freshly uploaded image
+    target.showHero = true;
     openHeroCropper();
   };
   reader.readAsDataURL(file);
@@ -2883,11 +2906,13 @@ function handleEmailHeroUpload(input) {
 let heroCropState = null; // { natW, natH, frameW, frameH, scaleBase, zoom, offsetX, offsetY, dragging, dragStartX, dragStartY, startOffsetX, startOffsetY }
 
 function openHeroCropper() {
-  const src = emailDesign.heroUrlOriginal;
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+  const target = getHeroTarget(tmpl);
+  const src = target.heroUrlOriginal;
   if (!src) return;
 
   const frameW = 440;
-  const initialHeightPx = parseInt(emailDesign.heroHeight, 10) || 200;
+  const initialHeightPx = parseInt(target.heroHeight, 10) || 200;
   const frameH = Math.round(frameW * (initialHeightPx / 600));
 
   document.getElementById('modalTitle').textContent = 'Upravit výřez hero obrázku';
@@ -2922,7 +2947,7 @@ function openHeroCropper() {
     const natW = img.naturalWidth, natH = img.naturalHeight;
     const scaleBase = Math.max(frameW / natW, frameH / natH); // minimum scale to fully cover the frame
 
-    const saved = emailDesign.heroCrop;
+    const saved = target.heroCrop;
     const zoom = saved ? saved.zoom : 1;
     let offsetX, offsetY;
     if (saved) {
@@ -2934,7 +2959,7 @@ function openHeroCropper() {
       offsetY = (frameH - dispH) / 2;
     }
 
-    heroCropState = { natW, natH, frameW, frameH, scaleBase, zoom, offsetX, offsetY };
+    heroCropState = { natW, natH, frameW, frameH, scaleBase, zoom, offsetX, offsetY, targetTemplateId: tmpl.id, targetUnified: isHeroUnified(tmpl) };
     document.getElementById('cropZoomSlider').value = Math.round(zoom * 100);
     renderCropImage();
 
@@ -2991,7 +3016,10 @@ function onCropZoomChange(val) {
 function onCropHeightChange(val) {
   const s = heroCropState; if (!s) return;
   const newHeightPx = parseInt(val, 10);
-  emailDesign.heroHeight = String(newHeightPx);
+  const target = s.targetUnified
+    ? emailDesign
+    : (EMAIL_TEMPLATES.find(t => t.id === s.targetTemplateId) || emailDesign);
+  target.heroHeight = String(newHeightPx);
   const label = document.getElementById('cropHeightLabel');
   if (label) label.textContent = newHeightPx;
 
@@ -3055,8 +3083,11 @@ function applyHeroCrop() {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, sx, sy, sW, sH, 0, 0, targetW, targetH);
 
-  emailDesign.heroUrl  = canvas.toDataURL('image/jpeg', 0.88);
-  emailDesign.heroCrop = { zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY };
+  const target = s.targetUnified
+    ? emailDesign
+    : (EMAIL_TEMPLATES.find(t => t.id === s.targetTemplateId) || emailDesign);
+  target.heroUrl  = canvas.toDataURL('image/jpeg', 0.88);
+  target.heroCrop = { zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY };
 
   window.removeEventListener('pointermove', onCropPointerMove);
   window.removeEventListener('pointerup', onCropPointerUp);
@@ -3095,6 +3126,7 @@ function getResolvedSubject(templateId, preview, guest) {
 function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
   const d      = emailDesign;
+  const heroT  = getHeroTarget(tmpl);
   const subject= resolveMergeTags((preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject, guest);
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
@@ -3121,7 +3153,7 @@ function buildEmailHTML(templateId, preview, guest) {
   </td></tr>
 
   
-  ${d.showHero && d.heroUrl ? `<tr><td style="padding:0;"><img src="${d.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>` : ''}
+  ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;"><img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>` : ''}
 
   
   ${d.showDivider ? `<tr><td style="height:4px;background:${d.accentColor};"></td></tr>` : ''}
