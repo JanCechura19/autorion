@@ -3173,7 +3173,7 @@ function buildEmailHTML(templateId, preview, guest) {
   
   <tr><td style="padding:20px 40px 28px;border-top:1px solid #eeeeee;text-align:center;">
     <p style="margin:0;font-size:12px;color:#999999;line-height:1.6;">${(preview && document.getElementById('eFooter')?.value) || d.footerText}</p>
-    <p style="margin:8px 0 0;font-size:11px;color:#bbbbbb;">© 2025 PPF Group · <a href="#" style="color:#bbbbbb;">Odhlásit odběr</a></p>
+    <p style="margin:8px 0 0;font-size:11px;color:#bbbbbb;">© ${new Date().getFullYear()} Autorion s.r.o. · <a href="#" style="color:#bbbbbb;">Odhlásit odběr</a></p>
   </td></tr>
 
 </table>
@@ -4984,7 +4984,7 @@ function openNewEventModal() {
     <div class="form-row"><label>Název akce</label><input id="neName" placeholder="Autorion Drive Day 2026" oninput="onNeNameInput()"></div>
     <div class="form-row">
       <label>Adresa akce (URL)</label>
-      <input id="neSlug" placeholder="ppf-automotive-experience-2026" oninput="onNeSlugInput()">
+      <input id="neSlug" placeholder="autorion-drive-day-2026" oninput="onNeSlugInput()">
       <div id="neSlugPreview" style="font-size:11px;color:var(--muted);margin-top:4px;">
         event.autorion.net/?event=…
       </div>
