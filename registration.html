@@ -829,7 +829,7 @@
         <span class="field-label" data-i18n="labelSalutation">Oslovení</span>
         <div class="salutation-group" id="salutationGroup">
           <label class="salutation-pill">
-            <input type="radio" name="salutation" value="pan" required>
+            <input type="radio" name="salutation" value="pan">
             <span class="salutation-pill-label" data-i18n="salMr">Pan</span>
           </label>
           <label class="salutation-pill">
@@ -1679,13 +1679,11 @@ function validate() {
   let ok = true;
   const sal = document.querySelector('input[name="salutation"]:checked');
   // Update error messages to current lang before showing
-  document.getElementById('salutationError').textContent = t('errSalutation');
   document.getElementById('firstNameError').textContent  = t('errFirstName');
   document.getElementById('lastNameError').textContent   = t('errLastName');
   document.getElementById('emailError').textContent      = t('errEmail');
   document.getElementById('gdprError').textContent       = t('errGdpr');
 
-  showFieldError('salutationError',!sal); if(!sal) ok=false;
   const fn = document.getElementById('firstName').value.trim();
   document.getElementById('firstName').classList.toggle('error',!fn);
   showFieldError('firstNameError',!fn); if(!fn) ok=false;
@@ -1726,11 +1724,12 @@ async function handleSubmit(e) {
   }
   if (!validate()) return;
 
-  const sal = document.querySelector('input[name="salutation"]:checked').value;
+  const salEl = document.querySelector('input[name="salutation"]:checked');
+  const sal   = salEl ? salEl.value : '';
   const fn  = document.getElementById('firstName').value.trim();
   const ln  = document.getElementById('lastName').value.trim();
   const emailVal = document.getElementById('email').value.trim();
-  const salLabel = (t('salLabels'))[sal] || sal;
+  const salLabel = sal ? ((t('salLabels'))[sal] || sal) : '';
 
   const bookings = slots.map(s => {
     const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
