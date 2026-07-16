@@ -2218,7 +2218,7 @@ async function saveGuest(id) {
       first_name: created.first_name, last_name: created.last_name,
       email: created.email, phone: created.phone || '',
       status: created.status, companion: created.companion,
-      email_sent:false, checked_in: !!created.checked_in,
+      email_sent: sendConfirmation, checked_in: !!created.checked_in,
       registered_at: created.created_at || new Date().toISOString(),
       notes:'', bookings: created.bookings || [],
       unique_token:'guest-'+created.id
@@ -2285,7 +2285,7 @@ async function processImportFile(file) {
           first_name: created.first_name, last_name: created.last_name,
           email: created.email, phone: created.phone || '',
           status: created.status, companion: created.companion,
-          email_sent:false, checked_in:false,
+          email_sent: sendConfirmation, checked_in:false,
           registered_at: created.created_at || new Date().toISOString(),
           notes:'', bookings: created.bookings || [],
           unique_token:'guest-'+created.id
@@ -2334,7 +2334,7 @@ function defaultEmailDesign() {
     accentColor:'#b8924a', bodyColor:'#1a1816', mutedColor:'#666666',
     fontFamily:"'Helvetica Neue', Arial, sans-serif", fontSize:'15px', borderRadius:'8px',
     logoUrl:'', logoHeight:'40', logoAlign:'center',
-    showDivider:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
+    showDivider:true, showButton:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
     footerText: (EVENT ? `${EVENT.name} · ${EVENT.location}` : ''),
     showHero:false, heroUrl:'', heroUrlOriginal:'', heroCrop:null, heroHeight:'200',
   };
@@ -2590,10 +2590,11 @@ async function sendEmailToGroup() {
   const items = recip
     .filter(g => g.email) // skip guests with no email on file
     .map(g => ({
-      email:   g.email,
-      name:    `${g.first_name || ''} ${g.last_name || ''}`.trim(),
-      subject: getResolvedSubject(state.tmplId, true, g),
-      html:    buildEmailHTML(state.tmplId, true, g),
+      email:    g.email,
+      name:     `${g.first_name || ''} ${g.last_name || ''}`.trim(),
+      subject:  getResolvedSubject(state.tmplId, true, g),
+      html:     buildEmailHTML(state.tmplId, true, g),
+      guest_id: g.id,
     }));
 
   const result = await apiCall('/send-bulk-email', 'POST', { items });
@@ -2703,6 +2704,10 @@ function buildEmailEditorControls(tmpl) {
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
           <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
+        </div>
+        <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;">Zobrazit tlačítko</span>
+          <label class="toggle"><input type="checkbox" ${d.showButton!==false?'checked':''} onchange="emailDesign.showButton=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text tlačítka</div>
           <input class="ctrl-input" id="eBtnText" value="${d.btnText}" oninput="emailDesign.btnText=this.value;updateEmailPreview()">
@@ -2880,27 +2885,30 @@ function openHeroCropper() {
   if (!src) return;
 
   const frameW = 440;
-  const frameH = Math.round(440 * (parseInt(emailDesign.heroHeight) / 600));
+  const frameH = Math.round(440 * (parseInt(emailDesign.heroHeight, 10) / 600 || 0.33));
 
   document.getElementById('modalTitle').textContent = 'Upravit výřez hero obrázku';
   document.getElementById('modalBody').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px;align-items:center;">
       <div id="cropFrame" style="position:relative;overflow:hidden;width:${frameW}px;height:${frameH}px;background:#1a1a1a;border-radius:6px;cursor:grab;touch-action:none;">
-        <img id="cropImg" src="${src}" draggable="false" style="position:absolute;left:0;top:0;user-select:none;pointer-events:none;">
+        <img id="cropImg" src="${src}" draggable="false" style="position:absolute;left:0;top:0;max-width:none;max-height:none;user-select:none;pointer-events:none;">
       </div>
       <div style="width:${frameW}px;">
         <label style="font-size:12px;color:var(--muted);">Přiblížení</label>
-        <input type="range" id="cropZoomSlider" min="100" max="300" value="100" style="width:100%;accent-color:var(--text)" oninput="onCropZoomChange(this.value)">
+        <input type="range" id="cropZoomSlider" min="100" max="300" value="100" style="width:100%;accent-color:var(--text)">
       </div>
       <div style="font-size:11px;color:var(--muted);text-align:center;width:${frameW}px;">Přetažením obrázku vyberte, která část bude v e-mailu vidět</div>
     </div>`;
   document.getElementById('modalFoot').innerHTML = `
-    <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+    <button class="btn btn-secondary" onclick="closeHeroCropper()">Zrušit</button>
     <button class="btn btn-primary" onclick="applyHeroCrop()">Použít výřez</button>`;
   openModal();
 
-  const img = new Image();
-  img.onload = () => {
+  document.getElementById('cropZoomSlider').addEventListener('input', function() {
+    onCropZoomChange(this.value);
+  });
+
+  const setupState = () => {
     const natW = img.naturalWidth, natH = img.naturalHeight;
     const scaleBase = Math.max(frameW / natW, frameH / natH); // minimum scale to fully cover the frame
 
@@ -2925,7 +2933,20 @@ function openHeroCropper() {
     window.addEventListener('pointermove', onCropPointerMove);
     window.addEventListener('pointerup', onCropPointerUp);
   };
+
+  const img = new Image();
+  img.onload = setupState;
   img.src = src;
+  // Some browsers won't (re-)fire onload for an image already in cache —
+  // handle that case directly instead of silently doing nothing.
+  if (img.complete && img.naturalWidth > 0) setupState();
+}
+
+function closeHeroCropper() {
+  window.removeEventListener('pointermove', onCropPointerMove);
+  window.removeEventListener('pointerup', onCropPointerUp);
+  heroCropState = null;
+  closeModal();
 }
 
 function renderCropImage() {
@@ -3010,13 +3031,16 @@ function applyHeroCrop() {
   showToast('Výřez uložen ✓', 'success');
 }
 
+function getRegistrationUrl(guest) {
+  if (!(guest && EVENT.slug)) return '#';
+  let url = `https://registration.autorion.net/?event=${EVENT.slug}`;
+  if (guest.invite_token) url += `&invite=${guest.invite_token}`;
+  return url;
+}
+
 function resolveMergeTags(text, guest) {
   const lastName = guest ? (guest.last_name || '') : 'Novák';
-  let registrationUrl = '#';
-  if (guest && EVENT.slug) {
-    registrationUrl = `https://registration.autorion.net/?event=${EVENT.slug}`;
-    if (guest.invite_token) registrationUrl += `&invite=${guest.invite_token}`;
-  }
+  const registrationUrl = getRegistrationUrl(guest);
   return text
     .replace(/{{last_name}}/g,      lastName)
     .replace(/{{event_name}}/g,     EVENT.name)
@@ -3071,9 +3095,10 @@ function buildEmailHTML(templateId, preview, guest) {
       ${bodyLines}
     </div>
     
+    ${d.showButton !== false ? `
     <div style="text-align:center;margin-top:28px;">
-      <a href="#" style="display:inline-block;background:${d.btnBg};color:${d.btnColor};text-decoration:none;padding:13px 32px;border-radius:${d.borderRadius};font-size:15px;font-weight:600;letter-spacing:0.02em;">${(preview && document.getElementById('eBtnText')?.value) || d.btnText}</a>
-    </div>
+      <a href="${getRegistrationUrl(guest)}" style="display:inline-block;background:${d.btnBg};color:${d.btnColor};text-decoration:none;padding:13px 32px;border-radius:${d.borderRadius};font-size:15px;font-weight:600;letter-spacing:0.02em;">${(preview && document.getElementById('eBtnText')?.value) || d.btnText}</a>
+    </div>` : ''}
   </td></tr>
 
   
@@ -4706,7 +4731,8 @@ async function loadGuestsFromApi(eventId) {
     phone: g.phone || '',
     status: g.status || 'pending',
     companion: !!g.companion,
-    email_sent: false,
+    email_sent: !!g.last_email_sent_at,
+    last_email_sent_at: g.last_email_sent_at || null,
     checked_in: !!g.checked_in,
     registered_at: g.created_at || new Date().toISOString(),
     notes: '',

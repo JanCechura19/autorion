@@ -79,7 +79,8 @@ def decrypt_signature(token: str) -> str:
 GUEST_SAFE_COLUMNS = """
     id, event_id, first_name, last_name, email, phone, company, status,
     checked_in, companion, window_id, bookings, consent_signed, consent_paper,
-    consent_license, consent_signature_at, walk_in, created_at, invite_token
+    consent_license, consent_signature_at, walk_in, created_at, invite_token,
+    last_email_sent_at
 """
 
 def _build_confirmation_email_html(guest: dict, event: dict) -> str:
@@ -162,16 +163,34 @@ def send_ecomail_transactional(to_email: str, to_name: str, subject: str, html: 
         print(f"[ecomail] Odeslání selhalo ({to_email}): {e}")
         return False
 
+def _mark_guest_emailed(guest_id: int):
+    """Persists 'an e-mail was actually sent to this guest' — used by both
+    the automatic registration confirmation and manual bulk sends, so the
+    admin's 'E-mail odeslán' / 'Dosud nekontaktovaní' views reflect reality
+    instead of resetting on every page reload."""
+    if not guest_id:
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("UPDATE guests SET last_email_sent_at = NOW() WHERE id = %s", (guest_id,))
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[ecomail] Nepodařilo se zaznamenat odeslání e-mailu (guest {guest_id}): {e}")
+
 def send_registration_confirmation_email(guest: dict, event: dict):
     """Best-effort send — a failure here must never break guest registration."""
     if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
         return
     guest_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip()
-    send_ecomail_transactional(
+    ok = send_ecomail_transactional(
         guest["email"], guest_name,
         f"Potvrzení registrace – {event.get('name','')}",
         _build_confirmation_email_html(guest, event),
     )
+    if ok:
+        _mark_guest_emailed(guest.get("id"))
 
 def get_db():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -292,6 +311,7 @@ class EmailItem(BaseModel):
     name: str
     subject: str
     html: str
+    guest_id: Optional[int] = None
 
 class BulkEmailRequest(BaseModel):
     items: list[EmailItem]
@@ -403,6 +423,7 @@ def init_db():
             consent_signature_at TIMESTAMP DEFAULT NULL,
             walk_in BOOLEAN DEFAULT FALSE,
             invite_token VARCHAR(64) UNIQUE,
+            last_email_sent_at TIMESTAMP DEFAULT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -416,6 +437,11 @@ def init_db():
     # Personal invite links: lets us pre-fill + update an admin-added guest's
     # own record instead of creating a duplicate when they use their link.
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS invite_token VARCHAR(64) UNIQUE;")
+    # Real, persistent tracking of "was ANY e-mail (auto-confirmation or
+    # manual invitation/reminder/...) actually sent to this guest" — the
+    # admin UI used to track this only in browser memory, which reset on
+    # every page reload/event switch.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS last_email_sent_at TIMESTAMP DEFAULT NULL;")
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
@@ -1190,6 +1216,7 @@ def send_bulk_email(req: BulkEmailRequest, user=Depends(get_current_user)):
     for item in req.items:
         if send_ecomail_transactional(item.email, item.name, item.subject, item.html):
             sent += 1
+            _mark_guest_emailed(item.guest_id)
     return {"sent": sent, "failed": len(req.items) - sent, "total": len(req.items)}
 
 @app.get("/api/health")
