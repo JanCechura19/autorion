@@ -1024,7 +1024,7 @@ const T = {
     errGeneric: 'Něco se pokazilo. Zkuste to prosím znovu.',
     // Success
     successTitle:   'Registrace<br><em>přijata</em>',
-    successText:    (name) => `Děkujeme, ${name}. Potvrzení registrace jsme odeslali na Váš e-mail. Těšíme se na setkání.`,
+    successText:    (name) => `Děkujeme Vám za registraci. Potvrzení registrace jsme odeslali na Váš e-mail. Těšíme se na setkání.`,
     // Summary labels
     summaryName:    'Jméno',
     summaryRides:   'Jízdy',
@@ -1080,7 +1080,7 @@ const T = {
     errSlotTaken: 'The selected time slot is already taken. Please review your selection.',
     errGeneric: 'Something went wrong. Please try again.',
     successTitle:   'Registration<br><em>confirmed</em>',
-    successText:    (name) => `Thank you, ${name}. We have sent your registration confirmation to your email. We look forward to seeing you.`,
+    successText:    (name) => `Thank you for registering. We have sent your registration confirmation to your email. We look forward to seeing you.`,
     summaryName:    'Name',
     summaryRides:   'Drives',
     summaryWindow:  'Arrival time',
@@ -1128,6 +1128,13 @@ function setLang(lang) {
 
   // Re-render dynamic parts
   renderSlots();
+
+  // If the success screen is already showing (visitor switched language
+  // after registering), re-render its text in the new language too.
+  const successScreen = document.getElementById('successScreen');
+  if (successScreen && successScreen.classList.contains('visible')) {
+    renderSuccessScreen();
+  }
 
   // Update slots note
   updateSlotsNote();
@@ -1791,28 +1798,10 @@ async function handleSubmit(e) {
     const success = document.getElementById('successScreen');
     success.classList.add('visible');
 
-    document.getElementById('successTitle').innerHTML = t('successTitle');
-    document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
-
-    let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
-    if (REGISTRATION_TYPE === 'windows') {
-      const w = TIME_WINDOWS.find(w => w.id === selectedWindowId);
-      if (w) {
-        summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryWindow')}</span><span class="summary-value" style="font-size:15px">${w.label}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${w.from}–${w.to}</span></span></div>`;
-      }
-    } else if (slots.length) {
-      const rideText = slots.map(s=>{
-        const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
-        return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;
-      }).join('<br><br>');
-      summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="font-size:15px">${rideText}</span></div>`;
-    } else {
-      summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="color:var(--muted);font-size:15px">${t('summaryNoRides')}</span></div>`;
-    }
-    const eventDateStr = EVENT_DATA ? formatEventDate(EVENT_DATA.date_from, EVENT_DATA.date_to) : '';
-    const eventLocStr = EVENT_DATA ? (EVENT_DATA.location || '') : '';
-    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryEvent')}</span><span class="summary-value" style="font-size:15px">${eventDateStr}<br>${eventLocStr}</span></div>`;
-    document.getElementById('successSummary').innerHTML=summaryHtml;
+    lastSuccessSalLabel = salLabel;
+    lastSuccessFirstName = fn;
+    lastSuccessLastName = ln;
+    renderSuccessScreen();
     window.scrollTo({top:0,behavior:'smooth'});
   } catch (err) {
     console.error(err);
@@ -1821,6 +1810,42 @@ async function handleSubmit(e) {
     submitBtn.style.opacity = '';
     submitBtn.innerHTML = originalBtnHtml;
   }
+}
+
+// Kept at module scope (not just inside handleSubmit) so the success screen
+// can be fully re-rendered in the new language if the visitor switches
+// CZE/ENG after already seeing their confirmation.
+let lastSuccessSalLabel = '';
+let lastSuccessFirstName = '';
+let lastSuccessLastName = '';
+
+function renderSuccessScreen() {
+  const salLabel = lastSuccessSalLabel;
+  const fn = lastSuccessFirstName;
+  const ln = lastSuccessLastName;
+
+  document.getElementById('successTitle').innerHTML = t('successTitle');
+  document.getElementById('successText').innerHTML  = t('successText')(`${salLabel} ${ln}`);
+
+  let summaryHtml=`<div class="summary-row"><span class="summary-label">${t('summaryName')}</span><span class="summary-value">${salLabel} ${fn} ${ln}</span></div>`;
+  if (REGISTRATION_TYPE === 'windows') {
+    const w = TIME_WINDOWS.find(w => w.id === selectedWindowId);
+    if (w) {
+      summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryWindow')}</span><span class="summary-value" style="font-size:15px">${w.label}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${w.from}–${w.to}</span></span></div>`;
+    }
+  } else if (slots.length) {
+    const rideText = slots.map(s=>{
+      const v = VEHICLES.find(v=>String(v.id)===String(s.vehicle_id));
+      return `${v?.name||'Vehicle'}<br><span style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--muted)">${s.time_slot}</span>`;
+    }).join('<br><br>');
+    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="font-size:15px">${rideText}</span></div>`;
+  } else {
+    summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryRides')}</span><span class="summary-value" style="color:var(--muted);font-size:15px">${t('summaryNoRides')}</span></div>`;
+  }
+  const eventDateStr = EVENT_DATA ? formatEventDate(EVENT_DATA.date_from, EVENT_DATA.date_to) : '';
+  const eventLocStr = EVENT_DATA ? (EVENT_DATA.location || '') : '';
+  summaryHtml+=`<div class="summary-row"><span class="summary-label">${t('summaryEvent')}</span><span class="summary-value" style="font-size:15px">${eventDateStr}<br>${eventLocStr}</span></div>`;
+  document.getElementById('successSummary').innerHTML=summaryHtml;
 }
 
 async function refreshAvailability() {
