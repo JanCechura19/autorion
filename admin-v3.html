@@ -2322,6 +2322,7 @@ const DEFAULT_EMAIL_TEMPLATES = [
   { id:'reminder',   name:'Připomenutí',   icon:'🔔', subject:'Připomenutí — {{event_name}} se blíží', body:'Vážený pane/paní {{last_name}},\n\npřipomínáme, že akce {{event_name}} se koná {{event_date}} v {{event_location}}.\n\nPotvrďte prosím svou účast:\n{{registration_link}}', design:null },
   { id:'ticket',     name:'Vstupenka',     icon:'🎫', subject:'Vaše vstupenka — {{event_name}}',      body:'Vážený pane/paní {{last_name}},\n\nv příloze zasíláme Vaši vstupenku na akci {{event_name}} ({{event_date}}).\n\nPro vstup předložte QR kód z přiložené vstupenky.\n\nTěšíme se na Vás!', design:null },
   { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast — {{event_name}}',   body:'Vážený pane/paní {{last_name}},\n\ndíky za Vaši účast na akci {{event_name}}. Byl(a) jste pro nás velmi cenným hostem.\n\nBudeme rádi, pokud se s námi podělíte o svůj dojem.', design:null },
+  { id:'registration_confirmation', name:'Potvrzení registrace', icon:'✅', subject:'Potvrzení registrace – {{event_name}}', body:'Dobrý den {{last_name}},\n\nděkujeme za registraci na akci {{event_name}}. Těšíme se na vás!\n\nNa místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.', design:null },
 ];
 
 // Per-event copy — loaded from EVENT.email_templates in selectEvent(), falls
@@ -2372,12 +2373,13 @@ function switchEmailTab(tab, el) {
             <div style="background:var(--surface2);padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
               <span style="font-size:22px">${t.icon||'✉️'}</span>
               <div>
-                <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;">${t.name}</div>
+                <div style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;">${t.name}${t.id==='registration_confirmation' ? '<span class="badge badge-blue" style="font-size:9px;">AUTOMATICKY</span>' : ''}</div>
                 <div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.subject.replace('{{event_name}}','…')}</div>
               </div>
             </div>
             <div style="padding:14px 20px;">
               <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;">${t.body.replace(/\n/g,' ').slice(0,90)}…</div>
+              ${t.id==='registration_confirmation' ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">✅ Odesílá se automaticky při dokončení registrace — ruční odeslání níže je jen pro test.</div>` : ''}
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEmailComposer(null,'${t.id}')">📤 Odeslat</button>
                 <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEmailEditorForTemplate('${t.id}')">🎨 Upravit design</button>
@@ -2885,7 +2887,8 @@ function openHeroCropper() {
   if (!src) return;
 
   const frameW = 440;
-  const frameH = Math.round(440 * (parseInt(emailDesign.heroHeight, 10) / 600 || 0.33));
+  const initialHeightPx = parseInt(emailDesign.heroHeight, 10) || 200;
+  const frameH = Math.round(frameW * (initialHeightPx / 600));
 
   document.getElementById('modalTitle').textContent = 'Upravit výřez hero obrázku';
   document.getElementById('modalBody').innerHTML = `
@@ -2897,6 +2900,10 @@ function openHeroCropper() {
         <label style="font-size:12px;color:var(--muted);">Přiblížení</label>
         <input type="range" id="cropZoomSlider" min="100" max="300" value="100" style="width:100%;accent-color:var(--text)">
       </div>
+      <div style="width:${frameW}px;">
+        <label style="font-size:12px;color:var(--muted);">Výška okna (<span id="cropHeightLabel">${initialHeightPx}</span>px)</label>
+        <input type="range" id="cropHeightSlider" min="80" max="450" value="${initialHeightPx}" style="width:100%;accent-color:var(--text)">
+      </div>
       <div style="font-size:11px;color:var(--muted);text-align:center;width:${frameW}px;">Přetažením obrázku vyberte, která část bude v e-mailu vidět</div>
     </div>`;
   document.getElementById('modalFoot').innerHTML = `
@@ -2906,6 +2913,9 @@ function openHeroCropper() {
 
   document.getElementById('cropZoomSlider').addEventListener('input', function() {
     onCropZoomChange(this.value);
+  });
+  document.getElementById('cropHeightSlider').addEventListener('input', function() {
+    onCropHeightChange(this.value);
   });
 
   const setupState = () => {
@@ -2975,6 +2985,33 @@ function onCropZoomChange(val) {
   s.zoom = newZoom;
   s.offsetX = s.frameW / 2 - centerXFrac * s.natW * newScale;
   s.offsetY = s.frameH / 2 - centerYFrac * s.natH * newScale;
+  renderCropImage();
+}
+
+function onCropHeightChange(val) {
+  const s = heroCropState; if (!s) return;
+  const newHeightPx = parseInt(val, 10);
+  emailDesign.heroHeight = String(newHeightPx);
+  const label = document.getElementById('cropHeightLabel');
+  if (label) label.textContent = newHeightPx;
+
+  const newFrameH = Math.round(s.frameW * (newHeightPx / 600));
+  const oldScale  = s.scaleBase * s.zoom;
+
+  // Anchor on the same image point that was at the frame's center before resizing
+  const centerXFrac = (s.frameW / 2 - s.offsetX) / (s.natW * oldScale);
+  const centerYFrac = (s.frameH / 2 - s.offsetY) / (s.natH * oldScale);
+
+  s.frameH = newFrameH;
+  s.scaleBase = Math.max(s.frameW / s.natW, s.frameH / s.natH);
+  const newScale = s.scaleBase * s.zoom;
+
+  s.offsetX = s.frameW / 2 - centerXFrac * s.natW * newScale;
+  s.offsetY = s.frameH / 2 - centerYFrac * s.natH * newScale;
+
+  const frame = document.getElementById('cropFrame');
+  if (frame) frame.style.height = newFrameH + 'px';
+
   renderCropImage();
 }
 
@@ -4707,9 +4744,7 @@ async function selectEvent(id) {
   const ev=EVENTS_DB.find(e=>e.id===id); if(!ev) return;
   EVENT=ev;
   VEHICLES = (ev.vehicles && ev.vehicles.length) ? ev.vehicles.map(v=>({...v})) : [];
-  EMAIL_TEMPLATES = (ev.email_templates && ev.email_templates.length)
-    ? ev.email_templates.map(t=>({...t}))
-    : DEFAULT_EMAIL_TEMPLATES.map(t=>({...t}));
+  EMAIL_TEMPLATES = mergeEmailTemplatesWithDefaults(ev.email_templates);
   emailDesign = (ev.email_design && Object.keys(ev.email_design).length)
     ? {...ev.email_design}
     : defaultEmailDesign();
@@ -4717,6 +4752,16 @@ async function selectEvent(id) {
   await loadGuestsFromApi(id);
   updateNavBadge();
   showPage('dashboard');
+}
+
+// Keeps any saved customizations, but adds in any default template type
+// the event doesn't have yet (e.g. when a new template type is introduced
+// after the event already saved its own set).
+function mergeEmailTemplatesWithDefaults(saved) {
+  const savedList = (saved && saved.length) ? saved.map(t=>({...t})) : [];
+  const savedIds  = new Set(savedList.map(t=>t.id));
+  const missing   = DEFAULT_EMAIL_TEMPLATES.filter(t=>!savedIds.has(t.id)).map(t=>({...t}));
+  return [...savedList, ...missing];
 }
 
 async function loadGuestsFromApi(eventId) {

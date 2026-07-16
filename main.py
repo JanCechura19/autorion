@@ -83,24 +83,61 @@ GUEST_SAFE_COLUMNS = """
     last_email_sent_at
 """
 
-def _build_confirmation_email_html(guest: dict, event: dict) -> str:
+DEFAULT_CONFIRMATION_TEMPLATE = {
+    "subject": "Potvrzení registrace – {{event_name}}",
+    "body": "Dobrý den {{last_name}},\n\nděkujeme za registraci na akci {{event_name}}. Těšíme se na vás!\n\nNa místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.",
+}
+
+DEFAULT_EMAIL_DESIGN = {
+    "bgColor": "#f4f4f4", "containerBg": "#ffffff", "headerBg": "#181612", "headerColor": "#ffffff",
+    "accentColor": "#b8924a", "bodyColor": "#181612", "mutedColor": "#8c8577",
+    "fontFamily": "Arial, Helvetica, sans-serif", "fontSize": "15px", "borderRadius": "8px",
+    "logoUrl": "", "logoHeight": "40", "logoAlign": "center",
+    "showButton": False, "btnBg": "#181612", "btnColor": "#ffffff", "btnText": "Potvrdit účast",
+    "footerText": "", "showHero": False, "heroUrl": "", "heroHeight": "200",
+}
+
+def _format_event_date(event: dict) -> str:
     date_from = event.get("date_from") or ""
     date_to   = event.get("date_to") or ""
-    date_label = f"{date_from} – {date_to}" if (date_to and date_to != date_from) else date_from
+    return f"{date_from} – {date_to}" if (date_to and date_to != date_from) else date_from
 
+def _get_registration_url(guest: dict, event: dict) -> str:
+    slug = event.get("slug")
+    if not slug:
+        return "#"
+    url = f"https://registration.autorion.net/?event={slug}"
+    if guest.get("invite_token"):
+        url += f"&invite={guest['invite_token']}"
+    return url
+
+def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: str) -> str:
+    return (
+        (text or "")
+        .replace("{{last_name}}", guest.get("last_name") or "")
+        .replace("{{event_name}}", event.get("name") or "")
+        .replace("{{event_date}}", _format_event_date(event))
+        .replace("{{event_location}}", event.get("location") or "")
+        .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
+    )
+
+def _build_booking_details_html(guest: dict, event: dict) -> str:
+    """The 'what you booked' block (time window OR vehicle rides) —
+    always shown as a fixed structural section, not editable free text,
+    so it can never be accidentally broken by editing the template body."""
     bookings = guest.get("bookings") or []
-    rides_html = ""
     if event.get("registration_type") == "windows":
         windows = event.get("time_windows") or []
         window = next((w for w in windows if w.get("id") == guest.get("window_id")), None)
         if window:
-            rides_html = f'''
+            return f'''
             <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Čas příchodu</td></tr>
             <tr>
               <td style="padding:6px 0;color:#181612;font-size:14px;">{window.get("label") or ""}</td>
               <td style="padding:6px 0;color:#8c8577;font-size:14px;text-align:right;">{window.get("from") or ""}–{window.get("to") or ""}</td>
             </tr>'''
-    elif bookings:
+        return ""
+    if bookings:
         rows = "".join(
             f'<tr>'
             f'<td style="padding:6px 0;color:#181612;font-size:14px;">{b.get("vehicle_name") or "Vůz"}</td>'
@@ -108,30 +145,61 @@ def _build_confirmation_email_html(guest: dict, event: dict) -> str:
             f'</tr>'
             for b in bookings
         )
-        rides_html = f'''
+        return f'''
         <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Vaše testovací jízdy</td></tr>
         {rows}'''
+    return ""
+
+def _build_templated_email_html(guest: dict, event: dict, template: dict, design: dict) -> str:
+    """Renders an event-info-table email (used for the automatic registration
+    confirmation) using the SAME customizable subject/body/design an admin
+    can edit in the Editor e-mailů — instead of a fixed Python-only template."""
+    d = {**DEFAULT_EMAIL_DESIGN, **(design or {})}
+    registration_url = _get_registration_url(guest, event)
+
+    body_resolved = _resolve_merge_tags(template.get("body") or "", guest, event, registration_url)
+    body_html = "".join(
+        f'<p style="margin:0 0 14px 0">{line}</p>' if line.strip() else '<p style="margin:0 0 8px 0">&nbsp;</p>'
+        for line in body_resolved.split("\n")
+    )
+
+    logo_html = (
+        f'<img src="{d["logoUrl"]}" style="height:{d["logoHeight"]}px;" alt="">'
+        if d.get("logoUrl") else
+        f'<span style="color:{d["headerColor"]};font-size:19px;font-weight:700;letter-spacing:0.02em;">Autorion Events</span>'
+    )
+    hero_html = (
+        f'<tr><td style="padding:0;"><img src="{d["heroUrl"]}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>'
+        if (d.get("showHero") and d.get("heroUrl")) else ""
+    )
+    booking_html = _build_booking_details_html(guest, event)
+    button_html = (
+        f'''<div style="text-align:center;margin-top:28px;">
+          <a href="{registration_url}" style="display:inline-block;background:{d['btnBg']};color:{d['btnColor']};text-decoration:none;padding:13px 32px;border-radius:{d['borderRadius']};font-size:15px;font-weight:600;letter-spacing:0.02em;">{d.get('btnText') or 'Potvrdit účast'}</a>
+        </div>'''
+        if d.get("showButton") else ""
+    )
+    date_label = _format_event_date(event)
 
     return f"""
-    <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #ddd9d0;">
-      <div style="background:#181612;padding:26px 32px;">
-        <span style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:0.02em;">Autorion Events</span>
-      </div>
-      <div style="padding:32px;">
-        <h1 style="font-size:21px;color:#181612;margin:0 0 16px;">Registrace potvrzena ✓</h1>
-        <p style="color:#181612;font-size:15px;line-height:1.6;margin:0 0 20px;">
-          Dobrý den {guest.get('first_name','')},<br><br>
-          děkujeme za registraci na akci <strong>{event.get('name','')}</strong>. Těšíme se na vás!
-        </p>
-        <table style="width:100%;border-top:1px solid #ddd9d0;border-bottom:1px solid #ddd9d0;padding:14px 0;border-collapse:collapse;">
-          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Akce</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{event.get('name','')}</td></tr>
-          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Datum</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{date_label}</td></tr>
-          <tr><td style="padding:6px 0;color:#8c8577;font-size:14px;">Místo</td><td style="padding:6px 0;text-align:right;color:#181612;font-weight:500;font-size:14px;">{event.get('location','')}</td></tr>
-          {rides_html}
+    <div style="font-family:{d['fontFamily']};background:{d['bgColor']};padding:24px 0;">
+      <div style="max-width:520px;margin:0 auto;background:{d['containerBg']};border-radius:{d['borderRadius']};overflow:hidden;border:1px solid #ddd9d0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          {hero_html}
+          <tr><td style="background:{d['headerBg']};padding:26px 32px;text-align:{d['logoAlign']};">{logo_html}</td></tr>
+          <tr><td style="padding:32px;">
+            <div style="font-size:{d['fontSize']};color:{d['bodyColor']};line-height:1.7;">
+              {body_html}
+            </div>
+            <table style="width:100%;border-top:1px solid #ddd9d0;border-bottom:1px solid #ddd9d0;padding:14px 0;border-collapse:collapse;margin-top:12px;">
+              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Akce</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('name','')}</td></tr>
+              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Datum</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{date_label}</td></tr>
+              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Místo</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('location','')}</td></tr>
+              {booking_html}
+            </table>
+            {button_html}
+          </td></tr>
         </table>
-        <p style="color:#8c8577;font-size:13px;line-height:1.5;margin-top:22px;">
-          Na místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.
-        </p>
       </div>
     </div>
     """
@@ -180,15 +248,25 @@ def _mark_guest_emailed(guest_id: int):
         print(f"[ecomail] Nepodařilo se zaznamenat odeslání e-mailu (guest {guest_id}): {e}")
 
 def send_registration_confirmation_email(guest: dict, event: dict):
-    """Best-effort send — a failure here must never break guest registration."""
+    """Best-effort send — a failure here must never break guest registration.
+    Uses the event's own 'registration_confirmation' template/design if the
+    admin has customized it in the Editor e-mailů; otherwise falls back to
+    a sensible built-in default so nothing breaks for events that never
+    touched this."""
     if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
         return
+
+    templates = event.get("email_templates") or []
+    template = next((t for t in templates if t.get("id") == "registration_confirmation"), None) \
+        or DEFAULT_CONFIRMATION_TEMPLATE
+    design = event.get("email_design") or {}
+
     guest_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip()
-    ok = send_ecomail_transactional(
-        guest["email"], guest_name,
-        f"Potvrzení registrace – {event.get('name','')}",
-        _build_confirmation_email_html(guest, event),
-    )
+    registration_url = _get_registration_url(guest, event)
+    subject = _resolve_merge_tags(template.get("subject") or DEFAULT_CONFIRMATION_TEMPLATE["subject"], guest, event, registration_url)
+    html = _build_templated_email_html(guest, event, template, design)
+
+    ok = send_ecomail_transactional(guest["email"], guest_name, subject, html)
     if ok:
         _mark_guest_emailed(guest.get("id"))
 
@@ -1035,7 +1113,7 @@ def create_guest(event_id: int, guest: GuestCreate):
             json.dumps(bookings_list), guest.consent_signed, guest.company or '', invite_token
         ))
         new_guest = cur.fetchone()
-        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows FROM events WHERE id = %s", (event_id,))
+        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
         conn.commit()
         cur.close()
@@ -1113,7 +1191,7 @@ def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.consent_signed, guest_id))
         updated_guest = cur.fetchone()
-        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows FROM events WHERE id = %s", (event_id,))
+        cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
         conn.commit()
         cur.close()
