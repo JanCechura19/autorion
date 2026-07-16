@@ -3612,6 +3612,7 @@ function renderSettings() {
 function buildSettingsHTML(readonly, ro, isSuperAdmin) {
   const landingUrl      = EVENT.slug ? `https://event.autorion.net/?event=${EVENT.slug}` : '';
   const registrationUrl = EVENT.slug ? `https://registration.autorion.net/?event=${EVENT.slug}` : '';
+  const showRegBtn      = (EVENT.landing_page || {}).showRegisterButton !== false; // default: shown
   return `
     <div style="max-width:760px;display:flex;flex-direction:column;gap:24px;">
 
@@ -3637,6 +3638,21 @@ function buildSettingsHTML(readonly, ro, isSuperAdmin) {
             Tip: pro dealer-specifické zásady ochrany osobních údajů přidejte na konec adresy <code>&amp;dealer=albion</code>, <code>&amp;dealer=cardion</code> nebo <code>&amp;dealer=orbion</code>.
           </div>
         </div>` : `<div style="font-size:13px;color:var(--muted);">Tato akce nemá nastavenou adresu (slug) — kontaktujte podporu.</div>`}
+      </div>
+
+      <div class="table-wrap" style="padding:24px;">
+        <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;">Landing page</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;">Zobrazit tlačítko „Registrovat se"</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:520px;">Když vypnete, na landing page (${landingUrl||'event.autorion.net'}) se nebude zobrazovat žádné tlačítko ani odkaz na registraci — jen informace o akci.</div>
+          </div>
+          <label class="toggle" style="flex-shrink:0;margin-left:16px;">
+            <input type="checkbox" ${showRegBtn?'checked':''} onchange="toggleLandingRegisterButton(this.checked)">
+            <div class="toggle-track" onclick="this.previousElementSibling.click()"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
       </div>
 
       
@@ -3766,6 +3782,18 @@ async function saveEventFields(fields) {
   const ev = EVENTS_DB.find(e => e.id === EVENT.id);
   if (ev) Object.assign(ev, fields);
   return true;
+}
+
+async function toggleLandingRegisterButton(checked) {
+  // Merge into the existing landing_page object rather than replacing it —
+  // it may already hold hero/section content from the visual editor.
+  const lp = { ...(EVENT.landing_page || {}), showRegisterButton: checked };
+  const ok = await saveEventFields({ landing_page: lp });
+  if (ok) {
+    showToast(checked ? 'Tlačítko registrace zapnuto ✓' : 'Tlačítko registrace vypnuto ✓', 'success');
+  } else {
+    renderSettings(); // revert the toggle's visual state on failure
+  }
 }
 
 function copyEventLink(url, label) {

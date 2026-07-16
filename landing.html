@@ -413,8 +413,10 @@ function renderPage(event) {
   }
 
   const regUrl = event.slug ? `https://registration.autorion.net?event=${event.slug}` : '#';
+  const showRegisterBtn = lp.showRegisterButton !== false; // default: shown
   document.getElementById('ctaRegister').href = regUrl;
   document.getElementById('ctaRegisterFooter').href = regUrl;
+  document.querySelector('.cta-row').style.display = showRegisterBtn ? '' : 'none';
 
   const sections = lp.sections || [];
   const navWrap = document.getElementById('sectionNavWrap');
@@ -462,7 +464,7 @@ function renderPage(event) {
     container.appendChild(sectionEl);
   });
 
-  if (sections.length) {
+  if (sections.length && showRegisterBtn) {
     document.getElementById('footerCta').style.display = 'block';
   }
 }
