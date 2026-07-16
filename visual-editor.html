@@ -882,7 +882,7 @@ iframe#previewFrame {
             </div>
             <div class="ctrl-row">
               <div class="ctrl-label">Náhled</div>
-              <div class="font-preview" id="displayFontPreview">PPF Automotive Experience</div>
+              <div class="font-preview" id="displayFontPreview">Autorion Automotive Events</div>
             </div>
           </div>
         </div>
@@ -915,7 +915,7 @@ iframe#previewFrame {
             </div>
             <div class="ctrl-row">
               <div class="ctrl-label">Náhled</div>
-              <div class="font-preview" id="bodyFontPreview" style="font-size:14px;line-height:1.6">Vítejte na exkluzivní akci PPF Automotive Experience 2025.</div>
+              <div class="font-preview" id="bodyFontPreview" style="font-size:14px;line-height:1.6">Vítejte na exkluzivní akci Autorion Events 2026.</div>
             </div>
           </div>
         </div>
@@ -1165,7 +1165,7 @@ iframe#previewFrame {
       <div class="preview-dot" style="background:#ff5f57"></div>
       <div class="preview-dot" style="background:#febc2e"></div>
       <div class="preview-dot" style="background:#28c840"></div>
-      <div class="preview-url" id="previewUrl">registrace.ppf-event.cz</div>
+      <div class="preview-url" id="previewUrl">registration.autorion.net</div>
     </div>
     <div class="preview-frame-wrap">
       <div class="preview-frame-outer desktop" id="previewOuter">
@@ -1351,6 +1351,15 @@ function restoreTheme(saved) {
     if (lo.visible  !== undefined) document.getElementById('logoVisible').checked  = lo.visible;
     if (lo.height)  { document.getElementById('logoHeight').value   = lo.height;   updateLabel('logoHeightVal', lo.height+'px'); }
     if (lo.position) document.getElementById('logoPosition').value  = lo.position;
+    if (lo.imageUrl) {
+      imageData.logo = lo.imageUrl;
+      const preview     = document.getElementById('logoPreview');
+      const placeholder = document.getElementById('logoPlaceholder');
+      const wrap        = document.getElementById('logoWrap');
+      if (preview) { preview.src = lo.imageUrl; preview.classList.add('visible'); }
+      if (placeholder) placeholder.style.display = 'none';
+      if (wrap) wrap.classList.add('has-image');
+    }
   }
   // Hero
   if (saved.hero) {
@@ -1728,7 +1737,7 @@ body::before {
   <!-- HEADER -->
   <header class="header section-header">
     <div class="header-eyebrow">Registrace</div>
-    <h1 class="header-title">PPF Automotive<br><em>Experience 2025</em></h1>
+    <h1 class="header-title">Autorion<br><em>Events</em></h1>
     <div class="header-meta">
       <div class="meta-item">
         <span class="meta-label">Datum</span>
@@ -1796,7 +1805,7 @@ body::before {
       <div class="gdpr-wrap">
         <div class="gdpr-custom-cb"></div>
         <div>
-          <div class="gdpr-text">Souhlasím se zpracováním osobních údajů společností PPF Group N.V. za účelem organizace a realizace akce. <a href="#">Zásady ochrany osobních údajů.</a></div>
+          <div class="gdpr-text">Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce. <a href="#">Zásady ochrany osobních údajů.</a></div>
         </div>
       </div>
     </div>
@@ -2512,6 +2521,7 @@ function collectTheme() {
       visible: document.getElementById('logoVisible').checked,
       height: document.getElementById('logoHeight').value,
       position: document.getElementById('logoPosition').value,
+      imageUrl: imageData.logo || '',
     },
     hero: {
       height: document.getElementById('heroHeight').value,
