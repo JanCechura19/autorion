@@ -2264,7 +2264,7 @@ function openImportModal() {
       Odeslat potvrzovací e-mail všem importovaným hostům
     </label>
     <div style="font-size:11px;color:var(--muted);margin-top:-4px;">Doporučujeme nechat vypnuté — obvykle nechcete rozeslat "registrace potvrzena" celému importovanému seznamu naráz.</div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.6;"><strong>Sloupce:</strong> Jméno, Příjmení, E-mail, Telefon, Doprovod (Ano/Ne)</div>
+    <div style="font-size:12px;color:var(--text);line-height:1.6;background:var(--surface2);border-radius:6px;padding:8px 12px;"><strong>Pořadí sloupců (stejné jako v tabulce):</strong><br>Příjmení, Jméno, E-mail, Telefon, Doprovod (Ano/Ne), Společnost</div>
     <div id="importPreview"></div>`;
   document.getElementById('modalFoot').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">Zavřít</button>`;
   openModal();
@@ -2288,7 +2288,7 @@ async function processImportFile(file) {
       if (!r[0]||!r[1]||!email) continue;
       if (existing.has(email)) { skipped++; continue; }
       const payload = {
-        first_name: String(r[0]).trim(), last_name: String(r[1]).trim(), email,
+        last_name: String(r[0]).trim(), first_name: String(r[1]).trim(), email,
         phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
         company: String(r[5]||'').trim().toLowerCase(),
         status: 'pending', event_id: currentEventId, send_confirmation: sendConfirmation
