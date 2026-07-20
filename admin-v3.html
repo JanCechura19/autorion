@@ -1657,6 +1657,8 @@ async function apiCall(endpoint, method='GET', body=null) {
 }
 
 function doLogout() {
+  authToken = null;
+  localStorage.removeItem('authToken');
   currentUser = null;
   document.getElementById('appShell').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -1966,12 +1968,23 @@ function renderTable() {
     document.getElementById('paginationBar').innerHTML = '';
     return;
   }
-  tbody.innerHTML = pageGuests.map(g=>`
+  // Count how many times each e-mail appears across ALL of this event's
+  // guests (not just the current page/filter) so duplicates are flagged
+  // even if they land on different pages.
+  const emailCounts = {};
+  guests.forEach(g => {
+    const key = (g.email || '').toLowerCase();
+    if (key) emailCounts[key] = (emailCounts[key] || 0) + 1;
+  });
+
+  tbody.innerHTML = pageGuests.map(g=>{
+    const isDupe = emailCounts[(g.email||'').toLowerCase()] > 1;
+    return `
     <tr class="${selectedIds.has(g.id)?'selected':''}" onclick="openDetail(${g.id})">
       <td class="cb-cell" onclick="event.stopPropagation()">${can('canEdit')?`<input type="checkbox" ${selectedIds.has(g.id)?'checked':''} onchange="toggleSelect(${g.id},this)">`:''}</td>
       <td class="name-cell">${g.last_name}</td>
       <td>${g.first_name}</td>
-      <td class="email-cell">${g.email}</td>
+      <td class="email-cell">${g.email}${isDupe ? ` <span class="badge" style="background:#f8d7a8;color:#7a4a00;font-size:9px;" title="Tento e-mail se v seznamu vyskytuje vícekrát">⚠ Duplicita</span>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${g.phone||'—'}</td>
       <td>${g.company ? `<span class="badge" style="background:${g.company==='albion'?'#A6916C':g.company==='cardion'?'#8291A6':'#333'};color:#fff;text-transform:uppercase;font-size:10px">${g.company}</span>` : '<span class="badge badge-gray">—</span>'}</td>
       <td>${statusBadge(g.status)}</td>
@@ -1979,7 +1992,8 @@ function renderTable() {
       <td>${g.email_sent?'<span class="badge badge-green">✓</span>':'<span class="badge badge-gray">Ne</span>'}</td>
       <td><span style="font-weight:500">${g.bookings.length}</span><span style="color:var(--muted);font-size:11px">/3</span></td>
       <td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm btn-icon" onclick="openDetail(${g.id})">👁</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   renderPagination();
 }
 
@@ -2221,6 +2235,7 @@ async function saveGuest(id) {
       email_sent: sendConfirmation, checked_in: !!created.checked_in,
       registered_at: created.created_at || new Date().toISOString(),
       notes:'', bookings: created.bookings || [],
+      invite_token: created.invite_token || null,
       unique_token:'guest-'+created.id
     });
     showToast('Host přidán','success');
@@ -2288,6 +2303,7 @@ async function processImportFile(file) {
           email_sent: sendConfirmation, checked_in:false,
           registered_at: created.created_at || new Date().toISOString(),
           notes:'', bookings: created.bookings || [],
+          invite_token: created.invite_token || null,
           unique_token:'guest-'+created.id
         });
         existing.add(email); imported++;
@@ -5174,9 +5190,31 @@ function updateUserInfo() {
 // BOOT
 // ═══════════════════════════════════════════════════════
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('loginBtn').addEventListener('click', doLogin);
   document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+  // Resume an existing session after a page reload (F5) instead of forcing
+  // a fresh login every time, as long as the stored token is still valid.
+  if (authToken) {
+    const me = await apiCall('/auth/me');
+    if (me) {
+      currentUser = {
+        id:             me.id,
+        email:          me.email,
+        name:           me.name,
+        initials:       me.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+        role:           me.role,
+        checkin_access: me.checkin_access,
+        event_access:   null,
+      };
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appShell').style.display = 'flex';
+      await initApp();
+    }
+    // If the token turned out to be invalid, apiCall's 401 handling already
+    // called doLogout() for us — the login screen shows normally.
+  }
 
   function checkMobile() {
     const isMobile = window.innerWidth <= 640;

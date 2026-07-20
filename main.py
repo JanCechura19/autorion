@@ -619,6 +619,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(HTTPBea
         raise HTTPException(status_code=401, detail="Nejste přihlášeni")
     return sessions[credentials.credentials]
 
+@app.get("/api/auth/me")
+def get_me(user=Depends(get_current_user)):
+    """Lets the frontend resume a session after a page reload using just the
+    stored token, instead of forcing a fresh login every time."""
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+        "checkin_access": user["checkin_access"],
+    }
+
 @app.post("/api/auth/change-password")
 def change_password(req: PasswordChangeRequest, user=Depends(get_current_user)):
     conn = get_db()
