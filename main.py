@@ -81,7 +81,7 @@ GUEST_SAFE_COLUMNS = """
     id, event_id, first_name, last_name, email, phone, company, status,
     checked_in, companion, window_id, bookings, consent_signed, consent_paper,
     consent_license, consent_signature_at, walk_in, created_at, invite_token,
-    last_email_sent_at
+    last_email_sent_at, gdpr_consent
 """
 
 DEFAULT_CONFIRMATION_TEMPLATE = {
@@ -423,7 +423,7 @@ class GuestCreate(BaseModel):
     salutation: Optional[str] = None
     window_id: Optional[int] = None
     bookings: List[BookingItem] = []
-    consent_signed: bool = False
+    gdpr_consent: bool = False  # GDPR checkbox agreed at registration — separate from the on-site check-in signature (consent_signed)
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
     send_confirmation: bool = True  # public registration always wants this; admin "add guest" forms can opt out
 
@@ -432,7 +432,7 @@ class InviteCompleteRequest(BaseModel):
     companion: bool = False
     window_id: Optional[int] = None
     bookings: List[BookingItem] = []
-    consent_signed: bool = False
+    gdpr_consent: bool = False
 
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -520,6 +520,7 @@ def init_db():
             walk_in BOOLEAN DEFAULT FALSE,
             invite_token VARCHAR(64) UNIQUE,
             last_email_sent_at TIMESTAMP DEFAULT NULL,
+            gdpr_consent BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -538,6 +539,11 @@ def init_db():
     # admin UI used to track this only in browser memory, which reset on
     # every page reload/event switch.
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS last_email_sent_at TIMESTAMP DEFAULT NULL;")
+    # Separate from consent_signed (the on-site check-in signature) — this
+    # tracks the GDPR checkbox agreed to during registration, which used to
+    # incorrectly share the same column, making every self-registered guest
+    # look like they'd already signed the on-site consent at check-in.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS gdpr_consent BOOLEAN DEFAULT FALSE;")
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
@@ -1148,13 +1154,13 @@ def create_guest(event_id: int, guest: GuestCreate):
 
         invite_token = secrets.token_urlsafe(24)
         cur.execute(f"""
-            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, consent_signed, company, invite_token)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, gdpr_consent, company, invite_token)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
-            json.dumps(bookings_list), guest.consent_signed, guest.company or '', invite_token
+            json.dumps(bookings_list), guest.gdpr_consent, guest.company or '', invite_token
         ))
         new_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
@@ -1230,10 +1236,10 @@ def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
         cur.execute(f"""
             UPDATE guests
             SET phone = %s, companion = %s, window_id = %s, bookings = %s,
-                consent_signed = %s, status = 'confirmed'
+                gdpr_consent = %s, status = 'confirmed'
             WHERE id = %s
             RETURNING {GUEST_SAFE_COLUMNS}
-        """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.consent_signed, guest_id))
+        """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.gdpr_consent, guest_id))
         updated_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
