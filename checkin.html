@@ -1439,6 +1439,7 @@ function openConsentForm() {
 function renderConsentForm() {
   const g  = currentGuest;
   const ev = currentEvent;
+  const dateLabel = ev.date_to && ev.date_to !== ev.date_from ? `${ev.date_from} – ${ev.date_to}` : ev.date_from;
 
   document.getElementById('consentFormContent').innerHTML = `
     <div class="consent-form-header">
@@ -1456,7 +1457,7 @@ function renderConsentForm() {
       </div>
       <div class="form-field">
         <label>${ct('labelDate')}</label>
-        <input type="text" value="${ev.date}" readonly>
+        <input type="text" value="${dateLabel}" readonly>
       </div>
     </div>
 
@@ -1478,7 +1479,7 @@ function renderConsentForm() {
     <div class="form-card">
       <div class="form-card-title">${ct('sectionConsent')}</div>
       <div class="consent-text-box">
-        ${ct('consentBody')(g.first_name + ' ' + g.last_name, ev.name, ev.date, ev.location)}
+        ${ct('consentBody')(g.first_name + ' ' + g.last_name, ev.name, dateLabel, ev.location)}
       </div>
       <div class="consent-check-row" id="consentCheckRow" onclick="toggleConsentCheck()">
         <div class="consent-custom-cb" id="consentCb"></div>
@@ -1525,24 +1526,27 @@ function initSignaturePad() {
   sigCtx.lineCap   = 'round';
   sigCtx.lineJoin  = 'round';
 
-  // Touch events
-  sigCanvas.addEventListener('touchstart',  onSigStart, { passive: false });
-  sigCanvas.addEventListener('touchmove',   onSigMove,  { passive: false });
-  sigCanvas.addEventListener('touchend',    onSigEnd);
-  sigCanvas.addEventListener('mousedown',   onSigStart);
-  sigCanvas.addEventListener('mousemove',   onSigMove);
-  sigCanvas.addEventListener('mouseup',     onSigEnd);
-  sigCanvas.addEventListener('mouseleave',  onSigEnd);
+  // Pointer Events unify mouse/touch/pen input into one consistent API —
+  // this avoids the classic mobile-web issue where a finger touch also
+  // fires a delayed synthetic mousedown, which can otherwise make finger
+  // signing unreliable (works with a mouse, silently fails with a finger).
+  sigCanvas.addEventListener('pointerdown',   onSigStart);
+  sigCanvas.addEventListener('pointermove',   onSigMove);
+  sigCanvas.addEventListener('pointerup',     onSigEnd);
+  sigCanvas.addEventListener('pointercancel', onSigEnd);
+  sigCanvas.addEventListener('pointerleave',  onSigEnd);
 }
 
 function getPos(e) {
   const rect = sigCanvas.getBoundingClientRect();
-  const src  = e.touches ? e.touches[0] : e;
-  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
 function onSigStart(e) {
   e.preventDefault();
+  if (sigCanvas.setPointerCapture) {
+    try { sigCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+  }
   isDrawing = true;
   const pos = getPos(e);
   lastX = pos.x; lastY = pos.y;
@@ -1551,8 +1555,8 @@ function onSigStart(e) {
 }
 
 function onSigMove(e) {
-  e.preventDefault();
   if (!isDrawing) return;
+  e.preventDefault();
   const pos = getPos(e);
   sigCtx.lineTo(pos.x, pos.y);
   sigCtx.stroke();
