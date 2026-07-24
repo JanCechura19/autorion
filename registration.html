@@ -1760,7 +1760,7 @@ async function handleSubmit(e) {
     salutation: sal,
     companion: companionChecked,
     status: 'confirmed',
-    consent_signed: true,
+    gdpr_consent: true,
     bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
     window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null,
     company: DEALER || ''
@@ -1781,7 +1781,7 @@ async function handleSubmit(e) {
       ? `${API_BASE}/events/public/${EVENT_SLUG}/invite/${INVITE_TOKEN}/complete`
       : `${API_BASE}/events/${EVENT_ID}/guests`;
     const submitPayload = INVITE_TOKEN
-      ? { companion: companionChecked, consent_signed: true,
+      ? { companion: companionChecked, gdpr_consent: true,
           bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
           window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null }
       : payload;
