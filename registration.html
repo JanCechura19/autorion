@@ -873,6 +873,14 @@
         <div class="field-line"></div>
         <div class="field-error" id="emailError" data-i18n="errEmail">Zadejte prosím platný e-mail.</div>
       </div>
+
+      <!-- Companion -->
+      <div class="companion-wrap" onclick="toggleCompanion()" style="display:flex;align-items:center;gap:12px;cursor:pointer;margin-top:22px;">
+        <div class="gdpr-custom-cb" id="companionCb">
+          <span class="gdpr-check-icon">✓</span>
+        </div>
+        <span data-i18n="companionLabel" style="font-size:14px;">Přijedu s doprovodem</span>
+      </div>
     </div>
 
     <!-- DIVIDER -->
@@ -985,6 +993,7 @@ const T = {
     labelFirstName:  'Jméno',
     labelLastName:   'Příjmení',
     labelEmail:      'E-mail',
+    companionLabel:  'Přijedu s doprovodem',
     // Salutation options
     salMr:   'Pan',
     salMrs:  'Paní',
@@ -1048,6 +1057,7 @@ const T = {
     labelFirstName:  'First name',
     labelLastName:   'Last name',
     labelEmail:      'Email',
+    companionLabel:  'I will bring a companion',
     salMr:   'Mr.',
     salMrs:  'Mrs.',
     salMs:   'Ms.',
@@ -1669,6 +1679,12 @@ function toggleGdpr() {
   document.getElementById('gdprError').classList.remove('visible');
 }
 
+let companionChecked = false;
+function toggleCompanion() {
+  companionChecked = !companionChecked;
+  document.getElementById('companionCb')?.classList.toggle('checked', companionChecked);
+}
+
 // ═══════════════════════════════════════════════════════
 // VALIDATION
 // ═══════════════════════════════════════════════════════
@@ -1742,7 +1758,7 @@ async function handleSubmit(e) {
     email: emailVal,
     event_id: EVENT_ID,
     salutation: sal,
-    companion: false,
+    companion: companionChecked,
     status: 'confirmed',
     consent_signed: true,
     bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
@@ -1765,7 +1781,7 @@ async function handleSubmit(e) {
       ? `${API_BASE}/events/public/${EVENT_SLUG}/invite/${INVITE_TOKEN}/complete`
       : `${API_BASE}/events/${EVENT_ID}/guests`;
     const submitPayload = INVITE_TOKEN
-      ? { companion: false, consent_signed: true,
+      ? { companion: companionChecked, consent_signed: true,
           bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
           window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null }
       : payload;

@@ -1501,6 +1501,7 @@ function renderConsentForm() {
     <button class="submit-consent-btn" id="submitConsentBtn" onclick="submitConsent()" disabled>
       ${ct('submitBtn')}
     </button>
+    <div id="submitHint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;"></div>
   `;
 
   initSignaturePad();
@@ -1586,6 +1587,19 @@ function updateSubmitBtn() {
   const license = document.getElementById('licenseInput')?.value.trim();
   const ok = sigHasContent && sigConsented && license;
   btn.disabled = !ok;
+
+  const hint = document.getElementById('submitHint');
+  if (hint) {
+    if (ok) {
+      hint.textContent = '';
+    } else {
+      const missing = [];
+      if (!sigHasContent) missing.push('podpis');
+      if (!sigConsented)  missing.push('zaškrtnutí souhlasu');
+      if (!license)       missing.push('číslo řidičského průkazu');
+      hint.textContent = 'Ještě chybí: ' + missing.join(', ');
+    }
+  }
 }
 
 async function viewSignature(guestId) {
