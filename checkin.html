@@ -1432,8 +1432,12 @@ function openConsentForm() {
   document.getElementById('consentBtnCS').classList.add('active');
   document.getElementById('consentBtnEN').classList.remove('active');
   document.getElementById('consentTopbarTitle').textContent = ct('topbarTitle');
-  renderConsentForm();
+  // Show the screen FIRST — the signature canvas is measured (offsetWidth/
+  // offsetHeight) inside renderConsentForm(), and while the screen is still
+  // display:none those are both 0, making the canvas an invisible 0×0
+  // drawing surface regardless of how correctly the drawing code works.
   showScreen('screenConsent');
+  renderConsentForm();
 }
 
 function renderConsentForm() {
