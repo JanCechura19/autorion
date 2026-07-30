@@ -920,6 +920,9 @@ canvas#sigCanvas {
       <span class="search-icon">🔍</span>
       <input type="text" id="guestSearch" placeholder="Hledat hosta…" oninput="filterGuests()" autocomplete="off">
     </div>
+    <button class="btn-add-walkin" onclick="openAddGuestForm()" style="width:100%;margin-bottom:12px;padding:12px;border:1px dashed var(--border);border-radius:10px;background:none;color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
+      + Přidat neregistrovaného hosta
+    </button>
     <div class="filter-tabs" id="filterTabs">
       <button class="filter-tab active" onclick="setFilter('all',this)">Všichni</button>
       <button class="filter-tab" onclick="setFilter('pending',this)">Čekají</button>
@@ -974,6 +977,41 @@ canvas#sigCanvas {
       <button class="signature-overlay-close" onclick="closeSignatureViewer()">✕</button>
     </div>
     <div class="signature-overlay-body" id="sigViewBody"></div>
+  </div>
+</div>
+
+<!-- ══ ADD WALK-IN GUEST OVERLAY ══ -->
+<div class="signature-overlay" id="addGuestOverlay">
+  <div class="signature-overlay-card">
+    <div class="signature-overlay-head">
+      <div>
+        <div class="signature-overlay-title">Přidat neregistrovaného hosta</div>
+        <div class="signature-overlay-sub">Objeví se rovnou i v adminu</div>
+      </div>
+      <button class="signature-overlay-close" onclick="closeAddGuestForm()">✕</button>
+    </div>
+    <div class="signature-overlay-body" style="text-align:left;">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Jméno *</label>
+        <input type="text" id="wgFirstName" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Příjmení *</label>
+        <input type="text" id="wgLastName" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">E-mail (nepovinné)</label>
+        <input type="email" id="wgEmail" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
+      </div>
+      <div class="form-field" style="margin-bottom:6px;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Telefon (nepovinné)</label>
+        <input type="tel" id="wgPhone" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:10px 0 16px;">Host se ihned uloží se stavem "Potvrzena" a bude potřebovat souhlas s účastí stejně jako ostatní.</div>
+      <button onclick="submitAddGuest()" style="width:100%;padding:14px;background:var(--ink);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;">
+        Přidat a pokračovat na souhlas
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1629,6 +1667,50 @@ async function viewSignature(guestId) {
 
 function closeSignatureViewer() {
   document.getElementById('signatureOverlay').classList.remove('show');
+}
+
+function openAddGuestForm() {
+  document.getElementById('wgFirstName').value = '';
+  document.getElementById('wgLastName').value  = '';
+  document.getElementById('wgEmail').value     = '';
+  document.getElementById('wgPhone').value     = '';
+  document.getElementById('addGuestOverlay').classList.add('show');
+}
+
+function closeAddGuestForm() {
+  document.getElementById('addGuestOverlay').classList.remove('show');
+}
+
+async function submitAddGuest() {
+  const firstName = document.getElementById('wgFirstName').value.trim();
+  const lastName  = document.getElementById('wgLastName').value.trim();
+  const email     = document.getElementById('wgEmail').value.trim();
+  const phone     = document.getElementById('wgPhone').value.trim();
+
+  if (!firstName || !lastName) {
+    showToast('Vyplňte prosím jméno i příjmení');
+    return;
+  }
+
+  const payload = {
+    first_name: firstName,
+    last_name:  lastName,
+    email:      email, // backend accepts an empty string — no e-mail is fine for a walk-in
+    phone:      phone,
+    event_id:   currentEvent.id,
+    status:     'confirmed',
+    walk_in:    true,
+    send_confirmation: !!email, // only bother sending a confirmation if we actually have an address
+  };
+
+  const created = await apiCall(`/events/${currentEvent.id}/guests`, 'POST', payload);
+  if (!created) return; // apiCall already showed an error toast
+
+  currentGuests.push(created);
+  closeAddGuestForm();
+  showToast(`${created.first_name} ${created.last_name} přidán/a ✓`);
+  await loadEvents(); // refresh the X/Y check-in counter on the events screen
+  selectGuest(created.id);
 }
 
 async function submitConsent() {

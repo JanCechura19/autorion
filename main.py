@@ -426,6 +426,7 @@ class GuestCreate(BaseModel):
     gdpr_consent: bool = False  # GDPR checkbox agreed at registration — separate from the on-site check-in signature (consent_signed)
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
     send_confirmation: bool = True  # public registration always wants this; admin "add guest" forms can opt out
+    walk_in: bool = False  # added on-site by check-in staff, without prior registration
 
 class InviteCompleteRequest(BaseModel):
     phone: Optional[str] = None
@@ -1154,13 +1155,13 @@ def create_guest(event_id: int, guest: GuestCreate):
 
         invite_token = secrets.token_urlsafe(24)
         cur.execute(f"""
-            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, gdpr_consent, company, invite_token)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, gdpr_consent, company, invite_token, walk_in)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
-            json.dumps(bookings_list), guest.gdpr_consent, guest.company or '', invite_token
+            json.dumps(bookings_list), guest.gdpr_consent, guest.company or '', invite_token, guest.walk_in
         ))
         new_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
