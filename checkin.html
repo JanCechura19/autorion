@@ -912,6 +912,7 @@ canvas#sigCanvas {
   <div class="topbar">
     <button class="topbar-back" onclick="goToEvents()">←</button>
     <div class="topbar-title" id="guestListTitle">Hosté</div>
+    <button class="topbar-back" onclick="goToOccupancy()" title="Obsazenost" style="margin-left:auto;margin-right:8px;">📊</button>
     <div class="topbar-badge" id="checkinBadge">0 / 0</div>
   </div>
   <div class="scroll-area">
@@ -930,6 +931,17 @@ canvas#sigCanvas {
       <button class="filter-tab" onclick="setFilter('rides',this)">S jízdami</button>
     </div>
     <div id="guestList"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2b: OCCUPANCY (read-only, mirrors admin) ══ -->
+<div class="screen" id="screenOccupancy">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goToGuests()">←</button>
+    <div class="topbar-title">Obsazenost</div>
+  </div>
+  <div class="scroll-area">
+    <div id="occupancyContent" style="padding:16px;"></div>
   </div>
 </div>
 
@@ -1000,12 +1012,18 @@ canvas#sigCanvas {
         <input type="text" id="wgLastName" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
       </div>
       <div class="form-field" style="margin-bottom:14px;">
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">E-mail (nepovinné)</label>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">E-mail *</label>
         <input type="email" id="wgEmail" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
       </div>
-      <div class="form-field" style="margin-bottom:6px;">
-        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Telefon (nepovinné)</label>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Telefon *</label>
         <input type="tel" id="wgPhone" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;">
+      </div>
+      <div class="form-field" id="wgWindowFieldWrap" style="margin-bottom:6px;display:none;">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Časový blok</label>
+        <select id="wgWindow" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:15px;background:#fff;">
+          <option value="">Nezařazeno</option>
+        </select>
       </div>
       <div style="font-size:11px;color:var(--muted);margin:10px 0 16px;">Host se ihned uloží se stavem "Potvrzena" a bude potřebovat souhlas s účastí stejně jako ostatní.</div>
       <button onclick="submitAddGuest()" style="width:100%;padding:14px;background:var(--ink);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;">
@@ -1099,6 +1117,135 @@ async function goToGuests() {
   await loadGuestsForCurrentEvent(); // pick up check-ins done by other staff/devices
   renderGuestList();
   showScreen('screenGuests');
+}
+
+async function goToOccupancy() {
+  await loadGuestsForCurrentEvent(); // fresh counts, in case someone else just registered/checked in
+  renderOccupancy();
+  showScreen('screenOccupancy');
+}
+
+function renderOccupancy() {
+  const type = currentEvent.registration_type || 'drives';
+  if (type === 'windows') renderOccupancyWindows();
+  else renderOccupancyDrives();
+}
+
+function renderOccupancyWindows() {
+  const windows = currentEvent.time_windows || [];
+  const el = document.getElementById('occupancyContent');
+  if (!windows.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted);">
+      <div style="font-size:32px;margin-bottom:12px;">🕐</div>
+      <div style="font-size:14px;">Pro tuto akci nejsou nastavena žádná časová okna.</div>
+    </div>`;
+    return;
+  }
+
+  const winGuests = {};
+  windows.forEach(w => { winGuests[w.id] = []; });
+  currentGuests.forEach(g => {
+    if (g.window_id != null && winGuests[g.window_id] !== undefined) winGuests[g.window_id].push(g);
+  });
+
+  const days     = [...new Set(windows.map(w => w.day).filter(Boolean))];
+  const multiDay = days.length > 1;
+
+  function windowCard(w) {
+    const list = winGuests[w.id] || [];
+    const pct  = w.capacity > 0 ? Math.round(list.length / w.capacity * 100) : 0;
+    const full = w.capacity > 0 && list.length >= w.capacity;
+    return `
+      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;">
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:15px;">${w.label}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">${w.day ? '📅 '+w.day+' · ' : ''}🕐 ${w.from} – ${w.to}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:20px;font-weight:800;color:${full?'#c0392b':'var(--ink)'};">
+              ${list.length}${w.capacity>0?`<span style="font-size:12px;font-weight:400;color:var(--muted);">/${w.capacity}</span>`:''}
+            </div>
+            <div style="font-size:11px;color:var(--muted);">${full?'🔴 Plno':'🟢 Volno'}</div>
+          </div>
+        </div>
+        ${w.capacity>0?`<div style="height:4px;background:var(--bg);"><div style="width:${pct}%;height:100%;background:${full?'#c0392b':'#3a8a4a'};"></div></div>`:''}
+        ${list.length ? `<div style="padding:6px 16px 12px;">
+          ${list.map(g=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--bg);font-size:13px;">
+            <span>${g.last_name} ${g.first_name}</span>
+            <span style="color:${g.checked_in?'#3a8a4a':'var(--muted)'}">${g.checked_in?'✓ odbaven':'čeká'}</span>
+          </div>`).join('')}
+        </div>` : `<div style="padding:10px 16px 14px;font-size:12px;color:var(--muted);">Žádní přihlášení hosté</div>`}
+      </div>`;
+  }
+
+  let html = '';
+  if (multiDay) {
+    days.forEach(day => {
+      html += `<div style="font-weight:700;font-size:14px;margin:14px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--border);">📅 ${day}</div>`;
+      windows.filter(w => w.day === day).forEach(w => { html += windowCard(w); });
+    });
+    const undated = windows.filter(w => !w.day);
+    if (undated.length) {
+      html += `<div style="font-weight:700;font-size:14px;margin:14px 0 8px;">Bez určeného dne</div>`;
+      undated.forEach(w => { html += windowCard(w); });
+    }
+  } else {
+    windows.forEach(w => { html += windowCard(w); });
+  }
+  el.innerHTML = html;
+}
+
+function renderOccupancyDrives() {
+  const el = document.getElementById('occupancyContent');
+  const vehicles = currentEvent.vehicles || [];
+  const slotStart    = currentEvent.slot_start    || '10:00';
+  const slotEnd      = currentEvent.slot_end      || '18:00';
+  const slotDuration = currentEvent.slot_duration || 15;
+
+  if (!vehicles.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted);">
+      <div style="font-size:32px;margin-bottom:12px;">🚗</div>
+      <div style="font-size:14px;">Pro tuto akci nejsou nastavena žádná vozidla.</div>
+    </div>`;
+    return;
+  }
+
+  const [sh, sm] = slotStart.split(':').map(Number);
+  const [eh, em] = slotEnd.split(':').map(Number);
+  const slots = [];
+  for (let t = sh*60+sm; t+slotDuration <= eh*60+em; t += slotDuration) {
+    const h=Math.floor(t/60), m=t%60, h2=Math.floor((t+slotDuration)/60), m2=(t+slotDuration)%60;
+    slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}–${String(h2).padStart(2,'0')}:${String(m2).padStart(2,'0')}`);
+  }
+
+  const bk = {};
+  currentGuests.forEach(g => (g.bookings||[]).forEach(b => {
+    if (!bk[b.time_slot]) bk[b.time_slot] = {};
+    bk[b.time_slot][b.vehicle_id] = g;
+  }));
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${slots.length} slotů × ${vehicles.length} vozů — posuňte tabulku do stran</div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;">
+      <table style="border-collapse:collapse;width:100%;font-size:12px;">
+        <thead>
+          <tr style="background:var(--bg);">
+            <th style="padding:8px 10px;text-align:left;white-space:nowrap;">Čas</th>
+            ${vehicles.map(v=>`<th style="padding:8px 10px;text-align:left;white-space:nowrap;">${v.name}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${slots.map(slot=>`<tr style="border-top:1px solid var(--bg);">
+            <td style="padding:8px 10px;color:var(--muted);white-space:nowrap;">${slot}</td>
+            ${vehicles.map(v=>{
+              const g = bk[slot]?.[v.id];
+              return `<td style="padding:8px 10px;white-space:nowrap;">${g ? `<span style="background:#e8eef7;color:#2c4a7a;padding:2px 8px;border-radius:20px;">${g.last_name}</span>` : '<span style="color:var(--border);">—</span>'}</td>`;
+            }).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function goToDetail() {
@@ -1674,6 +1821,26 @@ function openAddGuestForm() {
   document.getElementById('wgLastName').value  = '';
   document.getElementById('wgEmail').value     = '';
   document.getElementById('wgPhone').value     = '';
+
+  const wrap = document.getElementById('wgWindowFieldWrap');
+  const sel  = document.getElementById('wgWindow');
+  const windows = currentEvent.registration_type === 'windows' ? (currentEvent.time_windows || []) : [];
+
+  if (windows.length) {
+    const winCounts = {};
+    currentGuests.forEach(g => {
+      if (g.window_id != null) winCounts[g.window_id] = (winCounts[g.window_id] || 0) + 1;
+    });
+    sel.innerHTML = `<option value="">Nezařazeno</option>` + windows.map(w => {
+      const count = winCounts[w.id] || 0;
+      const capTxt = w.capacity > 0 ? ` (${count}/${w.capacity})` : ` (${count})`;
+      return `<option value="${w.id}">${w.label} · ${w.from}–${w.to}${capTxt}</option>`;
+    }).join('');
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+  }
+
   document.getElementById('addGuestOverlay').classList.add('show');
 }
 
@@ -1686,21 +1853,32 @@ async function submitAddGuest() {
   const lastName  = document.getElementById('wgLastName').value.trim();
   const email     = document.getElementById('wgEmail').value.trim();
   const phone     = document.getElementById('wgPhone').value.trim();
+  const windowSel = document.getElementById('wgWindow');
+  const windowId  = (windowSel && windowSel.style.display !== 'none' && windowSel.value) ? parseInt(windowSel.value, 10) : null;
 
   if (!firstName || !lastName) {
     showToast('Vyplňte prosím jméno i příjmení');
+    return;
+  }
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    showToast('Vyplňte prosím platný e-mail');
+    return;
+  }
+  if (!phone) {
+    showToast('Vyplňte prosím telefon');
     return;
   }
 
   const payload = {
     first_name: firstName,
     last_name:  lastName,
-    email:      email, // backend accepts an empty string — no e-mail is fine for a walk-in
+    email:      email,
     phone:      phone,
     event_id:   currentEvent.id,
     status:     'confirmed',
     walk_in:    true,
-    send_confirmation: !!email, // only bother sending a confirmation if we actually have an address
+    window_id:  windowId,
+    send_confirmation: true,
   };
 
   const created = await apiCall(`/events/${currentEvent.id}/guests`, 'POST', payload);
