@@ -2753,7 +2753,7 @@ function renderEmailEditor() {
         <div style="width:100%;max-width:600px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
             <div style="font-size:11px;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Náhled e-mailu</div>
-            ${activeEmailTemplateId === 'save_date' ? `
+            ${activeEmailTemplateId === 'save_date' && (EMAIL_TEMPLATES.find(t=>t.id==='save_date')?.dealerBrandingEnabled !== false) ? `
             <select onchange="setPreviewDealer(this.value)" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;">
               <option value="">Jednotný design</option>
               ${SAVE_DATE_DEALERS.map(dl=>`<option value="${dl.key}" ${previewDealerKey===dl.key?'selected':''}>Náhled: ${dl.label}</option>`).join('')}
@@ -2779,6 +2779,23 @@ function buildEmailEditorControls(tmpl) {
   const heroT = getHeroTarget(tmpl);
   return `
     
+    <div style="border-bottom:1px solid var(--border);">
+      <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">🧩 Vlastní HTML layout</span>
+        <span style="color:var(--muted);font-size:10px;">▾</span>
+      </div>
+      <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:10px;">
+        <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;">Použít vlastní HTML místo šablony</span>
+          <label class="toggle"><input type="checkbox" ${tmpl.useCustomHtml?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).useCustomHtml=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
+        </div>
+        ${tmpl.useCustomHtml ? `
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
+        <textarea id="eCustomHtml" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:220px;outline:none;background:var(--surface2);resize:vertical;" oninput="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).customHtml=this.value;updateEmailPreview()">${tmpl.customHtml||''}</textarea>
+        ` : ''}
+      </div>
+    </div>
+
     <div style="border-bottom:1px solid var(--border);">
       <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
         <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">✏️ Obsah</span>
@@ -2854,7 +2871,10 @@ function buildEmailEditorControls(tmpl) {
             ${heroT.heroUrl ? `<img src="${heroT.heroUrl}" style="max-height:80px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Nahrát hero obrázek'}
           </div>
           <input type="file" id="eHeroInput" accept="image/*" style="display:none" onchange="handleEmailHeroUpload(this)">
-          ${heroT.heroUrlOriginal ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;" onclick="openHeroCropper()">✂️ Upravit výřez</button>` : ''}
+          ${heroT.heroUrlOriginal ? `<div style="display:flex;gap:6px;margin-top:6px;">
+            <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="openHeroCropper()">✂️ Upravit výřez</button>
+            <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="removeEmailHeroImage()">🗑 Odstranit</button>
+          </div>` : ''}
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Výška <span class="ctrl-value-display">${heroT.heroHeight||200}px</span></div>
           <input type="range" min="80" max="400" value="${heroT.heroHeight||200}" style="width:100%;accent-color:var(--text)" oninput="getHeroTarget(EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId)).heroHeight=this.value;this.previousElementSibling.querySelector('.ctrl-value-display').textContent=this.value+'px';updateEmailPreview()">
@@ -2887,7 +2907,14 @@ function buildEmailEditorControls(tmpl) {
         <span style="color:var(--muted);font-size:10px;">▾</span>
       </div>
       <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:14px;">
-        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Podle pole "Společnost" u hosta appka automaticky použije odpovídající logo a barvy — u každého hosta jinak, v rámci jednoho rozeslání. Hosté bez přiřazené společnosti dostanou jednotný design z předchozí sekce.</div>
+        <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;">Rozesílat podle firmy hosta</span>
+          <label class="toggle"><input type="checkbox" ${tmpl.dealerBrandingEnabled!==false?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id==='save_date').dealerBrandingEnabled=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
+        </div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">${tmpl.dealerBrandingEnabled!==false
+          ? 'Zapnuto: podle pole "Společnost" u hosta appka automaticky použije odpovídající logo a barvy — u každého hosta jinak, v rámci jednoho rozeslání. Hosté bez přiřazené společnosti dostanou jednotný design z předchozí sekce.'
+          : 'Vypnuto: úplně všichni hosté dostanou stejný, jednotný design z předchozí sekce — nastavení dealerů níže se ignoruje.'}</div>
+        ${tmpl.dealerBrandingEnabled!==false ? `
         ${SAVE_DATE_DEALERS.map(dl => {
           const brand = getDealerBrand(tmpl, dl.key);
           return `
@@ -2898,11 +2925,13 @@ function buildEmailEditorControls(tmpl) {
                 ${brand.logoUrl ? `<img src="${brand.logoUrl}" style="max-height:36px;">` : '+ Nahrát logo'}
               </div>
               <input type="file" id="dealerLogo_${dl.key}" accept="image/*" style="display:none" onchange="handleDealerLogoUpload('${dl.key}', this)">
+              ${brand.logoUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setDealerBrandField('${dl.key}','logoUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit logo</button>` : ''}
             </div>
             ${dealerColorRow(dl.key, 'Barva záhlaví', 'headerBg',    brand.headerBg    || dl.defaultColor)}
             ${dealerColorRow(dl.key, 'Akcent',        'accentColor', brand.accentColor || dl.defaultColor)}
           </div>`;
         }).join('')}
+        ` : ''}
       </div>
     </div>` : ''}
 
@@ -2988,6 +3017,16 @@ function handleEmailHeroUpload(input) {
     openHeroCropper();
   };
   reader.readAsDataURL(file);
+}
+
+function removeEmailHeroImage() {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+  const target = getHeroTarget(tmpl);
+  target.heroUrl = '';
+  target.heroUrlOriginal = '';
+  target.heroCrop = null;
+  renderEmailEditor();
+  updateEmailPreview();
 }
 
 // ══════════════════════════════════════════════════════
@@ -3236,7 +3275,7 @@ function buildEmailHTML(templateId, preview, guest) {
   // Save the Date: automatically apply the guest's own dealer branding
   // (logo + colors) based on their `company` field — per guest, within the
   // same bulk send — falling back to the shared design otherwise.
-  if (tmpl.id === 'save_date' && guest?.company) {
+  if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
     const brand = getDealerBrand(tmpl, guest.company);
     if (brand.logoUrl || brand.headerBg || brand.accentColor) {
       d = {
@@ -3250,6 +3289,22 @@ function buildEmailHTML(templateId, preview, guest) {
   }
 
   const subject= resolveMergeTags((preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject, guest);
+
+  // Custom HTML layout: bypasses the whole structured skeleton (colors,
+  // header, hero, button, footer) — the pasted markup IS the e-mail body.
+  // Merge tags and [text](url) links still get resolved inside it.
+  if (tmpl.useCustomHtml && tmpl.customHtml) {
+    const customBody = linkifyMarkdown(resolveMergeTags(tmpl.customHtml, guest), (d.accentColor || '#b8924a'));
+    return `<!DOCTYPE html>
+<html lang="cs">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${subject}</title></head>
+<body style="margin:0;padding:0;">
+${customBody}
+</body>
+</html>`;
+  }
+
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
   const bodyLines = linkifyMarkdown(resolveMergeTags(body, guest), d.accentColor)
