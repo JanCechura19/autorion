@@ -2345,6 +2345,52 @@ const DEFAULT_EMAIL_TEMPLATES = [
 // back to the defaults above for events that haven't saved anything yet.
 let EMAIL_TEMPLATES = DEFAULT_EMAIL_TEMPLATES.map(t => ({...t}));
 
+// Automatic dealer branding for Save the Date: each guest's own `company`
+// field (albion/cardion/orbion) picks which logo+colors their copy of the
+// e-mail gets — set once per dealer here, applied automatically per guest.
+const SAVE_DATE_DEALERS = [
+  { key:'albion',  label:'Albion Cars',  defaultColor:'#A6916C' },
+  { key:'cardion', label:'Cardion Cars', defaultColor:'#8291A6' },
+  { key:'orbion',  label:'Orbion Cars',  defaultColor:'#333333' },
+];
+
+function getDealerBrand(tmpl, dealerKey) {
+  return (tmpl?.dealerBranding || {})[dealerKey] || {};
+}
+
+function setDealerBrandField(dealerKey, field, value) {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === 'save_date');
+  if (!tmpl) return;
+  tmpl.dealerBranding = tmpl.dealerBranding || {};
+  tmpl.dealerBranding[dealerKey] = tmpl.dealerBranding[dealerKey] || {};
+  tmpl.dealerBranding[dealerKey][field] = value;
+  updateEmailPreview();
+}
+
+function handleDealerLogoUpload(dealerKey, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    setDealerBrandField(dealerKey, 'logoUrl', e.target.result);
+    renderEmailEditor();
+    updateEmailPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function dealerColorRow(dealerKey, label, field, value) {
+  const id = `dealerHex_${dealerKey}_${field}`;
+  return `<div class="ctrl-row"><div class="ctrl-label">${label}</div>
+    <div class="color-ctrl">
+      <div class="color-swatch" style="background:${value}">
+        <input type="color" value="${value}" oninput="setDealerBrandField('${dealerKey}','${field}',this.value);this.closest('.color-swatch').style.background=this.value;syncEmailHex(this,'${id}')">
+      </div>
+      <input class="color-hex" id="${id}" value="${value.toUpperCase()}" maxlength="7"
+        oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){setDealerBrandField('${dealerKey}','${field}',this.value)}">
+    </div>
+  </div>`;
+}
+
 // Each template can either share ONE hero image (unified, the default) or
 // have its own independent image (custom) — set per template via heroMode.
 function isHeroUnified(tmpl) {
@@ -2445,6 +2491,7 @@ function switchEmailTab(tab, el) {
 
 function openEmailEditorForTemplate(id) {
   activeEmailTemplateId = id;
+  previewDealerKey = null;
   // Switch to editor tab
   const editorTab = document.querySelector('#emailTabs .tab:nth-child(2)');
   switchEmailTab('editor', editorTab);
@@ -2684,7 +2731,7 @@ function renderEmailEditor() {
         
         <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface2);">
           <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Šablona</div>
-          <select class="filter-select" style="width:100%;" onchange="activeEmailTemplateId=this.value;renderEmailEditor()">
+          <select class="filter-select" style="width:100%;" onchange="activeEmailTemplateId=this.value;previewDealerKey=null;renderEmailEditor()">
             ${EMAIL_TEMPLATES.map(t=>`<option value="${t.id}" ${t.id===activeEmailTemplateId?'selected':''}>${t.icon||''} ${t.name}</option>`).join('')}
           </select>
         </div>
@@ -2704,8 +2751,13 @@ function renderEmailEditor() {
       
       <div style="flex:1;background:#e8e8e8;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:24px;">
         <div style="width:100%;max-width:600px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
             <div style="font-size:11px;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Náhled e-mailu</div>
+            ${activeEmailTemplateId === 'save_date' ? `
+            <select onchange="setPreviewDealer(this.value)" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;">
+              <option value="">Jednotný design</option>
+              ${SAVE_DATE_DEALERS.map(dl=>`<option value="${dl.key}" ${previewDealerKey===dl.key?'selected':''}>Náhled: ${dl.label}</option>`).join('')}
+            </select>` : ''}
             <div style="display:flex;gap:6px;">
               <button class="btn btn-secondary btn-sm" id="prevDesktop" onclick="setEmailViewport('desktop',this)" style="background:#fff;">🖥 Desktop</button>
               <button class="btn btn-secondary btn-sm" id="prevMobile"  onclick="setEmailViewport('mobile',this)">📱 Mobil</button>
@@ -2827,6 +2879,32 @@ function buildEmailEditorControls(tmpl) {
         ${colorRow('Tlačítko (text)', 'btnColor',      d.btnColor)}
       </div>
     </div>
+
+    ${tmpl.id === 'save_date' ? `
+    <div style="border-bottom:1px solid var(--border);">
+      <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">🏷️ Barvy a loga podle dealera</span>
+        <span style="color:var(--muted);font-size:10px;">▾</span>
+      </div>
+      <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:14px;">
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Podle pole "Společnost" u hosta appka automaticky použije odpovídající logo a barvy — u každého hosta jinak, v rámci jednoho rozeslání. Hosté bez přiřazené společnosti dostanou jednotný design z předchozí sekce.</div>
+        ${SAVE_DATE_DEALERS.map(dl => {
+          const brand = getDealerBrand(tmpl, dl.key);
+          return `
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:10px;">${dl.label}</div>
+            <div class="ctrl-row" style="margin-bottom:4px;">
+              <div style="border:1px dashed var(--border2);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--muted);" onclick="document.getElementById('dealerLogo_${dl.key}').click()">
+                ${brand.logoUrl ? `<img src="${brand.logoUrl}" style="max-height:36px;">` : '+ Nahrát logo'}
+              </div>
+              <input type="file" id="dealerLogo_${dl.key}" accept="image/*" style="display:none" onchange="handleDealerLogoUpload('${dl.key}', this)">
+            </div>
+            ${dealerColorRow(dl.key, 'Barva záhlaví', 'headerBg',    brand.headerBg    || dl.defaultColor)}
+            ${dealerColorRow(dl.key, 'Akcent',        'accentColor', brand.accentColor || dl.defaultColor)}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
 
     
     <div style="border-bottom:1px solid var(--border);">
@@ -3152,8 +3230,25 @@ function linkifyMarkdown(text, color) {
 
 function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
-  const d      = emailDesign;
+  let   d      = emailDesign;
   const heroT  = getHeroTarget(tmpl);
+
+  // Save the Date: automatically apply the guest's own dealer branding
+  // (logo + colors) based on their `company` field — per guest, within the
+  // same bulk send — falling back to the shared design otherwise.
+  if (tmpl.id === 'save_date' && guest?.company) {
+    const brand = getDealerBrand(tmpl, guest.company);
+    if (brand.logoUrl || brand.headerBg || brand.accentColor) {
+      d = {
+        ...emailDesign,
+        logoUrl:     brand.logoUrl     || emailDesign.logoUrl,
+        headerBg:    brand.headerBg    || emailDesign.headerBg,
+        accentColor: brand.accentColor || emailDesign.accentColor,
+        btnBg:       brand.headerBg    || emailDesign.btnBg,
+      };
+    }
+  }
+
   const subject= resolveMergeTags((preview && document.getElementById('eSubjectEdit')?.value) || tmpl.subject, guest);
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
@@ -3209,10 +3304,18 @@ function buildEmailHTML(templateId, preview, guest) {
 </body></html>`;
 }
 
+let previewDealerKey = null; // used only for Save the Date's per-dealer preview
+
 function updateEmailPreview() {
   const frame = document.getElementById('emailPreviewFrame');
   if (!frame) return;
-  frame.srcdoc = buildEmailHTML(activeEmailTemplateId, true);
+  const previewGuest = previewDealerKey ? { company: previewDealerKey } : null;
+  frame.srcdoc = buildEmailHTML(activeEmailTemplateId, true, previewGuest);
+}
+
+function setPreviewDealer(key) {
+  previewDealerKey = key || null;
+  updateEmailPreview();
 }
 
 function copyEmailHTML() {
