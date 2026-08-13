@@ -2917,6 +2917,14 @@ function buildEmailEditorControls(tmpl) {
         ${tmpl.dealerBrandingEnabled!==false ? `
         ${SAVE_DATE_DEALERS.map(dl => {
           const brand = getDealerBrand(tmpl, dl.key);
+          if (tmpl.useCustomHtml) {
+            return `
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="font-weight:700;font-size:13px;margin-bottom:8px;">${dl.label}</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Vlastní HTML jen pro tohoto dealera. Když necháte prázdné, použije se obecné vlastní HTML z první sekce.</div>
+              <textarea id="dealerHtml_${dl.key}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:140px;outline:none;background:var(--surface2);resize:vertical;" oninput="setDealerBrandField('${dl.key}','customHtml',this.value)">${brand.customHtml||''}</textarea>
+            </div>`;
+          }
           return `
           <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
             <div style="font-weight:700;font-size:13px;margin-bottom:10px;">${dl.label}</div>
@@ -3292,10 +3300,17 @@ function buildEmailHTML(templateId, preview, guest) {
 
   // Custom HTML layout: bypasses the whole structured skeleton (colors,
   // header, hero, button, footer) — the pasted markup IS the e-mail body.
+  // Each dealer can have their own HTML (falls back to the shared one).
   // Merge tags and [text](url) links still get resolved inside it.
-  if (tmpl.useCustomHtml && tmpl.customHtml) {
-    const customBody = linkifyMarkdown(resolveMergeTags(tmpl.customHtml, guest), (d.accentColor || '#b8924a'));
-    return `<!DOCTYPE html>
+  if (tmpl.useCustomHtml) {
+    let htmlSource = tmpl.customHtml;
+    if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
+      const brand = getDealerBrand(tmpl, guest.company);
+      if (brand.customHtml) htmlSource = brand.customHtml;
+    }
+    if (htmlSource) {
+      const customBody = linkifyMarkdown(resolveMergeTags(htmlSource, guest), (d.accentColor || '#b8924a'));
+      return `<!DOCTYPE html>
 <html lang="cs">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${subject}</title></head>
@@ -3303,6 +3318,7 @@ function buildEmailHTML(templateId, preview, guest) {
 ${customBody}
 </body>
 </html>`;
+    }
   }
 
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
