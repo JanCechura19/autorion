@@ -2367,11 +2367,40 @@ function setDealerBrandField(dealerKey, field, value) {
   updateEmailPreview();
 }
 
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function onDealerVideoUrlChange(dealerKey, url) {
+  setDealerBrandField(dealerKey, 'videoUrl', url);
+  const ytId = extractYouTubeId(url);
+  if (ytId) {
+    // maxresdefault isn't available for every video — hqdefault always is,
+    // and is still a solid resolution for an e-mail hero banner.
+    setDealerBrandField(dealerKey, 'heroUrl', `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`);
+    renderEmailEditor();
+    updateEmailPreview();
+  }
+}
+
 function handleDealerLogoUpload(dealerKey, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     setDealerBrandField(dealerKey, 'logoUrl', e.target.result);
+    renderEmailEditor();
+    updateEmailPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleDealerVideoThumbUpload(dealerKey, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    setDealerBrandField(dealerKey, 'heroUrl', e.target.result);
     renderEmailEditor();
     updateEmailPreview();
   };
@@ -2937,6 +2966,18 @@ function buildEmailEditorControls(tmpl) {
             </div>
             ${dealerColorRow(dl.key, 'Barva záhlaví', 'headerBg',    brand.headerBg    || dl.defaultColor)}
             ${dealerColorRow(dl.key, 'Akcent',        'accentColor', brand.accentColor || dl.defaultColor)}
+            <div class="ctrl-row" style="margin-top:10px;">
+              <div class="ctrl-label">Odkaz na video (YouTube)</div>
+              <input class="ctrl-input" value="${brand.videoUrl||''}" placeholder="https://youtube.com/watch?v=..." oninput="onDealerVideoUrlChange('${dl.key}',this.value)">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Náhled (nahradí hero obrázek) se u YouTube odkazů natáhne automaticky z videa.</div>
+            </div>
+            <div class="ctrl-row" style="margin-top:8px;">
+              <div style="border:1px dashed var(--border2);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--muted);" onclick="document.getElementById('dealerVideo_${dl.key}').click()">
+                ${brand.heroUrl ? `<img src="${brand.heroUrl}" style="max-height:70px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Vlastní náhled (nepovinné, přebije automatický)'}
+              </div>
+              <input type="file" id="dealerVideo_${dl.key}" accept="image/*" style="display:none" onchange="handleDealerVideoThumbUpload('${dl.key}', this)">
+              ${brand.heroUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setDealerBrandField('${dl.key}','heroUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit náhled</button>` : ''}
+            </div>
           </div>`;
         }).join('')}
         ` : ''}
@@ -3278,11 +3319,12 @@ function linkifyMarkdown(text, color) {
 function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
   let   d      = emailDesign;
-  const heroT  = getHeroTarget(tmpl);
+  let   heroT  = getHeroTarget(tmpl);
+  let   heroLinkUrl = null; // wraps the hero image in a link when set (dealer video preview)
 
   // Save the Date: automatically apply the guest's own dealer branding
-  // (logo + colors) based on their `company` field — per guest, within the
-  // same bulk send — falling back to the shared design otherwise.
+  // (logo + colors + video preview) based on their `company` field — per
+  // guest, within the same bulk send — falling back to the shared design.
   if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
     const brand = getDealerBrand(tmpl, guest.company);
     if (brand.logoUrl || brand.headerBg || brand.accentColor) {
@@ -3293,6 +3335,10 @@ function buildEmailHTML(templateId, preview, guest) {
         accentColor: brand.accentColor || emailDesign.accentColor,
         btnBg:       brand.headerBg    || emailDesign.btnBg,
       };
+    }
+    if (brand.heroUrl) {
+      heroT = { ...heroT, showHero: true, heroUrl: brand.heroUrl };
+      if (brand.videoUrl) heroLinkUrl = brand.videoUrl;
     }
   }
 
@@ -3346,7 +3392,7 @@ ${customBody}
   </td></tr>
 
   
-  ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;"><img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>` : ''}
+  ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;">${heroLinkUrl ? `<a href="${heroLinkUrl}" style="display:block;">` : ''}<img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">${heroLinkUrl ? `</a>` : ''}</td></tr>` : ''}
 
   
   ${d.showDivider ? `<tr><td style="height:4px;background:${d.accentColor};"></td></tr>` : ''}
