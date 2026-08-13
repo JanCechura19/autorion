@@ -2810,6 +2810,25 @@ function buildEmailEditorControls(tmpl) {
     
     <div style="border-bottom:1px solid var(--border);">
       <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">🏷️ Zástupné znaky</span>
+        <span style="color:var(--muted);font-size:10px;">▾</span>
+      </div>
+      <div class="e-section-body" style="padding:4px 16px 14px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Klikni na znak — vloží se do textu na místo kurzoru.</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${MERGE_TAGS.map(m => `
+            <button type="button" onclick="insertMergeTag('${m.tag}')"
+              style="display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;cursor:pointer;font-family:inherit;">
+              <code style="font-size:11px;color:var(--ink);white-space:nowrap;">${m.tag}</code>
+              <span style="font-size:11px;color:var(--muted);">${m.desc}</span>
+            </button>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;">Tip: <code>[text odkazu](https://adresa.cz)</code> vytvoří klikací odkaz.</div>
+      </div>
+    </div>
+
+    <div style="border-bottom:1px solid var(--border);">
+      <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
         <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">🧩 Vlastní HTML layout</span>
         <span style="color:var(--muted);font-size:10px;">▾</span>
       </div>
@@ -3292,6 +3311,34 @@ function getRegistrationUrl(guest) {
 function getTeamName(guest) {
   const dealer = SAVE_DATE_DEALERS.find(dl => dl.key === guest?.company);
   return dealer ? dealer.label : 'Autorion Events';
+}
+
+const MERGE_TAGS = [
+  { tag:'{{last_name}}',         desc:'Příjmení hosta' },
+  { tag:'{{event_name}}',        desc:'Název akce' },
+  { tag:'{{event_date}}',        desc:'Datum akce' },
+  { tag:'{{event_location}}',    desc:'Místo konání' },
+  { tag:'{{team_name}}',         desc:'Tým podle firmy hosta' },
+  { tag:'{{event_details}}',     desc:'Blok Datum + Místo vedle sebe' },
+  { tag:'{{registration_link}}', desc:'Klikací odkaz na registraci' },
+];
+
+function insertMergeTag(tag) {
+  const customArea = document.getElementById('eCustomHtml');
+  const bodyArea    = document.getElementById('eBodyEdit');
+  const textarea = (customArea && customArea.offsetParent !== null) ? customArea : bodyArea;
+
+  if (!textarea) {
+    navigator.clipboard.writeText(tag).then(() => showToast(`${tag} zkopírováno do schránky`, 'success'));
+    return;
+  }
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end   = textarea.selectionEnd   ?? textarea.value.length;
+  const val   = textarea.value;
+  textarea.value = val.slice(0, start) + tag + val.slice(end);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+  textarea.dispatchEvent(new Event('input', { bubbles: true })); // triggers the existing oninput save+preview handlers
 }
 
 function buildEventDetailsBlock(design) {
