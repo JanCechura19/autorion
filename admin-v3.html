@@ -2645,7 +2645,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
 
     
     <div class="form-row">
-      <label>Zpráva <span style="font-weight:300;text-transform:none;color:var(--muted);">— {{last_name}} {{event_name}} {{event_date}} {{registration_link}}</span></label>
+      <label>Zpráva <span style="font-weight:300;text-transform:none;color:var(--muted);">— {{last_name}} {{event_name}} {{event_date}} {{team_name}} {{event_details}} {{registration_link}}</span></label>
       <textarea id="eBody" style="min-height:120px;font-size:13px;line-height:1.7;width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;outline:none;background:var(--bg);">${tmpl.body.replace(/{{event_name}}/g,EVENT.name).replace(/{{event_date}}/g,EVENT.date_from).replace(/{{event_location}}/g,EVENT.location)}</textarea>
     </div>
   `;
@@ -2819,7 +2819,7 @@ function buildEmailEditorControls(tmpl) {
           <label class="toggle"><input type="checkbox" ${tmpl.useCustomHtml?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).useCustomHtml=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         ${tmpl.useCustomHtml ? `
-        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{team_name}}</code>, <code>{{event_details}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
         <textarea id="eCustomHtml" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:220px;outline:none;background:var(--surface2);resize:vertical;" oninput="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).customHtml=this.value;updateEmailPreview()">${tmpl.customHtml||''}</textarea>
         ` : ''}
       </div>
@@ -2836,7 +2836,7 @@ function buildEmailEditorControls(tmpl) {
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
           <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code>. <code>{{event_details}}</code> vloží pěkný blok Datum/Místo vedle sebe. Pro podpis "tým <code>{{team_name}}</code>" se podle firmy hosta dosadí Albion Cars / Cardion Cars / Orbion Cars (nebo Autorion Events).</div>
         </div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:12px;">Zobrazit tlačítko</span>
@@ -3289,7 +3289,29 @@ function getRegistrationUrl(guest) {
   return url;
 }
 
-function resolveMergeTags(text, guest) {
+function getTeamName(guest) {
+  const dealer = SAVE_DATE_DEALERS.find(dl => dl.key === guest?.company);
+  return dealer ? dealer.label : 'Autorion Events';
+}
+
+function buildEventDetailsBlock(design) {
+  const d = design || emailDesign;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;">
+    <tr>
+      <td width="50%" style="text-align:center;padding:0 16px;">
+        <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:${d.accentColor};font-weight:600;margin-bottom:6px;">Datum</div>
+        <div style="font-size:16px;color:${d.bodyColor};font-weight:600;">${EVENT.date_from}</div>
+      </td>
+      <td width="1" style="border-left:1px solid ${d.accentColor};opacity:0.5;"></td>
+      <td width="50%" style="text-align:center;padding:0 16px;">
+        <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:${d.accentColor};font-weight:600;margin-bottom:6px;">Místo</div>
+        <div style="font-size:16px;color:${d.bodyColor};font-weight:600;">${EVENT.location}</div>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function resolveMergeTags(text, guest, design) {
   const lastName = guest ? (guest.last_name || '') : 'Novák';
   const registrationUrl = getRegistrationUrl(guest);
   return text
@@ -3297,7 +3319,9 @@ function resolveMergeTags(text, guest) {
     .replace(/{{event_name}}/g,     EVENT.name)
     .replace(/{{event_date}}/g,     EVENT.date_from)
     .replace(/{{event_location}}/g, EVENT.location)
-    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${emailDesign.accentColor}">Odkaz na registraci</a>`);
+    .replace(/{{team_name}}/g,      getTeamName(guest))
+    .replace(/{{event_details}}/g,  buildEventDetailsBlock(design))
+    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">Odkaz na registraci</a>`);
 }
 
 function getResolvedSubject(templateId, preview, guest) {
@@ -3355,7 +3379,7 @@ function buildEmailHTML(templateId, preview, guest) {
       if (brand.customHtml) htmlSource = brand.customHtml;
     }
     if (htmlSource) {
-      const customBody = linkifyMarkdown(resolveMergeTags(htmlSource, guest), (d.accentColor || '#b8924a'));
+      const customBody = linkifyMarkdown(resolveMergeTags(htmlSource, guest, d), (d.accentColor || '#b8924a'));
       return `<!DOCTYPE html>
 <html lang="cs">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3369,7 +3393,7 @@ ${customBody}
 
   const body   = (preview && document.getElementById('eBodyEdit')?.value)    || tmpl.body;
 
-  const bodyLines = linkifyMarkdown(resolveMergeTags(body, guest), d.accentColor)
+  const bodyLines = linkifyMarkdown(resolveMergeTags(body, guest, d), d.accentColor)
     .split('\n')
     .map(l => l.trim() ? `<p style="margin:0 0 14px 0">${l}</p>` : '<p style="margin:0 0 8px 0">&nbsp;</p>')
     .join('');
