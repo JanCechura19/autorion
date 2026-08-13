@@ -2747,7 +2747,28 @@ function sendEmail(ids) {
 // EMAIL EDITOR
 // ═══════════════════════════════════════════════════════
 
+let lastRenderedEmailTemplateId = null;
+
+function syncEmailEditorFieldsToTemplate(templateId) {
+  // renderEmailEditor() rebuilds the whole panel's innerHTML — any side
+  // action that triggers it mid-edit (uploading a dealer logo, entering a
+  // video URL, etc.) would otherwise silently wipe out whatever the admin
+  // had typed into Subject/Body/Custom HTML but not yet explicitly saved.
+  if (!templateId) return;
+  const t = EMAIL_TEMPLATES.find(x => x.id === templateId);
+  if (!t) return;
+  const subjectEl = document.getElementById('eSubjectEdit');
+  const bodyEl     = document.getElementById('eBodyEdit');
+  const customEl   = document.getElementById('eCustomHtml');
+  if (subjectEl) t.subject    = subjectEl.value;
+  if (bodyEl)    t.body       = bodyEl.value;
+  if (customEl)  t.customHtml = customEl.value;
+}
+
 function renderEmailEditor() {
+  syncEmailEditorFieldsToTemplate(lastRenderedEmailTemplateId);
+  lastRenderedEmailTemplateId = activeEmailTemplateId;
+
   const panel = document.getElementById('emailEditorPanel');
   const tmpl  = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
 
