@@ -2385,26 +2385,44 @@ function onDealerVideoUrlChange(dealerKey, url) {
   }
 }
 
-function handleDealerLogoUpload(dealerKey, input) {
-  const file = input.files[0]; if (!file) return;
+function resizeImageFile(file, maxWidth, format, quality, callback) {
+  // Uploaded logos/thumbnails get embedded as base64 directly in the e-mail
+  // HTML — an unresized photo can easily push a single e-mail past Gmail's
+  // ~102KB clipping threshold ("Zobrazujeme pouze část e-mailu..."). Resizing
+  // down before embedding keeps things well within a safe size.
   const reader = new FileReader();
   reader.onload = e => {
-    setDealerBrandField(dealerKey, 'logoUrl', e.target.result);
-    renderEmailEditor();
-    updateEmailPreview();
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.naturalWidth); // never upscale
+      const w = Math.max(1, Math.round(img.naturalWidth  * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL(format, quality));
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function handleDealerVideoThumbUpload(dealerKey, input) {
+function handleDealerLogoUpload(dealerKey, input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    setDealerBrandField(dealerKey, 'heroUrl', e.target.result);
+  resizeImageFile(file, 300, 'image/png', 1, dataUrl => {
+    setDealerBrandField(dealerKey, 'logoUrl', dataUrl);
     renderEmailEditor();
     updateEmailPreview();
-  };
-  reader.readAsDataURL(file);
+  });
+}
+
+function handleDealerVideoThumbUpload(dealerKey, input) {
+  const file = input.files[0]; if (!file) return;
+  resizeImageFile(file, 800, 'image/jpeg', 0.82, dataUrl => {
+    setDealerBrandField(dealerKey, 'heroUrl', dataUrl);
+    renderEmailEditor();
+    updateEmailPreview();
+  });
 }
 
 function dealerColorRow(dealerKey, label, field, value) {
@@ -3089,9 +3107,11 @@ function setEmailViewport(vp, btn) {
 
 function handleEmailLogoUpload(input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { emailDesign.logoUrl = e.target.result; updateEmailPreview(); renderEmailEditor(); };
-  reader.readAsDataURL(file);
+  resizeImageFile(file, 300, 'image/png', 1, dataUrl => {
+    emailDesign.logoUrl = dataUrl;
+    updateEmailPreview();
+    renderEmailEditor();
+  });
 }
 
 function handleEmailHeroUpload(input) {
