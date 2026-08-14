@@ -2232,6 +2232,7 @@ async function saveGuest(id) {
       first_name: created.first_name, last_name: created.last_name,
       email: created.email, phone: created.phone || '',
       status: created.status, companion: created.companion,
+      company: created.company || '',
       email_sent: sendConfirmation, checked_in: !!created.checked_in,
       registered_at: created.created_at || new Date().toISOString(),
       notes:'', bookings: created.bookings || [],
@@ -2300,6 +2301,7 @@ async function processImportFile(file) {
           first_name: created.first_name, last_name: created.last_name,
           email: created.email, phone: created.phone || '',
           status: created.status, companion: created.companion,
+          company: created.company || '',
           email_sent: sendConfirmation, checked_in:false,
           registered_at: created.created_at || new Date().toISOString(),
           notes:'', bookings: created.bookings || [],
@@ -3439,13 +3441,15 @@ function buildEmailHTML(templateId, preview, guest) {
   // guest, within the same bulk send — falling back to the shared design.
   if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
     const brand = getDealerBrand(tmpl, guest.company);
-    if (brand.logoUrl || brand.headerBg || brand.accentColor) {
+    const dealerDef = SAVE_DATE_DEALERS.find(dl => dl.key === guest.company);
+    const defaultDealerColor = dealerDef ? dealerDef.defaultColor : null;
+    if (brand.logoUrl || brand.headerBg || brand.accentColor || defaultDealerColor) {
       d = {
         ...emailDesign,
         logoUrl:     brand.logoUrl     || emailDesign.logoUrl,
-        headerBg:    brand.headerBg    || emailDesign.headerBg,
-        accentColor: brand.accentColor || emailDesign.accentColor,
-        btnBg:       brand.headerBg    || emailDesign.btnBg,
+        headerBg:    brand.headerBg    || defaultDealerColor || emailDesign.headerBg,
+        accentColor: brand.accentColor || defaultDealerColor || emailDesign.accentColor,
+        btnBg:       brand.headerBg    || defaultDealerColor || emailDesign.btnBg,
       };
     }
     if (brand.heroUrl) {
@@ -3504,7 +3508,15 @@ ${customBody}
   </td></tr>
 
   
-  ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;">${heroLinkUrl ? `<a href="${heroLinkUrl}" style="display:block;">` : ''}<img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">${heroLinkUrl ? `</a>` : ''}</td></tr>` : ''}
+  ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;">${heroLinkUrl
+    ? `<a href="${heroLinkUrl}" style="display:block;position:relative;text-decoration:none;">
+         <img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">
+         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:64px;background:rgba(0,0,0,0.6);border-radius:50%;text-align:center;line-height:64px;">
+           <span style="display:inline-block;width:0;height:0;border-top:12px solid transparent;border-bottom:12px solid transparent;border-left:20px solid #ffffff;margin-left:6px;vertical-align:middle;"></span>
+         </div>
+       </a>`
+    : `<img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">`
+  }</td></tr>` : ''}
 
   
   ${d.showDivider ? `<tr><td style="height:4px;background:${d.accentColor};"></td></tr>` : ''}
