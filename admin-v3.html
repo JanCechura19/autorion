@@ -2387,6 +2387,19 @@ function onDealerVideoUrlChange(dealerKey, url) {
   }
 }
 
+function onHeroVideoUrlChange(url) {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+  const target = getHeroTarget(tmpl);
+  target.videoUrl = url;
+  const ytId = extractYouTubeId(url);
+  if (ytId) {
+    target.heroUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+    target.showHero = true;
+    renderEmailEditor();
+  }
+  updateEmailPreview();
+}
+
 function resizeImageFile(file, maxWidth, format, quality, callback) {
   // Uploaded logos/thumbnails get embedded as base64 directly in the e-mail
   // HTML — an unresized photo can easily push a single e-mail past Gmail's
@@ -2985,6 +2998,11 @@ function buildEmailEditorControls(tmpl) {
         <div class="ctrl-row"><div class="ctrl-label">Výška <span class="ctrl-value-display">${heroT.heroHeight||200}px</span></div>
           <input type="range" min="80" max="400" value="${heroT.heroHeight||200}" style="width:100%;accent-color:var(--text)" oninput="getHeroTarget(EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId)).heroHeight=this.value;this.previousElementSibling.querySelector('.ctrl-value-display').textContent=this.value+'px';updateEmailPreview()">
         </div>
+        <div class="ctrl-row" style="margin-top:6px;">
+          <div class="ctrl-label">Odkaz na video (YouTube)</div>
+          <input class="ctrl-input" value="${heroT.videoUrl||''}" placeholder="https://youtube.com/watch?v=..." oninput="onHeroVideoUrlChange(this.value)">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Volitelné — obrázek pak funguje jako klikací náhled videa (s ikonou ▶). U YouTube odkazů se náhled natáhne automaticky.</div>
+        </div>
       </div>
     </div>
 
@@ -3482,7 +3500,7 @@ function buildEmailHTML(templateId, preview, guest) {
   const tmpl   = EMAIL_TEMPLATES.find(t => t.id === templateId) || EMAIL_TEMPLATES[0];
   let   d      = emailDesign;
   let   heroT  = getHeroTarget(tmpl);
-  let   heroLinkUrl = null; // wraps the hero image in a link when set (dealer video preview)
+  let   heroLinkUrl = heroT.videoUrl || null; // wraps the hero image in a link when set
 
   // Save the Date: automatically apply the guest's own dealer branding
   // (logo + colors + video preview) based on their `company` field — per
@@ -3502,7 +3520,7 @@ function buildEmailHTML(templateId, preview, guest) {
     }
     if (brand.heroUrl) {
       heroT = { ...heroT, showHero: true, heroUrl: brand.heroUrl };
-      if (brand.videoUrl) heroLinkUrl = brand.videoUrl;
+      heroLinkUrl = brand.videoUrl || null; // dealer's own video takes over; no dealer video = no link
     }
   }
 
@@ -3548,11 +3566,9 @@ ${customBody}
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${d.containerBg};border-radius:${d.borderRadius};overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 
   
-  <tr><td style="background:${d.headerBg};padding:${d.logoUrl?'20px 32px':'28px 32px'};text-align:${d.logoAlign};">
-    ${d.logoUrl
-      ? `<img src="${d.logoUrl}" height="${d.logoHeight}" style="display:inline-block;vertical-align:middle;" alt="Logo">`
-      : `<div style="font-family:${d.fontFamily};font-size:22px;font-weight:700;color:${d.headerColor};letter-spacing:0.02em;">${EVENT.name}</div>`
-    }
+  <tr><td style="background:${d.headerBg};padding:24px 32px;text-align:${d.logoAlign};">
+    ${d.logoUrl ? `<div style="margin-bottom:14px;"><img src="${d.logoUrl}" height="${d.logoHeight}" style="display:inline-block;vertical-align:middle;" alt="Logo"></div>` : ''}
+    <div style="font-family:${d.fontFamily};font-size:22px;font-weight:700;color:${d.headerColor};letter-spacing:0.02em;">${EVENT.name}</div>
   </td></tr>
 
   
