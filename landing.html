@@ -288,6 +288,8 @@
 
 </div>
 
+<div id="customLandingContainer" style="display:none;"></div>
+
 <script>
 const API_BASE = 'https://autorion.net/api';
 
@@ -381,10 +383,36 @@ function toEmbedUrl(url) {
   return url;
 }
 
+function resolveLandingMergeTags(text, event) {
+  const regUrl = EVENT_SLUG ? `https://registration.autorion.net/?event=${EVENT_SLUG}` : '#';
+  return (text || '')
+    .replace(/{{event_name}}/g,     event.name || '')
+    .replace(/{{event_date}}/g,     formatEventDateRange(event.date_from, event.date_to))
+    .replace(/{{event_location}}/g, event.location || '')
+    .replace(/{{registration_link}}/g, regUrl);
+}
+
 function renderPage(event) {
   document.getElementById('loadingScreen').style.display = 'none';
 
   const lp = event.landing_page || {};
+  const pageWrap   = document.querySelector('.page-wrap');
+  const customWrap = document.getElementById('customLandingContainer');
+
+  if (lp.useCustomHtml && lp.customHtml) {
+    if (pageWrap) pageWrap.style.display = 'none';
+    if (customWrap) {
+      customWrap.style.display = 'block';
+      customWrap.innerHTML = resolveLandingMergeTags(lp.customHtml, event);
+    }
+    return;
+  }
+
+  // Not in custom mode — make sure the normal page is visible and the
+  // custom container is cleared (relevant when toggling live in preview).
+  if (pageWrap) pageWrap.style.display = '';
+  if (customWrap) { customWrap.style.display = 'none'; customWrap.innerHTML = ''; }
+
   const hero = lp.hero || {};
 
   const theme = event.theme || {};

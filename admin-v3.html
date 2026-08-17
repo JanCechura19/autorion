@@ -2464,6 +2464,7 @@ function defaultEmailDesign() {
     showDivider:true, showButton:true, btnBg:'#1a1816', btnColor:'#ffffff', btnText:'Potvrdit účast',
     footerText: (EVENT ? `${EVENT.name} · ${EVENT.location}` : ''),
     showHero:false, heroUrl:'', heroUrlOriginal:'', heroCrop:null, heroHeight:'200',
+    dateFormat:'auto', registrationLinkText:'Odkaz na registraci',
   };
 }
 
@@ -2865,6 +2866,22 @@ function buildEmailEditorControls(tmpl) {
             </button>`).join('')}
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:8px;">Tip: <code>[text odkazu](https://adresa.cz)</code> vytvoří klikací odkaz.</div>
+
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px;">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;">Nastavení znaků</div>
+          <div class="ctrl-row" style="margin-bottom:8px;">
+            <div class="ctrl-label">Formát <code>{{event_date}}</code></div>
+            <select class="ctrl-input" onchange="emailDesign.dateFormat=this.value;updateEmailPreview()">
+              <option value="auto" ${(emailDesign.dateFormat||'auto')==='auto'?'selected':''}>Automatický rozsah (25.–27. 8. 2026)</option>
+              <option value="full" ${emailDesign.dateFormat==='full'?'selected':''}>Vždy celý rozsah (25.8.2026 – 27.8.2026)</option>
+              <option value="from_only" ${emailDesign.dateFormat==='from_only'?'selected':''}>Jen první den (25.8.2026)</option>
+            </select>
+          </div>
+          <div class="ctrl-row">
+            <div class="ctrl-label">Text odkazu <code>{{registration_link}}</code></div>
+            <input class="ctrl-input" value="${emailDesign.registrationLinkText || 'Odkaz na registraci'}" oninput="emailDesign.registrationLinkText=this.value;updateEmailPreview()">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3384,13 +3401,44 @@ function insertMergeTag(tag) {
   textarea.dispatchEvent(new Event('input', { bubbles: true })); // triggers the existing oninput save+preview handlers
 }
 
+function parseCzechDate(str) {
+  // Expects "D.M.YYYY" style (with optional spaces around dots) — the format
+  // used throughout the app's date fields. Returns null if it doesn't match,
+  // so callers can safely fall back rather than break on an odd input.
+  const m = (str || '').trim().match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/);
+  if (!m) return null;
+  return { day: parseInt(m[1], 10), month: parseInt(m[2], 10), year: parseInt(m[3], 10) };
+}
+
+function getEventDateRange() {
+  const from = EVENT.date_from, to = EVENT.date_to;
+  const format = emailDesign.dateFormat || 'auto';
+
+  if (format === 'from_only') return from;
+  if (!to || to === from) return from;
+
+  if (format === 'full') return `${from} – ${to}`;
+
+  // 'auto' — smart range that collapses month/year when they match
+  const df = parseCzechDate(from), dt = parseCzechDate(to);
+  if (!df || !dt) return `${from} – ${to}`; // unexpected format — safe fallback
+
+  if (df.year === dt.year && df.month === dt.month) {
+    return `${df.day}.–${dt.day}. ${dt.month}. ${dt.year}`;           // 25.–27. 8. 2026
+  }
+  if (df.year === dt.year) {
+    return `${df.day}. ${df.month}. – ${dt.day}. ${dt.month}. ${dt.year}`; // 28. 8. – 2. 9. 2026
+  }
+  return `${df.day}. ${df.month}. ${df.year} – ${dt.day}. ${dt.month}. ${dt.year}`; // 30. 12. 2026 – 2. 1. 2027
+}
+
 function buildEventDetailsBlock(design) {
   const d = design || emailDesign;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;">
     <tr>
       <td width="50%" style="text-align:center;padding:0 16px;">
         <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:${d.accentColor};font-weight:600;margin-bottom:6px;">Datum</div>
-        <div style="font-size:16px;color:${d.bodyColor};font-weight:600;">${EVENT.date_from}</div>
+        <div style="font-size:16px;color:${d.bodyColor};font-weight:600;">${getEventDateRange()}</div>
       </td>
       <td width="1" style="border-left:1px solid ${d.accentColor};opacity:0.5;"></td>
       <td width="50%" style="text-align:center;padding:0 16px;">
@@ -3407,11 +3455,11 @@ function resolveMergeTags(text, guest, design) {
   return text
     .replace(/{{last_name}}/g,      lastName)
     .replace(/{{event_name}}/g,     EVENT.name)
-    .replace(/{{event_date}}/g,     EVENT.date_from)
+    .replace(/{{event_date}}/g,     getEventDateRange())
     .replace(/{{event_location}}/g, EVENT.location)
     .replace(/{{team_name}}/g,      getTeamName(guest))
     .replace(/{{event_details}}/g,  buildEventDetailsBlock(design))
-    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">Odkaz na registraci</a>`);
+    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">${emailDesign.registrationLinkText || 'Odkaz na registraci'}</a>`);
 }
 
 function getResolvedSubject(templateId, preview, guest) {

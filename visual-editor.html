@@ -623,6 +623,7 @@ iframe#previewFrame {
     </div>
     <div class="panel-tabs" id="sectionsTabRow" style="display:none;border-top:1px solid var(--border);background:var(--surface2);">
       <div class="panel-tab" id="tabSectionsBtn" onclick="switchTab('sections', this)"><span class="panel-tab-icon">☰</span>Dealerské sekce</div>
+      <div class="panel-tab" id="tabCustomHtmlBtn" onclick="switchTab('customhtml', this)"><span class="panel-tab-icon">🧩</span>Vlastní HTML</div>
     </div>
 
     <div class="panel-content">
@@ -1152,6 +1153,27 @@ iframe#previewFrame {
             <button onclick="addSection()" style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px dashed var(--border2);border-radius:6px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;">
               + Přidat sekci
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-customhtml">
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">🧩</span>Vlastní HTML layout</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <label class="toggle-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <span style="font-size:12px;">Použít vlastní HTML místo běžného layoutu</span>
+              <input type="checkbox" id="useCustomLandingHtml" onchange="onToggleCustomLandingHtml(this.checked)">
+            </label>
+            <div id="customLandingHtmlHint" style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;display:none;">
+              Když je zapnuto, appka na <code>event.autorion.net</code> vykreslí přesně tenhle HTML kód — ignorují se barvy, sekce i hero obsah z ostatních záložek. Funguje: <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{registration_link}}</code>. Na rozdíl od e-mailu tady jde použít i moderní CSS (<code>&lt;style&gt;</code>, flexbox, grid) a JavaScript — je to normální webová stránka, ne e-mail.
+            </div>
+            <textarea id="customLandingHtml" placeholder="Sem vlož kompletní HTML kód stránky..."
+              style="width:100%;min-height:320px;font-family:monospace;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);resize:vertical;display:none;"
+              oninput="onCustomLandingHtmlInput(this.value)"></textarea>
           </div>
         </div>
       </div>
@@ -2339,6 +2361,22 @@ function moveSectionDown(id) {
   renderSectionsList(); markDirty(); applyLandingPreview();
 }
 
+let CUSTOM_LANDING_HTML = { enabled: false, html: '' };
+
+function onToggleCustomLandingHtml(checked) {
+  CUSTOM_LANDING_HTML.enabled = checked;
+  document.getElementById('customLandingHtmlHint').style.display = checked ? 'block' : 'none';
+  document.getElementById('customLandingHtml').style.display     = checked ? 'block' : 'none';
+  markDirty();
+  applyLandingPreview();
+}
+
+function onCustomLandingHtmlInput(value) {
+  CUSTOM_LANDING_HTML.html = value;
+  markDirty();
+  applyLandingPreview();
+}
+
 function applyLandingPreview() {
   if (EDITOR_MODE !== 'landing') return;
   const frame = document.getElementById('previewFrame');
@@ -2362,7 +2400,9 @@ function collectLandingPage() {
       intro_text: document.getElementById('contentIntroText')?.value || '',
       video_url: document.getElementById('heroVideoUrl')?.value || '',
     },
-    sections: LANDING_SECTIONS.map(s => ({ ...s }))
+    sections: LANDING_SECTIONS.map(s => ({ ...s })),
+    useCustomHtml: CUSTOM_LANDING_HTML.enabled,
+    customHtml: CUSTOM_LANDING_HTML.html,
   };
 }
 
@@ -2395,6 +2435,16 @@ function populateSectionsTab(landingPage) {
   } else {
     heroVideoInput.value = lp.hero?.video_url || '';
   }
+
+  // Custom HTML layout
+  CUSTOM_LANDING_HTML = { enabled: !!lp.useCustomHtml, html: lp.customHtml || '' };
+  const useCustomCb = document.getElementById('useCustomLandingHtml');
+  const customArea  = document.getElementById('customLandingHtml');
+  const customHint  = document.getElementById('customLandingHtmlHint');
+  if (useCustomCb) useCustomCb.checked = CUSTOM_LANDING_HTML.enabled;
+  if (customArea)  customArea.value    = CUSTOM_LANDING_HTML.html;
+  if (customArea)  customArea.style.display = CUSTOM_LANDING_HTML.enabled ? 'block' : 'none';
+  if (customHint)  customHint.style.display = CUSTOM_LANDING_HTML.enabled ? 'block' : 'none';
 
   renderSectionsList();
 }
