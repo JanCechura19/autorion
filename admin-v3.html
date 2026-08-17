@@ -2274,6 +2274,17 @@ function openImportModal() {
 function handleDrop(e) { e.preventDefault(); document.getElementById('importZone').classList.remove('dragover'); if(e.dataTransfer.files[0]) processImportFile(e.dataTransfer.files[0]); }
 function handleFileSelect(input) { if(input.files[0]) processImportFile(input.files[0]); }
 
+function normalizeCompanyKey(raw) {
+  // The import column is free text ("Albion Cars", "albion", "ALBION"...) —
+  // recognize common variations instead of requiring the exact internal key.
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  if (s.includes('albion'))  return 'albion';
+  if (s.includes('cardion')) return 'cardion';
+  if (s.includes('orbion'))  return 'orbion';
+  return s;
+}
+
 async function processImportFile(file) {
   const sendConfirmation = document.getElementById('fImportSendConfirmation')?.checked || false;
   const reader = new FileReader();
@@ -2291,7 +2302,7 @@ async function processImportFile(file) {
       const payload = {
         last_name: String(r[0]).trim(), first_name: String(r[1]).trim(), email,
         phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
-        company: String(r[5]||'').trim().toLowerCase(),
+        company: normalizeCompanyKey(r[5]),
         status: 'pending', event_id: currentEventId, send_confirmation: sendConfirmation
       };
       const created = await apiCall(`/events/${currentEventId}/guests`, 'POST', payload);
