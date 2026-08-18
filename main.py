@@ -161,6 +161,10 @@ def _build_booking_details_html(guest: dict, event: dict) -> str:
         {rows}'''
     return ""
 
+# Matches SAVE_DATE_DEALERS in admin-v3.html — used as a sensible fallback
+# color when a dealer's own accent/header color hasn't been explicitly set.
+DEALER_DEFAULT_COLORS = {"albion": "#A6916C", "cardion": "#8291A6", "orbion": "#333333"}
+
 def _build_templated_email_html(guest: dict, event: dict, template: dict, design: dict) -> str:
     """Renders an event-info-table email (used for the automatic registration
     confirmation) using the SAME customizable subject/body/design an admin
@@ -170,7 +174,28 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
     # be its own independent image just for this template ("custom") — mirrors
     # the same choice available in the Editor e-mailů.
     hero_source = template if (template.get("heroMode") == "custom") else d
+    hero_link_url = hero_source.get("videoUrl")  # unified/per-template video, may be overridden by dealer below
     registration_url = _get_registration_url(guest, event)
+
+    # Dealer branding: shared colors/logo (design.dealerBranding) plus this
+    # template's own video/hero override (template.dealerHero) — same model
+    # as the Editor e-mailů, applied here for the one Python-composed e-mail.
+    company = (guest.get("company") or "").strip().lower()
+    if template.get("dealerBrandingEnabled") is not False and company:
+        shared_brand = (design.get("dealerBranding") or {}).get(company, {})
+        template_brand = (template.get("dealerHero") or {}).get(company, {})
+        default_color = DEALER_DEFAULT_COLORS.get(company)
+        if shared_brand.get("logoUrl") or shared_brand.get("headerBg") or shared_brand.get("accentColor") or default_color:
+            d = {
+                **d,
+                "logoUrl":     shared_brand.get("logoUrl")     or d.get("logoUrl"),
+                "headerBg":    shared_brand.get("headerBg")    or default_color or d.get("headerBg"),
+                "accentColor": shared_brand.get("accentColor") or default_color or d.get("accentColor"),
+                "btnBg":       shared_brand.get("headerBg")    or default_color or d.get("btnBg"),
+            }
+        if template_brand.get("heroUrl"):
+            hero_source = {**hero_source, "showHero": True, "heroUrl": template_brand["heroUrl"]}
+            hero_link_url = template_brand.get("videoUrl")  # dealer's own video takes over; none = no link
 
     body_resolved = _linkify_markdown(
         _resolve_merge_tags(template.get("body") or "", guest, event, registration_url),
@@ -181,13 +206,16 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         for line in body_resolved.split("\n")
     )
 
-    logo_html = (
-        f'<img src="{d["logoUrl"]}" style="height:{d["logoHeight"]}px;" alt="">'
-        if d.get("logoUrl") else
-        f'<span style="color:{d["headerColor"]};font-size:19px;font-weight:700;letter-spacing:0.02em;">Autorion Events</span>'
-    )
+    logo_img_html = f'<img src="{d["logoUrl"]}" style="height:{d["logoHeight"]}px;" alt="">' if d.get("logoUrl") else ""
+    name_html = f'<div style="font-family:{d["fontFamily"]};font-size:19px;font-weight:700;color:{d["headerColor"]};letter-spacing:0.02em;">{event.get("name","")}</div>'
+    logo_html = f'{logo_img_html}<div style="margin-top:{"10px" if logo_img_html else "0"};">{name_html}</div>' if logo_img_html else name_html
+    hero_img_tag = f'<img src="{hero_source.get("heroUrl")}" width="600" style="display:block;width:100%;height:auto;" alt="">'
+    if hero_link_url:
+        hero_content = f'<a href="{hero_link_url}" style="display:block;text-decoration:none;">{hero_img_tag}</a>'
+    else:
+        hero_content = hero_img_tag
     hero_html = (
-        f'<tr><td style="padding:0;"><img src="{hero_source.get("heroUrl")}" width="600" style="display:block;width:100%;height:auto;" alt=""></td></tr>'
+        f'<tr><td style="padding:0;">{hero_content}</td></tr>'
         if (hero_source.get("showHero") and hero_source.get("heroUrl")) else ""
     )
     booking_html = _build_booking_details_html(guest, event)

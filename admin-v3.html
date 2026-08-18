@@ -2358,25 +2358,71 @@ const DEFAULT_EMAIL_TEMPLATES = [
 // back to the defaults above for events that haven't saved anything yet.
 let EMAIL_TEMPLATES = DEFAULT_EMAIL_TEMPLATES.map(t => ({...t}));
 
-// Automatic dealer branding for Save the Date: each guest's own `company`
-// field (albion/cardion/orbion) picks which logo+colors their copy of the
-// e-mail gets — set once per dealer here, applied automatically per guest.
+// Dealer branding for guests with a `company` (albion/cardion/orbion):
+// colors + logo are SHARED across every template (set once, used everywhere)
+// so they can't drift out of sync; video/hero/custom-HTML stay per template,
+// since a Save the Date video will usually differ from a Připomenutí video.
 const SAVE_DATE_DEALERS = [
   { key:'albion',  label:'Albion Cars',  defaultColor:'#A6916C' },
   { key:'cardion', label:'Cardion Cars', defaultColor:'#8291A6' },
   { key:'orbion',  label:'Orbion Cars',  defaultColor:'#333333' },
 ];
 
-function getDealerBrand(tmpl, dealerKey) {
-  return (tmpl?.dealerBranding || {})[dealerKey] || {};
+function getSharedDealerBrand(dealerKey) {
+  return (emailDesign.dealerBranding || {})[dealerKey] || {};
 }
 
-function setDealerBrandField(dealerKey, field, value) {
-  const tmpl = EMAIL_TEMPLATES.find(t => t.id === 'save_date');
-  if (!tmpl) return;
-  tmpl.dealerBranding = tmpl.dealerBranding || {};
-  tmpl.dealerBranding[dealerKey] = tmpl.dealerBranding[dealerKey] || {};
-  tmpl.dealerBranding[dealerKey][field] = value;
+function migrateDealerBranding() {
+  // One-time migration: dealer colors/logo used to live only on the Save
+  // the Date template's own dealerBranding object, mixed together with
+  // video/hero fields. They're now shared (emailDesign.dealerBranding),
+  // with video/hero/custom-HTML staying per template (tmpl.dealerHero).
+  if (emailDesign.dealerBranding && Object.keys(emailDesign.dealerBranding).length) return; // already migrated or configured fresh
+  const saveDateTmpl = EMAIL_TEMPLATES.find(t => t.id === 'save_date');
+  if (!saveDateTmpl || !saveDateTmpl.dealerBranding) return;
+
+  const sharedBranding = {};
+  const perTemplateHero = saveDateTmpl.dealerHero ? {...saveDateTmpl.dealerHero} : {};
+  Object.entries(saveDateTmpl.dealerBranding).forEach(([key, old]) => {
+    const shared = {};
+    if (old.logoUrl)     shared.logoUrl     = old.logoUrl;
+    if (old.headerBg)    shared.headerBg    = old.headerBg;
+    if (old.accentColor) shared.accentColor = old.accentColor;
+    if (Object.keys(shared).length) sharedBranding[key] = shared;
+
+    const hero = {...(perTemplateHero[key] || {})};
+    if (old.heroUrl)    hero.heroUrl    = old.heroUrl;
+    if (old.videoUrl)   hero.videoUrl   = old.videoUrl;
+    if (old.customHtml) hero.customHtml = old.customHtml;
+    if (Object.keys(hero).length) perTemplateHero[key] = hero;
+  });
+
+  if (Object.keys(sharedBranding).length) emailDesign.dealerBranding = sharedBranding;
+  if (Object.keys(perTemplateHero).length) saveDateTmpl.dealerHero = perTemplateHero;
+}
+
+function getDealerTemplateFields(tmpl, dealerKey) {
+  return (tmpl?.dealerHero || {})[dealerKey] || {};
+}
+
+function getDealerBrand(tmpl, dealerKey) {
+  // Merged view used when actually building an e-mail: shared colors/logo
+  // plus this template's own video/hero/custom-HTML for the dealer.
+  return { ...getSharedDealerBrand(dealerKey), ...getDealerTemplateFields(tmpl, dealerKey) };
+}
+
+function setSharedDealerField(dealerKey, field, value) {
+  emailDesign.dealerBranding = emailDesign.dealerBranding || {};
+  emailDesign.dealerBranding[dealerKey] = emailDesign.dealerBranding[dealerKey] || {};
+  emailDesign.dealerBranding[dealerKey][field] = value;
+  updateEmailPreview();
+}
+
+function setDealerTemplateField(dealerKey, field, value) {
+  const tmpl = EMAIL_TEMPLATES.find(t => t.id === activeEmailTemplateId) || EMAIL_TEMPLATES[0];
+  tmpl.dealerHero = tmpl.dealerHero || {};
+  tmpl.dealerHero[dealerKey] = tmpl.dealerHero[dealerKey] || {};
+  tmpl.dealerHero[dealerKey][field] = value;
   updateEmailPreview();
 }
 
@@ -2387,12 +2433,13 @@ function extractYouTubeId(url) {
 }
 
 function onDealerVideoUrlChange(dealerKey, url) {
-  setDealerBrandField(dealerKey, 'videoUrl', url);
+  setDealerTemplateField(dealerKey, 'videoUrl', url);
   const ytId = extractYouTubeId(url);
   if (ytId) {
-    // maxresdefault isn't available for every video — hqdefault always is,
-    // and is still a solid resolution for an e-mail hero banner.
-    setDealerBrandField(dealerKey, 'heroUrl', `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`);
+    // Kept as a real hosted URL (not baked/re-encoded as base64) so it also
+    // displays correctly in Outlook, which has poor support for embedded
+    // (data URI) images. Trade-off: no baked-in play icon for this path.
+    setDealerTemplateField(dealerKey, 'heroUrl', `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`);
     renderEmailEditor();
     updateEmailPreview();
   }
@@ -2404,6 +2451,7 @@ function onHeroVideoUrlChange(url) {
   target.videoUrl = url;
   const ytId = extractYouTubeId(url);
   if (ytId) {
+    // Kept as a real hosted URL — see note above.
     target.heroUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
     target.showHero = true;
     renderEmailEditor();
@@ -2411,7 +2459,26 @@ function onHeroVideoUrlChange(url) {
   updateEmailPreview();
 }
 
-function resizeImageFile(file, maxWidth, format, quality, callback) {
+function drawPlayButton(ctx, w, h) {
+  // Baked directly into the image's own pixels — unlike a CSS overlay, this
+  // renders identically in every e-mail client (Gmail, Outlook, Apple Mail...).
+  const r = Math.round(Math.min(w, h) * 0.14); // circle radius, proportional to image size
+  const cx = w / 2, cy = h / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fill();
+  const triSize = r * 0.7;
+  ctx.beginPath();
+  ctx.moveTo(cx - triSize * 0.45, cy - triSize);
+  ctx.lineTo(cx - triSize * 0.45, cy + triSize);
+  ctx.lineTo(cx + triSize * 0.85, cy);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+}
+
+function resizeImageFile(file, maxWidth, format, quality, callback, bakePlayButton) {
   // Uploaded logos/thumbnails get embedded as base64 directly in the e-mail
   // HTML — an unresized photo can easily push a single e-mail past Gmail's
   // ~102KB clipping threshold ("Zobrazujeme pouze část e-mailu..."). Resizing
@@ -2425,7 +2492,9 @@ function resizeImageFile(file, maxWidth, format, quality, callback) {
       const h = Math.max(1, Math.round(img.naturalHeight * scale));
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      if (bakePlayButton) drawPlayButton(ctx, w, h);
       callback(canvas.toDataURL(format, quality));
     };
     img.src = e.target.result;
@@ -2433,10 +2502,33 @@ function resizeImageFile(file, maxWidth, format, quality, callback) {
   reader.readAsDataURL(file);
 }
 
+function bakePlayButtonOntoUrl(url, callback) {
+  // Used for the auto-fetched YouTube thumbnail (a cross-origin URL, not a
+  // local file). YouTube's thumbnail server allows cross-origin canvas
+  // reads, but if that ever changes/fails, we gracefully fall back to the
+  // plain thumbnail — still clickable, just without the baked-in icon.
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      drawPlayButton(ctx, canvas.width, canvas.height);
+      callback(canvas.toDataURL('image/jpeg', 0.85));
+    } catch (err) {
+      callback(url); // tainted canvas or other failure — use the plain thumbnail
+    }
+  };
+  img.onerror = () => callback(url);
+  img.src = url;
+}
+
 function handleDealerLogoUpload(dealerKey, input) {
   const file = input.files[0]; if (!file) return;
   resizeImageFile(file, 300, 'image/png', 1, dataUrl => {
-    setDealerBrandField(dealerKey, 'logoUrl', dataUrl);
+    setSharedDealerField(dealerKey, 'logoUrl', dataUrl);
     renderEmailEditor();
     updateEmailPreview();
   });
@@ -2445,10 +2537,10 @@ function handleDealerLogoUpload(dealerKey, input) {
 function handleDealerVideoThumbUpload(dealerKey, input) {
   const file = input.files[0]; if (!file) return;
   resizeImageFile(file, 800, 'image/jpeg', 0.82, dataUrl => {
-    setDealerBrandField(dealerKey, 'heroUrl', dataUrl);
+    setDealerTemplateField(dealerKey, 'heroUrl', dataUrl);
     renderEmailEditor();
     updateEmailPreview();
-  });
+  }, true); // bake play button — this upload slot is specifically for a video preview
 }
 
 function dealerColorRow(dealerKey, label, field, value) {
@@ -2456,10 +2548,10 @@ function dealerColorRow(dealerKey, label, field, value) {
   return `<div class="ctrl-row"><div class="ctrl-label">${label}</div>
     <div class="color-ctrl">
       <div class="color-swatch" style="background:${value}">
-        <input type="color" value="${value}" oninput="setDealerBrandField('${dealerKey}','${field}',this.value);this.closest('.color-swatch').style.background=this.value;syncEmailHex(this,'${id}')">
+        <input type="color" value="${value}" oninput="setSharedDealerField('${dealerKey}','${field}',this.value);this.closest('.color-swatch').style.background=this.value;syncEmailHex(this,'${id}')">
       </div>
       <input class="color-hex" id="${id}" value="${value.toUpperCase()}" maxlength="7"
-        oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){setDealerBrandField('${dealerKey}','${field}',this.value)}">
+        oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){setSharedDealerField('${dealerKey}','${field}',this.value)}">
     </div>
   </div>`;
 }
@@ -2848,7 +2940,7 @@ function renderEmailEditor() {
         <div style="width:100%;max-width:600px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
             <div style="font-size:11px;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Náhled e-mailu</div>
-            ${activeEmailTemplateId === 'save_date' && (EMAIL_TEMPLATES.find(t=>t.id==='save_date')?.dealerBrandingEnabled !== false) ? `
+            ${(EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId)?.dealerBrandingEnabled !== false) ? `
             <select onchange="setPreviewDealer(this.value)" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;">
               <option value="">Jednotný design</option>
               ${SAVE_DATE_DEALERS.map(dl=>`<option value="${dl.key}" ${previewDealerKey===dl.key?'selected':''}>Náhled: ${dl.label}</option>`).join('')}
@@ -3035,31 +3127,15 @@ function buildEmailEditorControls(tmpl) {
       </div>
     </div>
 
-    ${tmpl.id === 'save_date' ? `
     <div style="border-bottom:1px solid var(--border);">
       <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
         <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">🏷️ Barvy a loga podle dealera</span>
         <span style="color:var(--muted);font-size:10px;">▾</span>
       </div>
       <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:14px;">
-        <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:12px;">Rozesílat podle firmy hosta</span>
-          <label class="toggle"><input type="checkbox" ${tmpl.dealerBrandingEnabled!==false?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id==='save_date').dealerBrandingEnabled=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
-        </div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.5;">${tmpl.dealerBrandingEnabled!==false
-          ? 'Zapnuto: podle pole "Společnost" u hosta appka automaticky použije odpovídající logo a barvy — u každého hosta jinak, v rámci jednoho rozeslání. Hosté bez přiřazené společnosti dostanou jednotný design z předchozí sekce.'
-          : 'Vypnuto: úplně všichni hosté dostanou stejný, jednotný design z předchozí sekce — nastavení dealerů níže se ignoruje.'}</div>
-        ${tmpl.dealerBrandingEnabled!==false ? `
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Sdílené pro všechny šablony — nastav jednou, platí všude. Zapnutí pro konkrétní šablonu a video/náhled řešíš níže v sekci "Rozeslání podle firmy".</div>
         ${SAVE_DATE_DEALERS.map(dl => {
-          const brand = getDealerBrand(tmpl, dl.key);
-          if (tmpl.useCustomHtml) {
-            return `
-            <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
-              <div style="font-weight:700;font-size:13px;margin-bottom:8px;">${dl.label}</div>
-              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Vlastní HTML jen pro tohoto dealera. Když necháte prázdné, použije se obecné vlastní HTML z první sekce.</div>
-              <textarea id="dealerHtml_${dl.key}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:140px;outline:none;background:var(--surface2);resize:vertical;" oninput="setDealerBrandField('${dl.key}','customHtml',this.value)">${brand.customHtml||''}</textarea>
-            </div>`;
-          }
+          const brand = getSharedDealerBrand(dl.key);
           return `
           <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
             <div style="font-weight:700;font-size:13px;margin-bottom:10px;">${dl.label}</div>
@@ -3068,27 +3144,59 @@ function buildEmailEditorControls(tmpl) {
                 ${brand.logoUrl ? `<img src="${brand.logoUrl}" style="max-height:36px;">` : '+ Nahrát logo'}
               </div>
               <input type="file" id="dealerLogo_${dl.key}" accept="image/*" style="display:none" onchange="handleDealerLogoUpload('${dl.key}', this)">
-              ${brand.logoUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setDealerBrandField('${dl.key}','logoUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit logo</button>` : ''}
+              ${brand.logoUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setSharedDealerField('${dl.key}','logoUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit logo</button>` : ''}
             </div>
             ${dealerColorRow(dl.key, 'Barva záhlaví', 'headerBg',    brand.headerBg    || dl.defaultColor)}
             ${dealerColorRow(dl.key, 'Akcent',        'accentColor', brand.accentColor || dl.defaultColor)}
-            <div class="ctrl-row" style="margin-top:10px;">
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div style="border-bottom:1px solid var(--border);">
+      <div style="padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;" onclick="toggleESection(this)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">📤 Rozeslání podle firmy</span>
+        <span style="color:var(--muted);font-size:10px;">▾</span>
+      </div>
+      <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:14px;">
+        <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;">Rozesílat podle firmy hosta (jen tato šablona)</span>
+          <label class="toggle"><input type="checkbox" ${tmpl.dealerBrandingEnabled!==false?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).dealerBrandingEnabled=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
+        </div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">${tmpl.dealerBrandingEnabled!==false
+          ? 'Zapnuto: podle pole "Společnost" u hosta appka automaticky použije barvy/logo dealera z předchozí sekce — u každého hosta jinak, v rámci jednoho rozeslání. Hosté bez přiřazené společnosti dostanou jednotný design.'
+          : 'Vypnuto: úplně všichni hosté u téhle šablony dostanou stejný, jednotný design — nastavení dealerů se ignoruje.'}</div>
+        ${tmpl.dealerBrandingEnabled!==false ? `
+        ${SAVE_DATE_DEALERS.map(dl => {
+          const brand = getDealerTemplateFields(tmpl, dl.key);
+          if (tmpl.useCustomHtml) {
+            return `
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+              <div style="font-weight:700;font-size:13px;margin-bottom:8px;">${dl.label}</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Vlastní HTML jen pro tohoto dealera a tuto šablonu. Když necháte prázdné, použije se obecné vlastní HTML z první sekce.</div>
+              <textarea id="dealerHtml_${dl.key}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:140px;outline:none;background:var(--surface2);resize:vertical;" oninput="setDealerTemplateField('${dl.key}','customHtml',this.value)">${brand.customHtml||''}</textarea>
+            </div>`;
+          }
+          return `
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:10px;">${dl.label}</div>
+            <div class="ctrl-row" style="margin-top:0;">
               <div class="ctrl-label">Odkaz na video (YouTube)</div>
               <input class="ctrl-input" value="${brand.videoUrl||''}" placeholder="https://youtube.com/watch?v=..." oninput="onDealerVideoUrlChange('${dl.key}',this.value)">
-              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Náhled (nahradí hero obrázek) se u YouTube odkazů natáhne automaticky z videa.</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Náhled (nahradí hero obrázek u téhle šablony) se u YouTube odkazů natáhne automaticky z videa.</div>
             </div>
             <div class="ctrl-row" style="margin-top:8px;">
               <div style="border:1px dashed var(--border2);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--muted);" onclick="document.getElementById('dealerVideo_${dl.key}').click()">
                 ${brand.heroUrl ? `<img src="${brand.heroUrl}" style="max-height:70px;width:100%;object-fit:cover;border-radius:4px;">` : '+ Vlastní náhled (nepovinné, přebije automatický)'}
               </div>
               <input type="file" id="dealerVideo_${dl.key}" accept="image/*" style="display:none" onchange="handleDealerVideoThumbUpload('${dl.key}', this)">
-              ${brand.heroUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setDealerBrandField('${dl.key}','heroUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit náhled</button>` : ''}
+              ${brand.heroUrl ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:4px;" onclick="setDealerTemplateField('${dl.key}','heroUrl','');renderEmailEditor();updateEmailPreview()">🗑 Odstranit náhled</button>` : ''}
             </div>
           </div>`;
         }).join('')}
         ` : ''}
       </div>
-    </div>` : ''}
+    </div>
 
     
     <div style="border-bottom:1px solid var(--border);">
@@ -3377,6 +3485,7 @@ function applyHeroCrop() {
   const target = s.targetUnified
     ? emailDesign
     : (EMAIL_TEMPLATES.find(t => t.id === s.targetTemplateId) || emailDesign);
+  if (target.videoUrl) drawPlayButton(ctx, targetW, targetH); // already linked to a video — keep the icon visible after re-cropping
   target.heroUrl  = canvas.toDataURL('image/jpeg', 0.88);
   target.heroCrop = { zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY };
 
@@ -3513,10 +3622,11 @@ function buildEmailHTML(templateId, preview, guest) {
   let   heroT  = getHeroTarget(tmpl);
   let   heroLinkUrl = heroT.videoUrl || null; // wraps the hero image in a link when set
 
-  // Save the Date: automatically apply the guest's own dealer branding
-  // (logo + colors + video preview) based on their `company` field — per
-  // guest, within the same bulk send — falling back to the shared design.
-  if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
+  // Dealer branding: automatically apply the guest's own dealer branding
+  // (shared logo + colors, plus this template's own video preview) based on
+  // their `company` field — per guest, within the same bulk send — falling
+  // back to the shared design otherwise.
+  if (tmpl.dealerBrandingEnabled !== false && guest?.company) {
     const brand = getDealerBrand(tmpl, guest.company);
     const dealerDef = SAVE_DATE_DEALERS.find(dl => dl.key === guest.company);
     const defaultDealerColor = dealerDef ? dealerDef.defaultColor : null;
@@ -3543,7 +3653,7 @@ function buildEmailHTML(templateId, preview, guest) {
   // Merge tags and [text](url) links still get resolved inside it.
   if (tmpl.useCustomHtml) {
     let htmlSource = tmpl.customHtml;
-    if (tmpl.id === 'save_date' && tmpl.dealerBrandingEnabled !== false && guest?.company) {
+    if (tmpl.dealerBrandingEnabled !== false && guest?.company) {
       const brand = getDealerBrand(tmpl, guest.company);
       if (brand.customHtml) htmlSource = brand.customHtml;
     }
@@ -3584,12 +3694,7 @@ ${customBody}
 
   
   ${heroT.showHero && heroT.heroUrl ? `<tr><td style="padding:0;">${heroLinkUrl
-    ? `<a href="${heroLinkUrl}" style="display:block;position:relative;text-decoration:none;">
-         <img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">
-         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:64px;background:rgba(0,0,0,0.6);border-radius:50%;text-align:center;line-height:64px;">
-           <span style="display:inline-block;width:0;height:0;border-top:12px solid transparent;border-bottom:12px solid transparent;border-left:20px solid #ffffff;margin-left:6px;vertical-align:middle;"></span>
-         </div>
-       </a>`
+    ? `<a href="${heroLinkUrl}" style="display:block;text-decoration:none;"><img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></a>`
     : `<img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">`
   }</td></tr>` : ''}
 
@@ -5254,6 +5359,7 @@ async function selectEvent(id) {
   emailDesign = (ev.email_design && Object.keys(ev.email_design).length)
     ? {...ev.email_design}
     : defaultEmailDesign();
+  migrateDealerBranding();
   renderSidebarV2();
   await loadGuestsFromApi(id);
   updateNavBadge();
