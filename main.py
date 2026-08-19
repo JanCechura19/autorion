@@ -218,6 +218,10 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         f'<tr><td style="padding:0;">{hero_content}</td></tr>'
         if (hero_source.get("showHero") and hero_source.get("heroUrl")) else ""
     )
+    video_caption_html = (
+        f'<tr><td style="padding:10px 32px 0;text-align:center;"><a href="{hero_link_url}" style="font-size:13px;color:{d["accentColor"]};text-decoration:none;font-weight:600;">&#9654; Přehrát video</a></td></tr>'
+        if (hero_source.get("showHero") and hero_source.get("heroUrl") and hero_link_url) else ""
+    )
     booking_html = _build_booking_details_html(guest, event)
     button_html = (
         f'''<div style="text-align:center;margin-top:28px;">
@@ -232,6 +236,7 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
       <div style="max-width:520px;margin:0 auto;background:{d['containerBg']};border-radius:{d['borderRadius']};overflow:hidden;border:1px solid #ddd9d0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
           {hero_html}
+          {video_caption_html}
           <tr><td style="background:{d['headerBg']};padding:26px 32px;text-align:{d['logoAlign']};">{logo_html}</td></tr>
           <tr><td style="padding:32px;">
             <div style="font-size:{d['fontSize']};color:{d['bodyColor']};line-height:1.7;">

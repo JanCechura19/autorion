@@ -3697,6 +3697,9 @@ ${customBody}
     ? `<a href="${heroLinkUrl}" style="display:block;text-decoration:none;"><img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt=""></a>`
     : `<img src="${heroT.heroUrl}" width="600" style="display:block;width:100%;height:auto;" alt="">`
   }</td></tr>` : ''}
+  ${heroT.showHero && heroT.heroUrl && heroLinkUrl ? `<tr><td style="padding:10px 32px 0;text-align:center;">
+    <a href="${heroLinkUrl}" style="font-size:13px;color:${d.accentColor};text-decoration:none;font-weight:600;">▶ Přehrát video</a>
+  </td></tr>` : ''}
 
   
   ${d.showDivider ? `<tr><td style="height:4px;background:${d.accentColor};"></td></tr>` : ''}
