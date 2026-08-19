@@ -532,6 +532,10 @@ def init_db():
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS vehicles JSONB DEFAULT '[]';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_templates JSONB DEFAULT '[]';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_design JSONB DEFAULT '{}';")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS landing_page_views INTEGER DEFAULT 0;")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS landing_page_views_noreg INTEGER DEFAULT 0;")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_page_views INTEGER DEFAULT 0;")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_page_views_invite INTEGER DEFAULT 0;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -869,8 +873,13 @@ def get_archived_events(user=Depends(get_current_user)):
 def get_event_public(slug: str):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM events WHERE slug = %s AND registration_open = TRUE", (slug,))
+    cur.execute(
+        "UPDATE events SET registration_page_views = COALESCE(registration_page_views, 0) + 1 "
+        "WHERE slug = %s AND registration_open = TRUE RETURNING *",
+        (slug,)
+    )
     event = cur.fetchone()
+    conn.commit()
     cur.close()
     conn.close()
     if not event:
@@ -878,13 +887,21 @@ def get_event_public(slug: str):
     return dict(event)
 
 @app.get("/api/events/landing/{slug}")
-def get_event_landing(slug: str):
+def get_event_landing(slug: str, reg: str = None):
     """Public landing page data — does not require registration_open, since
-    the info page can exist independently of whether registration is live."""
+    the info page can exist independently of whether registration is live.
+    Tracks visits to the two link variants separately: the generic link
+    (with the register button, e.g. for partners) vs. the ?reg=0 link sent
+    to people who already have a personal registration link by e-mail."""
+    column = "landing_page_views_noreg" if reg == "0" else "landing_page_views"
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM events WHERE slug = %s", (slug,))
+    cur.execute(
+        f"UPDATE events SET {column} = COALESCE({column}, 0) + 1 WHERE slug = %s RETURNING *",
+        (slug,)
+    )
     event = cur.fetchone()
+    conn.commit()
     cur.close()
     conn.close()
     if not event:
@@ -1235,9 +1252,15 @@ def get_invite_prefill(slug: str, token: str):
         (ev["id"], token)
     )
     guest = cur.fetchone()
-    cur.close(); conn.close()
     if not guest:
+        cur.close(); conn.close()
         raise HTTPException(status_code=404, detail="Pozvánka nenalezena nebo již není platná.")
+    cur.execute(
+        "UPDATE events SET registration_page_views_invite = COALESCE(registration_page_views_invite, 0) + 1 WHERE id = %s",
+        (ev["id"],)
+    )
+    conn.commit()
+    cur.close(); conn.close()
     return dict(guest)
 
 @app.post("/api/events/public/{slug}/invite/{token}/complete")

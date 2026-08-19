@@ -345,7 +345,7 @@ async function loadEventData() {
   const isPreview = !!previewMatch;
   const fetchUrl = isPreview
     ? `${API_BASE}/events/preview/${previewMatch[1]}`
-    : `${API_BASE}/events/landing/${slug}`;
+    : `${API_BASE}/events/landing/${slug}${isRegisterForcedOff() ? '?reg=0' : ''}`;
 
   try {
     const res = await fetch(fetchUrl);
