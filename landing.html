@@ -323,6 +323,15 @@ function getEventSlugFromUrl() {
   return params.get('event');
 }
 
+// A link can force the register CTA off regardless of the event's own
+// saved setting — e.g. ?event=xyz&reg=0 for people who already have a
+// personal registration link from an e-mail, so they don't accidentally
+// register a second time through the generic landing-page button.
+function isRegisterForcedOff() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('reg') === '0';
+}
+
 async function loadEventData() {
   const slug = getEventSlugFromUrl();
   EVENT_SLUG = slug;
@@ -404,6 +413,13 @@ function renderPage(event) {
     if (customWrap) {
       customWrap.style.display = 'block';
       customWrap.innerHTML = resolveLandingMergeTags(lp.customHtml, event);
+      // Any registration button/link tagged with class="reg-cta" in the
+      // custom HTML gets hidden when the link explicitly says ?reg=0 —
+      // used for people who already have a personal registration link
+      // from an e-mail, to avoid a second/duplicate registration.
+      if (isRegisterForcedOff()) {
+        customWrap.querySelectorAll('.reg-cta').forEach(el => { el.style.display = 'none'; });
+      }
     }
     return;
   }
@@ -441,7 +457,7 @@ function renderPage(event) {
   }
 
   const regUrl = event.slug ? `https://registration.autorion.net?event=${event.slug}` : '#';
-  const showRegisterBtn = lp.showRegisterButton !== false; // default: shown
+  const showRegisterBtn = lp.showRegisterButton !== false && !isRegisterForcedOff(); // default: shown, unless ?reg=0 overrides
   document.getElementById('ctaRegister').href = regUrl;
   document.getElementById('ctaRegisterFooter').href = regUrl;
   document.querySelector('.cta-row').style.display = showRegisterBtn ? '' : 'none';
