@@ -3032,8 +3032,8 @@ function buildEmailEditorControls(tmpl) {
           <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code>. <code>{{event_details}}</code> vloží pěkný blok Datum/Místo vedle sebe. Pro podpis "tým <code>{{team_name}}</code>" se podle firmy hosta dosadí Albion Cars / Cardion Cars / Orbion Cars (nebo Autorion Events).</div>
         </div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:12px;">Zobrazit tlačítko</span>
-          <label class="toggle"><input type="checkbox" ${d.showButton!==false?'checked':''} onchange="emailDesign.showButton=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
+          <span style="font-size:12px;">Zobrazit tlačítko (jen tato šablona)</span>
+          <label class="toggle"><input type="checkbox" ${tmpl.showButton!==false?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).showButton=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text tlačítka</div>
           <input class="ctrl-input" id="eBtnText" value="${d.btnText}" oninput="emailDesign.btnText=this.value;updateEmailPreview()">
@@ -3707,7 +3707,7 @@ ${customBody}
       ${bodyLines}
     </div>
     
-    ${d.showButton !== false ? `
+    ${tmpl.showButton !== false ? `
     <div style="text-align:center;margin-top:28px;">
       <a href="${getRegistrationUrl(guest)}" style="display:inline-block;background:${d.btnBg};color:${d.btnColor};text-decoration:none;padding:13px 32px;border-radius:${d.borderRadius};font-size:15px;font-weight:600;letter-spacing:0.02em;">${(preview && document.getElementById('eBtnText')?.value) || d.btnText}</a>
     </div>` : ''}

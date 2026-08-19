@@ -223,7 +223,7 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         f'''<div style="text-align:center;margin-top:28px;">
           <a href="{registration_url}" style="display:inline-block;background:{d['btnBg']};color:{d['btnColor']};text-decoration:none;padding:13px 32px;border-radius:{d['borderRadius']};font-size:15px;font-weight:600;letter-spacing:0.02em;">{d.get('btnText') or 'Potvrdit účast'}</a>
         </div>'''
-        if d.get("showButton") else ""
+        if template.get("showButton", d.get("showButton")) else ""
     )
     date_label = _format_event_date(event)
 
