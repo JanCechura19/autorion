@@ -1718,6 +1718,10 @@ async function reloadEventsDB() {
       vehicles:          ev.vehicles || [],
       email_templates:   ev.email_templates || [],
       email_design:      ev.email_design || {},
+      landing_page_views:             ev.landing_page_views || 0,
+      landing_page_views_noreg:       ev.landing_page_views_noreg || 0,
+      registration_page_views:        ev.registration_page_views || 0,
+      registration_page_views_invite: ev.registration_page_views_invite || 0,
     });
   });
   return true;
