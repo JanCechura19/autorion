@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Odhlášení — Autorion Events</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-primary: #0e0d0b;
+    --color-accent: #b8924a;
+    --color-surface: #f7f4ef;
+    --color-muted: #8a8070;
+    --color-border: #d6cfc3;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-mono: 'Geist Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font-family: var(--font-display);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+  }
+  .card {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 56px 40px;
+  }
+  .icon {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 28px;
+    font-size: 24px;
+  }
+  h1 {
+    font-size: 30px;
+    font-weight: 400;
+    margin-bottom: 16px;
+  }
+  h1 em { font-style: italic; color: var(--color-accent); }
+  p {
+    font-size: 17px;
+    line-height: 1.65;
+    color: #4a463e;
+  }
+  .muted {
+    margin-top: 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+    letter-spacing: 0.02em;
+  }
+  .error { color: #a33f2e; }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="icon">⏳</div>
+  <h1>Zpracováváme...</h1>
+  <p>Chvilku strpení.</p>
+</div>
+
+<script>
+const API_BASE = 'https://autorion.net/api';
+
+function getTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token');
+}
+
+async function run() {
+  const card  = document.getElementById('card');
+  const token = getTokenFromUrl();
+
+  if (!token) {
+    card.innerHTML = `
+      <div class="icon">✕</div>
+      <h1>Chybí odkaz</h1>
+      <p class="error">V adrese chybí potřebný identifikátor. Zkontrolujte prosím, že jste odkaz otevřeli celý, přímo z e-mailu.</p>`;
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/guests/unsubscribe/${token}`);
+    if (!res.ok) {
+      card.innerHTML = `
+        <div class="icon">✕</div>
+        <h1>Odkaz nenalezen</h1>
+        <p class="error">Tento odkaz už není platný, nebo byl použit už dříve.</p>`;
+      return;
+    }
+    const data = await res.json();
+    card.innerHTML = `
+      <div class="icon">✓</div>
+      <h1>Odhlášeno</h1>
+      <p>Zaznamenali jsme, že se akce${data.event_name ? ` <em>${data.event_name}</em>` : ''} nezúčastníte, a nebudeme vám k ní dál posílat e-maily.</p>
+      <div class="muted">Pokud jde o omyl, ozvěte se nám prosím na e-mailu, který vám tuto zprávu poslal.</div>`;
+  } catch (err) {
+    card.innerHTML = `
+      <div class="icon">✕</div>
+      <h1>Nepodařilo se to</h1>
+      <p class="error">Zkuste to prosím později, nebo nám napište přímo.</p>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', run);
+</script>
+
+</body>
+</html>

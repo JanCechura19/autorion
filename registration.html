@@ -912,7 +912,7 @@
           <label class="field-label" id="windowLabel">Čas příchodu</label>
           <div class="select-wrap">
             <select class="field-select" id="selectedWindow">
-              <option value="">— vyberte časový blok —</option>
+              <option value="">— vyberte den a časový blok —</option>
             </select>
           </div>
           <div class="field-error" id="windowError">Vyberte prosím čas příchodu.</div>
@@ -941,7 +941,7 @@
         </div>
         <div>
           <div class="gdpr-text" id="gdprText">
-            Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" data-i18n="gdprLink">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.
+            Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" data-i18n="gdprLink">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat. Upozorňujeme, že z průběhu akce bude pořizován audiovizuální záznam pro marketingové účely. Účastí na akci souhlasíte s natáčením.
           </div>
           <div class="gdpr-error" id="gdprError" data-i18n="errGdpr">Souhlas se zpracováním osobních údajů je povinný.</div>
         </div>
@@ -1017,7 +1017,7 @@ const T = {
     slotConflict:     '(koliduje)',
     slotConflictMsg:  '⚠ Tento čas koliduje s jinou Vaší rezervací.',
     // GDPR
-    gdprText:   (eventName) => `Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce ${eventName||''}. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" id="gdprLinkCs">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat.`,
+    gdprText:   (eventName) => `Souhlasím se zpracováním osobních údajů společností Autorion s.r.o. (mateřská společnost Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., a Orbion Cars s.r.o.) za účelem organizace a realizace akce ${eventName||''}. Beru na vědomí, že mé osobní údaje (jméno, příjmení, kontaktní informace) budou zpracovány v souladu s <a href="#" onclick="event.stopPropagation()" id="gdprLinkCs">Zásadami ochrany osobních údajů</a> a nebudou předány třetím stranám bez mého souhlasu. Souhlas uděluji dobrovolně a mohu jej kdykoli odvolat. Upozorňujeme, že z průběhu akce bude pořizován audiovizuální záznam pro marketingové účely. Účastí na akci souhlasíte s natáčením.`,
     gdprLink:   'Zásadami ochrany osobních údajů',
     // Validation errors
     errSalutation: 'Vyberte prosím oslovení.',
@@ -1077,7 +1077,7 @@ const T = {
     slotBooked:       '(unavailable)',
     slotConflict:     '(conflict)',
     slotConflictMsg:  '⚠ This time slot conflicts with another booking.',
-    gdprText:   (eventName) => `I consent to the processing of my personal data by Autorion s.r.o. (parent company of Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., and Orbion Cars s.r.o.) for the purpose of organising and running the ${eventName||''} event. I acknowledge that my personal data (name, contact information) will be processed in accordance with the <a href="#" onclick="event.stopPropagation()" id="gdprLinkEn">Privacy Policy</a> and will not be shared with third parties without my consent. I give this consent voluntarily and may withdraw it at any time.`,
+    gdprText:   (eventName) => `I consent to the processing of my personal data by Autorion s.r.o. (parent company of Albion Cars s.r.o., Cardion Cars a.s., Auto Cardion s.r.o., and Orbion Cars s.r.o.) for the purpose of organising and running the ${eventName||''} event. I acknowledge that my personal data (name, contact information) will be processed in accordance with the <a href="#" onclick="event.stopPropagation()" id="gdprLinkEn">Privacy Policy</a> and will not be shared with third parties without my consent. I give this consent voluntarily and may withdraw it at any time. Please note that audiovisual recordings will be made during the event for marketing purposes. By attending the event, you consent to being filmed.`,
     gdprLink:   'Privacy Policy',
     errSalutation: 'Please select a title.',
     errFirstName:  'Please enter your first name.',
@@ -1931,9 +1931,10 @@ function initRegistrationMode() {
     TIME_WINDOWS.forEach(w => {
       const full    = w.capacity > 0 && w.booked >= w.capacity;
       const avail   = w.capacity > 0 ? ` (${w.capacity - w.booked} volných míst)` : '';
+      const dayPart = w.day ? `${w.day} · ` : '';
       const opt     = document.createElement('option');
       opt.value     = w.id;
-      opt.textContent = `${w.label} · ${w.from}–${w.to}${avail}`;
+      opt.textContent = `${dayPart}${w.label} · ${w.from}–${w.to}${avail}`;
       if (full) { opt.disabled = true; opt.textContent += ' — PLNO'; }
       sel.appendChild(opt);
     });

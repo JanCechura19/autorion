@@ -2802,7 +2802,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
 
     
     <div class="form-row">
-      <label>Zpráva <span style="font-weight:300;text-transform:none;color:var(--muted);">— {{last_name}} {{event_name}} {{event_date}} {{team_name}} {{event_details}} {{registration_link}}</span></label>
+      <label>Zpráva <span style="font-weight:300;text-transform:none;color:var(--muted);">— {{last_name}} {{event_name}} {{event_date}} {{team_name}} {{event_details}} {{booking_summary}} {{registration_link}}</span></label>
       <textarea id="eBody" style="min-height:120px;font-size:13px;line-height:1.7;width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;outline:none;background:var(--bg);">${tmpl.body.replace(/{{event_name}}/g,EVENT.name).replace(/{{event_date}}/g,EVENT.date_from).replace(/{{event_location}}/g,EVENT.location)}</textarea>
     </div>
   `;
@@ -3032,7 +3032,7 @@ function buildEmailEditorControls(tmpl) {
           <label class="toggle"><input type="checkbox" ${tmpl.useCustomHtml?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).useCustomHtml=this.checked;renderEmailEditor();updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         ${tmpl.useCustomHtml ? `
-        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{team_name}}</code>, <code>{{event_details}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{team_name}}</code>, <code>{{event_details}}</code>, <code>{{booking_summary}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
         <textarea id="eCustomHtml" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:220px;outline:none;background:var(--surface2);resize:vertical;" oninput="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).customHtml=this.value;updateEmailPreview()">${tmpl.customHtml||''}</textarea>
         ` : ''}
       </div>
@@ -3049,7 +3049,7 @@ function buildEmailEditorControls(tmpl) {
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
           <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code>. <code>{{event_details}}</code> vloží pěkný blok Datum/Místo vedle sebe. Pro podpis "tým <code>{{team_name}}</code>" se podle firmy hosta dosadí Albion Cars / Cardion Cars / Orbion Cars (nebo Autorion Events).</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code>. <code>{{event_details}}</code> vloží pěkný blok Datum/Místo vedle sebe, <code>{{booking_summary}}</code> vloží, jaký čas/vůz si host zarezervoval. Pro podpis "tým <code>{{team_name}}</code>" se podle firmy hosta dosadí Albion Cars / Cardion Cars / Orbion Cars (nebo Autorion Events).</div>
         </div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:12px;">Zobrazit tlačítko (jen tato šablona)</span>
@@ -3538,6 +3538,7 @@ const MERGE_TAGS = [
   { tag:'{{event_location}}',    desc:'Místo konání' },
   { tag:'{{team_name}}',         desc:'Tým podle firmy hosta' },
   { tag:'{{event_details}}',     desc:'Blok Datum + Místo vedle sebe' },
+  { tag:'{{booking_summary}}',   desc:'Rezervovaný čas příchodu / vůz + jízdy' },
   { tag:'{{registration_link}}', desc:'Klikací odkaz na registraci' },
 ];
 
@@ -3590,6 +3591,37 @@ function getEventDateRange() {
   return `${df.day}. ${df.month}. ${df.year} – ${dt.day}. ${dt.month}. ${dt.year}`; // 30. 12. 2026 – 2. 1. 2027
 }
 
+function buildBookingSummaryBlock(guest, design) {
+  const d = design || emailDesign;
+  if (!guest) return ''; // preview without a real guest — nothing to summarize
+  const bookings = guest.bookings || [];
+
+  if (EVENT.registration_type === 'windows') {
+    const w = (EVENT.time_windows || []).find(w => w.id === guest.window_id);
+    if (!w) return '';
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee;">
+      <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:${d.bodyColor};font-size:14px;">Čas příchodu</td></tr>
+      <tr>
+        <td style="padding:0 0 12px;color:${d.bodyColor};font-size:14px;">${w.label || ''}</td>
+        <td style="padding:0 0 12px;color:${d.mutedColor};font-size:14px;text-align:right;">${w.from || ''}–${w.to || ''}</td>
+      </tr>
+    </table>`;
+  }
+
+  if (bookings.length) {
+    const rows = bookings.map(b => `
+      <tr>
+        <td style="padding:6px 0;color:${d.bodyColor};font-size:14px;">${b.vehicle_name || 'Vůz'}</td>
+        <td style="padding:6px 0;color:${d.mutedColor};font-size:14px;text-align:right;">${b.time_slot || ''}</td>
+      </tr>`).join('');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee;">
+      <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:${d.bodyColor};font-size:14px;">Vaše testovací jízdy</td></tr>
+      ${rows}
+    </table>`;
+  }
+  return '';
+}
+
 function buildEventDetailsBlock(design) {
   const d = design || emailDesign;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;">
@@ -3617,6 +3649,7 @@ function resolveMergeTags(text, guest, design) {
     .replace(/{{event_location}}/g, EVENT.location)
     .replace(/{{team_name}}/g,      getTeamName(guest))
     .replace(/{{event_details}}/g,  buildEventDetailsBlock(design))
+    .replace(/{{booking_summary}}/g, buildBookingSummaryBlock(guest, design))
     .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">${emailDesign.registrationLinkText || 'Odkaz na registraci'}</a>`);
 }
 
@@ -3659,7 +3692,7 @@ function buildEmailHTML(templateId, preview, guest) {
         btnBg:       brand.headerBg    || defaultDealerColor || emailDesign.btnBg,
       };
     }
-    if (brand.heroUrl) {
+    if (brand.heroUrl && heroT.showHero !== false) {
       heroT = { ...heroT, showHero: true, heroUrl: brand.heroUrl };
       heroLinkUrl = brand.videoUrl || null; // dealer's own video takes over; no dealer video = no link
     }
@@ -3739,7 +3772,7 @@ ${customBody}
   
   <tr><td style="padding:20px 40px 28px;border-top:1px solid #eeeeee;text-align:center;">
     <p style="margin:0;font-size:12px;color:#999999;line-height:1.6;">${(preview && document.getElementById('eFooter')?.value) || d.footerText}</p>
-    <p style="margin:8px 0 0;font-size:11px;color:#bbbbbb;">© ${new Date().getFullYear()} Autorion s.r.o. · <a href="#" style="color:#bbbbbb;">Odhlásit odběr</a></p>
+    <p style="margin:8px 0 0;font-size:11px;color:#bbbbbb;">© ${new Date().getFullYear()} Autorion s.r.o. · ${guest?.invite_token ? `<a href="https://registration.autorion.net/unsubscribe.html?token=${guest.invite_token}" style="color:#bbbbbb;">Odhlásit odběr</a>` : 'Odhlásit odběr'}</p>
   </td></tr>
 
 </table>

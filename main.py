@@ -193,7 +193,7 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
                 "accentColor": shared_brand.get("accentColor") or default_color or d.get("accentColor"),
                 "btnBg":       shared_brand.get("headerBg")    or default_color or d.get("btnBg"),
             }
-        if template_brand.get("heroUrl"):
+        if template_brand.get("heroUrl") and hero_source.get("showHero") is not False:
             hero_source = {**hero_source, "showHero": True, "heroUrl": template_brand["heroUrl"]}
             hero_link_url = template_brand.get("videoUrl")  # dealer's own video takes over; none = no link
 
@@ -249,6 +249,9 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
               {booking_html}
             </table>
             {button_html}
+          </td></tr>
+          <tr><td style="padding:20px 32px 24px;border-top:1px solid #eeeeee;text-align:center;">
+            <p style="margin:0;font-size:11px;color:#999999;">© {datetime.now().year} Autorion s.r.o. · {f'<a href="https://registration.autorion.net/unsubscribe.html?token={guest["invite_token"]}" style="color:#999999;">Odhlásit odběr</a>' if guest.get("invite_token") else "Odhlásit odběr"}</p>
           </td></tr>
         </table>
       </div>
@@ -1262,6 +1265,29 @@ def get_invite_prefill(slug: str, token: str):
     conn.commit()
     cur.close(); conn.close()
     return dict(guest)
+
+@app.get("/api/guests/unsubscribe/{token}")
+def unsubscribe_guest(token: str):
+    """Public, unauthenticated: lets a guest opt out of further e-mails by
+    marking their RSVP as declined ('Nemůže přijít') — reuses the existing
+    status the admin already tracks, and the default recipient group for
+    most templates ('Všichni kromě odmítnutých') already excludes it, so no
+    separate opt-out flag or infrastructure is needed."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "UPDATE guests SET status = 'declined' WHERE invite_token = %s RETURNING first_name, last_name, event_id",
+        (token,)
+    )
+    guest = cur.fetchone()
+    if not guest:
+        cur.close(); conn.close()
+        raise HTTPException(status_code=404, detail="Odkaz nenalezen nebo již není platný.")
+    cur.execute("SELECT name FROM events WHERE id = %s", (guest["event_id"],))
+    ev = cur.fetchone()
+    conn.commit()
+    cur.close(); conn.close()
+    return {"first_name": guest["first_name"], "last_name": guest["last_name"], "event_name": ev["name"] if ev else ""}
 
 @app.post("/api/events/public/{slug}/invite/{token}/complete")
 def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
