@@ -232,7 +232,6 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         </div>'''
         if template.get("showButton", d.get("showButton")) else ""
     )
-    date_label = _format_event_date(event)
 
     return f"""
     <div style="font-family:{d['fontFamily']};background:{d['bgColor']};padding:24px 0;">
@@ -245,11 +244,6 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
             <div style="font-size:{d['fontSize']};color:{d['bodyColor']};line-height:1.7;">
               {body_html}
             </div>
-            <table style="width:100%;border-top:1px solid #ddd9d0;border-bottom:1px solid #ddd9d0;padding:14px 0;border-collapse:collapse;margin-top:12px;">
-              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Akce</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('name','')}</td></tr>
-              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Datum</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{date_label}</td></tr>
-              <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Místo</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('location','')}</td></tr>
-            </table>
             {button_html}
           </td></tr>
           <tr><td style="padding:20px 32px 24px;border-top:1px solid #eeeeee;text-align:center;">
