@@ -2797,7 +2797,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
     
     <div class="form-row" style="margin-top:14px;">
       <label>Předmět</label>
-      <input id="eSubject" value="${tmpl.subject.replace(/{{event_name}}/g, EVENT.name)}">
+      <input id="eSubject" value="${escAttr(tmpl.subject.replace(/{{event_name}}/g, EVENT.name))}">
     </div>
 
     
@@ -3015,7 +3015,7 @@ function buildEmailEditorControls(tmpl) {
           </div>
           <div class="ctrl-row">
             <div class="ctrl-label">Text odkazu <code>{{registration_link}}</code></div>
-            <input class="ctrl-input" value="${emailDesign.registrationLinkText || 'Odkaz na registraci'}" oninput="emailDesign.registrationLinkText=this.value;updateEmailPreview()">
+            <input class="ctrl-input" value="${escAttr(emailDesign.registrationLinkText || 'Odkaz na registraci')}" oninput="emailDesign.registrationLinkText=this.value;updateEmailPreview()">
           </div>
         </div>
       </div>
@@ -3045,7 +3045,7 @@ function buildEmailEditorControls(tmpl) {
       </div>
       <div class="e-section-body" style="padding:4px 16px 14px;display:flex;flex-direction:column;gap:10px;">
         <div class="ctrl-row"><div class="ctrl-label">Předmět</div>
-          <input class="ctrl-input" id="eSubjectEdit" value="${tmpl.subject}" oninput="updateEmailPreview()">
+          <input class="ctrl-input" id="eSubjectEdit" value="${escAttr(tmpl.subject)}" oninput="updateEmailPreview()">
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
           <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
@@ -3056,10 +3056,10 @@ function buildEmailEditorControls(tmpl) {
           <label class="toggle"><input type="checkbox" ${tmpl.showButton!==false?'checked':''} onchange="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).showButton=this.checked;updateEmailPreview()"><div class="toggle-track" onclick="this.previousElementSibling.click()"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text tlačítka</div>
-          <input class="ctrl-input" id="eBtnText" value="${d.btnText}" oninput="emailDesign.btnText=this.value;updateEmailPreview()">
+          <input class="ctrl-input" id="eBtnText" value="${escAttr(d.btnText)}" oninput="emailDesign.btnText=this.value;updateEmailPreview()">
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Patička</div>
-          <input class="ctrl-input" id="eFooter" value="${d.footerText}" oninput="emailDesign.footerText=this.value;updateEmailPreview()">
+          <input class="ctrl-input" id="eFooter" value="${escAttr(d.footerText)}" oninput="emailDesign.footerText=this.value;updateEmailPreview()">
         </div>
       </div>
     </div>
@@ -3123,7 +3123,7 @@ function buildEmailEditorControls(tmpl) {
         </div>
         <div class="ctrl-row" style="margin-top:6px;">
           <div class="ctrl-label">Odkaz na video (YouTube)</div>
-          <input class="ctrl-input" value="${heroT.videoUrl||''}" placeholder="https://youtube.com/watch?v=..." oninput="onHeroVideoUrlChange(this.value)">
+          <input class="ctrl-input" value="${escAttr(heroT.videoUrl||'')}" placeholder="https://youtube.com/watch?v=..." oninput="onHeroVideoUrlChange(this.value)">
           <div style="font-size:11px;color:var(--muted);margin-top:4px;">Volitelné — obrázek pak funguje jako klikací náhled videa (s ikonou ▶). U YouTube odkazů se náhled natáhne automaticky.</div>
         </div>
       </div>
@@ -3202,7 +3202,7 @@ function buildEmailEditorControls(tmpl) {
             <div style="font-weight:700;font-size:13px;margin-bottom:10px;">${dl.label}</div>
             <div class="ctrl-row" style="margin-top:0;">
               <div class="ctrl-label">Odkaz na video (YouTube)</div>
-              <input class="ctrl-input" value="${brand.videoUrl||''}" placeholder="https://youtube.com/watch?v=..." oninput="onDealerVideoUrlChange('${dl.key}',this.value)">
+              <input class="ctrl-input" value="${escAttr(brand.videoUrl||'')}" placeholder="https://youtube.com/watch?v=..." oninput="onDealerVideoUrlChange('${dl.key}',this.value)">
               <div style="font-size:11px;color:var(--muted);margin-top:4px;">Náhled (nahradí hero obrázek u téhle šablony) se u YouTube odkazů natáhne automaticky z videa.</div>
             </div>
             <div class="ctrl-row" style="margin-top:8px;">
@@ -3541,6 +3541,14 @@ const MERGE_TAGS = [
   { tag:'{{booking_summary}}',   desc:'Rezervovaný čas příchodu / vůz + jízdy' },
   { tag:'{{registration_link}}', desc:'Klikací odkaz na registraci' },
 ];
+
+function escAttr(str) {
+  // Used when inserting user-typed text/URLs into an HTML value="..."
+  // attribute — without this, something like "&reg=0" in a link can get
+  // misread by the browser as the HTML entity &reg; (the ® symbol),
+  // silently corrupting the value shown/saved in the field.
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
 
 function insertMergeTag(tag) {
   const customArea = document.getElementById('eCustomHtml');
@@ -5368,7 +5376,12 @@ function renderSidebarEventContext() {
     : EVENTS_DB.find(e=>e.id===currentEventId);
   if(!ev) return;
   const pages=PERMISSIONS[currentUser?.role]?.pages||[];
-  const navItems=[
+  // Archived events never get loaded into the live EVENT/guests/EMAIL_TEMPLATES
+  // state that Dashboard/Hosté/E-maily/Obsazenost/Nastavení all depend on —
+  // offering those here would silently show stale data from whatever active
+  // event was last properly selected. Archived events only get the read-only
+  // archive detail view (already shown via selectArchivedEvent()).
+  const navItems=isArchived ? [] : [
     {page:'dashboard',icon:'📊',label:'Dashboard'},
     {page:'guests',   icon:'👥',label:'Hosté',badge:'navBadgeTotal'},
     {page:'emails',   icon:'✉️',label:'E-maily',          show:pages.includes('emails')},
