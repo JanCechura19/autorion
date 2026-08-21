@@ -2112,7 +2112,7 @@ function openDetail(id) {
     </div>
     <div>
       <div class="detail-section-title">Poznámky</div>
-      <textarea id="detailNotes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:13px;min-height:70px;background:var(--bg);color:var(--text);outline:none;resize:vertical;" placeholder="Přidat poznámku…">${g.notes||''}</textarea>
+      <textarea id="detailNotes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:13px;min-height:70px;background:var(--bg);color:var(--text);outline:none;resize:vertical;" placeholder="Přidat poznámku…">${escAttr(g.notes||'')}</textarea>
     </div>`;
   document.getElementById('detailFoot').innerHTML = [
     can('canEdit')      ? `<button class="btn btn-secondary btn-sm" onclick="openEditGuest(${g.id})">✏️ Upravit</button>` : '',
@@ -2803,7 +2803,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
     
     <div class="form-row">
       <label>Zpráva <span style="font-weight:300;text-transform:none;color:var(--muted);">— {{last_name}} {{event_name}} {{event_date}} {{team_name}} {{event_details}} {{booking_summary}} {{registration_link}}</span></label>
-      <textarea id="eBody" style="min-height:120px;font-size:13px;line-height:1.7;width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;outline:none;background:var(--bg);">${tmpl.body.replace(/{{event_name}}/g,EVENT.name).replace(/{{event_date}}/g,EVENT.date_from).replace(/{{event_location}}/g,EVENT.location)}</textarea>
+      <textarea id="eBody" style="min-height:120px;font-size:13px;line-height:1.7;width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:inherit;outline:none;background:var(--bg);">${escAttr(tmpl.body.replace(/{{event_name}}/g,EVENT.name).replace(/{{event_date}}/g,EVENT.date_from).replace(/{{event_location}}/g,EVENT.location))}</textarea>
     </div>
   `;
 
@@ -3033,7 +3033,7 @@ function buildEmailEditorControls(tmpl) {
         </div>
         ${tmpl.useCustomHtml ? `
         <div style="font-size:11px;color:var(--muted);line-height:1.5;">Když je zapnuto, ignorují se barvy, hero obrázek i tlačítko níže — vložené HTML je celý obsah e-mailu. Předmět (v sekci Obsah) se používá dál. Funguje <code>{{last_name}}</code>, <code>{{event_name}}</code>, <code>{{event_date}}</code>, <code>{{event_location}}</code>, <code>{{team_name}}</code>, <code>{{event_details}}</code>, <code>{{booking_summary}}</code>, <code>{{registration_link}}</code> i <code>[text](https://...)</code> odkazy.</div>
-        <textarea id="eCustomHtml" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:220px;outline:none;background:var(--surface2);resize:vertical;" oninput="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).customHtml=this.value;updateEmailPreview()">${tmpl.customHtml||''}</textarea>
+        <textarea id="eCustomHtml" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:220px;outline:none;background:var(--surface2);resize:vertical;" oninput="EMAIL_TEMPLATES.find(t=>t.id===activeEmailTemplateId).customHtml=this.value;updateEmailPreview()">${escAttr(tmpl.customHtml||'')}</textarea>
         ` : ''}
       </div>
     </div>
@@ -3048,7 +3048,7 @@ function buildEmailEditorControls(tmpl) {
           <input class="ctrl-input" id="eSubjectEdit" value="${escAttr(tmpl.subject)}" oninput="updateEmailPreview()">
         </div>
         <div class="ctrl-row"><div class="ctrl-label">Text e-mailu</div>
-          <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${tmpl.body}</textarea>
+          <textarea id="eBodyEdit" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12px;min-height:110px;outline:none;background:var(--surface2);resize:vertical;" oninput="updateEmailPreview()">${escAttr(tmpl.body)}</textarea>
           <div style="font-size:11px;color:var(--muted);margin-top:4px;">Tip: pro klikací odkaz napište <code>[text odkazu](https://adresa.cz)</code>. <code>{{event_details}}</code> vloží pěkný blok Datum/Místo vedle sebe, <code>{{booking_summary}}</code> vloží, jaký čas/vůz si host zarezervoval. Pro podpis "tým <code>{{team_name}}</code>" se podle firmy hosta dosadí Albion Cars / Cardion Cars / Orbion Cars (nebo Autorion Events).</div>
         </div>
         <div class="ctrl-row toggle-row" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3194,7 +3194,7 @@ function buildEmailEditorControls(tmpl) {
             <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
               <div style="font-weight:700;font-size:13px;margin-bottom:8px;">${dl.label}</div>
               <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Vlastní HTML jen pro tohoto dealera a tuto šablonu. Když necháte prázdné, použije se obecné vlastní HTML z první sekce.</div>
-              <textarea id="dealerHtml_${dl.key}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:140px;outline:none;background:var(--surface2);resize:vertical;" oninput="setDealerTemplateField('${dl.key}','customHtml',this.value)">${brand.customHtml||''}</textarea>
+              <textarea id="dealerHtml_${dl.key}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:140px;outline:none;background:var(--surface2);resize:vertical;" oninput="setDealerTemplateField('${dl.key}','customHtml',this.value)">${escAttr(brand.customHtml||'')}</textarea>
             </div>`;
           }
           return `
