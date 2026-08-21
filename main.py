@@ -112,13 +112,40 @@ def _get_registration_url(guest: dict, event: dict) -> str:
         url += f"&invite={guest['invite_token']}"
     return url
 
-def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: str) -> str:
+# Matches SAVE_DATE_DEALERS in admin-v3.html — dealer display names used to
+# resolve {{team_name}} based on the guest's own company field.
+DEALER_TEAM_NAMES = {"albion": "Albion Cars", "cardion": "Cardion Cars", "orbion": "Orbion Cars"}
+
+def _get_team_name(guest: dict) -> str:
+    company = (guest.get("company") or "").strip().lower()
+    return DEALER_TEAM_NAMES.get(company, "Autorion Events")
+
+def _build_event_details_block(event: dict, design: dict) -> str:
+    accent = design.get("accentColor") or "#b8924a"
+    body   = design.get("bodyColor") or "#1a1816"
+    return f'''<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;">
+      <tr>
+        <td width="50%" style="text-align:center;padding:0 16px;">
+          <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:{accent};font-weight:600;margin-bottom:6px;">Datum</div>
+          <div style="font-size:16px;color:{body};font-weight:600;">{_format_event_date(event)}</div>
+        </td>
+        <td width="1" style="border-left:1px solid {accent};opacity:0.5;"></td>
+        <td width="50%" style="text-align:center;padding:0 16px;">
+          <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:{accent};font-weight:600;margin-bottom:6px;">Místo</div>
+          <div style="font-size:16px;color:{body};font-weight:600;">{event.get("location") or ""}</div>
+        </td>
+      </tr>
+    </table>'''
+
+def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: str, design: dict = None) -> str:
     return (
         (text or "")
         .replace("{{last_name}}", guest.get("last_name") or "")
         .replace("{{event_name}}", event.get("name") or "")
         .replace("{{event_date}}", _format_event_date(event))
         .replace("{{event_location}}", event.get("location") or "")
+        .replace("{{team_name}}", _get_team_name(guest))
+        .replace("{{event_details}}", _build_event_details_block(event, design or {}))
         .replace("{{booking_summary}}", _build_booking_summary_block(guest, event))
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
     )
@@ -202,7 +229,7 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
             hero_link_url = template_brand.get("videoUrl")  # dealer's own video takes over; none = no link
 
     body_resolved = _linkify_markdown(
-        _resolve_merge_tags(template.get("body") or "", guest, event, registration_url),
+        _resolve_merge_tags(template.get("body") or "", guest, event, registration_url, d),
         d.get("accentColor") or "#b8924a"
     )
     body_html = "".join(
