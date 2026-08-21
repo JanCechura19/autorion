@@ -119,6 +119,7 @@ def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: s
         .replace("{{event_name}}", event.get("name") or "")
         .replace("{{event_date}}", _format_event_date(event))
         .replace("{{event_location}}", event.get("location") or "")
+        .replace("{{booking_summary}}", _build_booking_summary_block(guest, event))
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
     )
 
@@ -132,22 +133,24 @@ def _linkify_markdown(text: str, color: str) -> str:
         text or ""
     )
 
-def _build_booking_details_html(guest: dict, event: dict) -> str:
-    """The 'what you booked' block (time window OR vehicle rides) —
-    always shown as a fixed structural section, not editable free text,
-    so it can never be accidentally broken by editing the template body."""
+def _build_booking_summary_block(guest: dict, event: dict) -> str:
+    """Standalone 'what you booked' block (time window OR vehicle rides),
+    used via the {{booking_summary}} merge tag — the admin places it
+    wherever they want in the editable text (e.g. before their sign-off),
+    instead of it always appearing at a fixed position."""
     bookings = guest.get("bookings") or []
     if event.get("registration_type") == "windows":
         windows = event.get("time_windows") or []
         window = next((w for w in windows if w.get("id") == guest.get("window_id")), None)
-        if window:
-            return f'''
-            <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Čas příchodu</td></tr>
-            <tr>
-              <td style="padding:6px 0;color:#181612;font-size:14px;">{window.get("label") or ""}</td>
-              <td style="padding:6px 0;color:#8c8577;font-size:14px;text-align:right;">{window.get("from") or ""}–{window.get("to") or ""}</td>
-            </tr>'''
-        return ""
+        if not window:
+            return ""
+        return f'''<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee;">
+          <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:#181612;font-size:14px;">Detail registrace</td></tr>
+          <tr>
+            <td style="padding:0 0 12px;color:#181612;font-size:14px;">{window.get("label") or ""}</td>
+            <td style="padding:0 0 12px;color:#8c8577;font-size:14px;text-align:right;">{window.get("from") or ""}–{window.get("to") or ""}</td>
+          </tr>
+        </table>'''
     if bookings:
         rows = "".join(
             f'<tr>'
@@ -156,9 +159,10 @@ def _build_booking_details_html(guest: dict, event: dict) -> str:
             f'</tr>'
             for b in bookings
         )
-        return f'''
-        <tr><td colspan="2" style="padding-top:18px;font-weight:600;color:#181612;font-size:14px;">Vaše testovací jízdy</td></tr>
-        {rows}'''
+        return f'''<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee;">
+          <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:#181612;font-size:14px;">Vaše testovací jízdy</td></tr>
+          {rows}
+        </table>'''
     return ""
 
 # Matches SAVE_DATE_DEALERS in admin-v3.html — used as a sensible fallback
@@ -222,7 +226,6 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
         f'<tr><td style="padding:10px 32px 0;text-align:center;"><a href="{hero_link_url}" style="font-size:13px;color:{d["accentColor"]};text-decoration:none;font-weight:600;">&#9654; Přehrát video</a></td></tr>'
         if (hero_source.get("showHero") and hero_source.get("heroUrl") and hero_link_url) else ""
     )
-    booking_html = _build_booking_details_html(guest, event)
     button_html = (
         f'''<div style="text-align:center;margin-top:28px;">
           <a href="{registration_url}" style="display:inline-block;background:{d['btnBg']};color:{d['btnColor']};text-decoration:none;padding:13px 32px;border-radius:{d['borderRadius']};font-size:15px;font-weight:600;letter-spacing:0.02em;">{d.get('btnText') or 'Potvrdit účast'}</a>
@@ -246,7 +249,6 @@ def _build_templated_email_html(guest: dict, event: dict, template: dict, design
               <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Akce</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('name','')}</td></tr>
               <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Datum</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{date_label}</td></tr>
               <tr><td style="padding:6px 0;color:{d['mutedColor']};font-size:14px;">Místo</td><td style="padding:6px 0;text-align:right;color:{d['bodyColor']};font-weight:500;font-size:14px;">{event.get('location','')}</td></tr>
-              {booking_html}
             </table>
             {button_html}
           </td></tr>

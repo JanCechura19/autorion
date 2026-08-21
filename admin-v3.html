@@ -3600,7 +3600,7 @@ function buildBookingSummaryBlock(guest, design) {
     const w = (EVENT.time_windows || []).find(w => w.id === guest.window_id);
     if (!w) return '';
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee;">
-      <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:${d.bodyColor};font-size:14px;">Čas příchodu</td></tr>
+      <tr><td colspan="2" style="padding:14px 0 6px;font-weight:600;color:${d.bodyColor};font-size:14px;">Detail registrace</td></tr>
       <tr>
         <td style="padding:0 0 12px;color:${d.bodyColor};font-size:14px;">${w.label || ''}</td>
         <td style="padding:0 0 12px;color:${d.mutedColor};font-size:14px;text-align:right;">${w.from || ''}–${w.to || ''}</td>
