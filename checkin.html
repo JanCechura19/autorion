@@ -1094,7 +1094,10 @@ async function loadEvents() {
 async function loadGuestsForCurrentEvent() {
   if (!currentEvent) return;
   const data = await apiCall(`/events/${currentEvent.id}/guests`);
-  currentGuests = Array.isArray(data) ? data : [];
+  // Guests who declined ("Nemůže přijít") aren't expected on-site, so they're
+  // excluded here — this naturally applies everywhere downstream (list,
+  // stats, occupancy view) without needing a separate filter each place.
+  currentGuests = Array.isArray(data) ? data.filter(g => g.status !== 'declined') : [];
 }
 
 // ══════════════════════════════════════════════════════
