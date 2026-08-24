@@ -22,7 +22,13 @@ app = FastAPI(title="Autorion API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://autorion.net",
+        "https://admin.autorion.net",
+        "https://registration.autorion.net",
+        "https://checkin.autorion.net",
+        "https://event.autorion.net",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
