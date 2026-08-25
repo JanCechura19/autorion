@@ -2851,7 +2851,7 @@ async function sendEmailToGroup() {
   if (!recip.length) { showToast('Žádní příjemci ve vybrané skupině', 'error'); return; }
 
   const sendBtn = document.getElementById('sendEmailBtn');
-  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = `Odesílám…`; }
+  if (sendBtn) { sendBtn.disabled = true; }
 
   const items = recip
     .filter(g => g.email) // skip guests with no email on file
@@ -2863,27 +2863,47 @@ async function sendEmailToGroup() {
       guest_id: g.id,
     }));
 
-  const result = await apiCall('/send-bulk-email', 'POST', { items });
+  // Sending everyone in one giant request risks both an oversized payload
+  // (each personalized e-mail can carry embedded images) and a backend
+  // timeout (Ecomail is called once per recipient, synchronously, within
+  // that single request) — so large sends go out in smaller batches instead.
+  const BATCH_SIZE = 25;
+  let totalSent = 0, totalFailed = 0, totalAttempted = 0;
+  let stoppedEarly = false;
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    if (sendBtn) sendBtn.textContent = `Odesílám ${Math.min(i + BATCH_SIZE, items.length)}/${items.length}…`;
+
+    const result = await apiCall('/send-bulk-email', 'POST', { items: batch });
+    if (!result) { stoppedEarly = true; break; } // apiCall already showed an error toast
+
+    totalSent      += result.sent;
+    totalFailed    += result.failed;
+    totalAttempted += result.total;
+  }
 
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = `📤 Odeslat ${recip.length} e-mailům`; }
-  if (!result) return; // apiCall already showed an error toast (e.g. Ecomail not configured yet)
+  if (totalAttempted === 0) return; // nothing went out at all
 
   recip.forEach(g => { g.email_sent = true; });
 
   const tmpl = EMAIL_TEMPLATES.find(t => t.id === state.tmplId);
   emailSendHistory.unshift({
     tmplName: tmpl?.name || '—',
-    count:    result.sent,
+    count:    totalSent,
     group:    RECIPIENT_GROUPS.find(g=>g.key===group)?.label || 'Vlastní výběr',
     date:     new Date().toLocaleDateString('cs-CZ', {day:'numeric',month:'numeric',year:'numeric'}),
     time:     new Date().toLocaleTimeString('cs-CZ', {hour:'2-digit',minute:'2-digit'}),
   });
 
   closeModal();
-  if (result.failed > 0) {
-    showToast(`Odesláno ${result.sent}/${result.total} — ${result.failed} selhalo`, 'error');
+  if (stoppedEarly) {
+    showToast(`Odesláno ${totalSent}/${items.length} — dávkové odeslání se přerušilo, zkuste to znovu pro zbytek`, 'error');
+  } else if (totalFailed > 0) {
+    showToast(`Odesláno ${totalSent}/${totalAttempted} — ${totalFailed} selhalo`, 'error');
   } else {
-    showToast(`✓ E-mail „${tmpl?.name}" odeslán ${result.sent} příjemcům`, 'success');
+    showToast(`✓ E-mail „${tmpl?.name}" odeslán ${totalSent} příjemcům`, 'success');
   }
   renderGuests(); // refresh email_sent badges
 }
