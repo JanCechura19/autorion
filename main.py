@@ -919,7 +919,7 @@ def get_event_public(slug: str):
     return dict(event)
 
 @app.get("/api/events/landing/{slug}")
-def get_event_landing(slug: str, reg: str = None):
+def get_event_landing(slug: str, reg: str = None, lang: str = None):
     """Public landing page data — does not require registration_open, since
     the info page can exist independently of whether registration is live.
     Tracks visits to the two link variants separately: the generic link
@@ -938,7 +938,21 @@ def get_event_landing(slug: str, reg: str = None):
     conn.close()
     if not event:
         raise HTTPException(status_code=404, detail="Akce nenalezena")
-    return dict(event)
+    event = dict(event)
+
+    # Custom HTML landing pages can have a separate English version — only
+    # the language actually being viewed is sent back, not both, so a
+    # bilingual page with its own embedded images doesn't double the
+    # payload size for every visitor.
+    lp = event.get("landing_page") or {}
+    if isinstance(lp, dict) and lp.get("useCustomHtml"):
+        lp = dict(lp)
+        if lang == "en" and lp.get("customHtmlEn"):
+            lp["customHtml"] = lp["customHtmlEn"]
+        lp.pop("customHtmlEn", None)
+        event["landing_page"] = lp
+
+    return event
 
 @app.get("/api/events/preview/{event_id}")
 def get_event_preview(event_id: int):

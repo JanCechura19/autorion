@@ -332,6 +332,17 @@ function isRegisterForcedOff() {
   return params.get('reg') === '0';
 }
 
+// Which language's custom HTML to show — independent of isRegisterForcedOff(),
+// so both can be combined freely, e.g. ?event=xyz&lang=en&reg=0. The Visual
+// Editor's live preview can override this via postMessage so editors can
+// check the English version without needing a real ?lang=en URL.
+let PREVIEW_LANG_OVERRIDE = null;
+function isEnglish() {
+  if (PREVIEW_LANG_OVERRIDE) return PREVIEW_LANG_OVERRIDE === 'en';
+  const params = new URLSearchParams(window.location.search);
+  return params.get('lang') === 'en';
+}
+
 async function loadEventData() {
   const slug = getEventSlugFromUrl();
   EVENT_SLUG = slug;
@@ -343,9 +354,12 @@ async function loadEventData() {
 
   const previewMatch = slug.match(/^__preview_(\d+)$/);
   const isPreview = !!previewMatch;
+  const trackingParams = new URLSearchParams();
+  if (isRegisterForcedOff()) trackingParams.set('reg', '0');
+  if (isEnglish())           trackingParams.set('lang', 'en');
   const fetchUrl = isPreview
     ? `${API_BASE}/events/preview/${previewMatch[1]}`
-    : `${API_BASE}/events/landing/${slug}${isRegisterForcedOff() ? '?reg=0' : ''}`;
+    : `${API_BASE}/events/landing/${slug}${trackingParams.toString() ? '?' + trackingParams.toString() : ''}`;
 
   try {
     const res = await fetch(fetchUrl);
@@ -412,7 +426,11 @@ function renderPage(event) {
     if (pageWrap) pageWrap.style.display = 'none';
     if (customWrap) {
       customWrap.style.display = 'block';
-      customWrap.innerHTML = resolveLandingMergeTags(lp.customHtml, event);
+      // English falls back to the Czech block if it hasn't been filled in
+      // yet, so the page never renders blank for events without an English
+      // version yet.
+      const activeHtml = (isEnglish() && lp.customHtmlEn) ? lp.customHtmlEn : lp.customHtml;
+      customWrap.innerHTML = resolveLandingMergeTags(activeHtml, event);
       // Any registration button/link tagged with class="reg-cta" in the
       // custom HTML gets hidden when the link explicitly says ?reg=0 —
       // used for people who already have a personal registration link
@@ -611,6 +629,7 @@ function buildThemeCss(theme) {
 
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'autorion-landing-update') {
+    if (e.data.previewLang) PREVIEW_LANG_OVERRIDE = e.data.previewLang;
     if (e.data.theme) buildThemeCss(e.data.theme);
     if (e.data.event) renderPage(e.data.event);
   }

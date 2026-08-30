@@ -1174,6 +1174,21 @@ iframe#previewFrame {
             <textarea id="customLandingHtml" placeholder="Sem vlož kompletní HTML kód stránky..."
               style="width:100%;min-height:320px;font-family:monospace;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);resize:vertical;display:none;"
               oninput="onCustomLandingHtmlInput(this.value)"></textarea>
+            <div id="customLandingHtmlEnWrap" style="display:none;margin-top:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <label style="font-size:12px;font-weight:600;">Anglická verze <span style="font-weight:300;color:var(--muted);">(volitelné)</span></label>
+                <div style="display:flex;gap:4px;">
+                  <button type="button" id="previewLangCsBtn" onclick="setPreviewLang('cs')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;">Náhled CZ</button>
+                  <button type="button" id="previewLangEnBtn" onclick="setPreviewLang('en')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;">Náhled EN</button>
+                </div>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">
+                Zobrazí se místo české verze, když je v adrese <code>?lang=en</code>. Když necháte prázdné, appka i pro anglický odkaz zatím ukáže českou verzi.
+              </div>
+              <textarea id="customLandingHtmlEn" placeholder="Sem vlož anglickou verzi HTML kódu stránky (nepovinné)..."
+                style="width:100%;min-height:320px;font-family:monospace;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);resize:vertical;"
+                oninput="onCustomLandingHtmlEnInput(this.value)"></textarea>
+            </div>
           </div>
         </div>
       </div>
@@ -2361,18 +2376,35 @@ function moveSectionDown(id) {
   renderSectionsList(); markDirty(); applyLandingPreview();
 }
 
-let CUSTOM_LANDING_HTML = { enabled: false, html: '' };
+let CUSTOM_LANDING_HTML = { enabled: false, html: '', htmlEn: '' };
+let PREVIEW_LANG = 'cs'; // which language the live preview iframe shows — independent of the real published URL
+
+function setPreviewLang(lang) {
+  PREVIEW_LANG = lang;
+  const csBtn = document.getElementById('previewLangCsBtn');
+  const enBtn = document.getElementById('previewLangEnBtn');
+  if (csBtn) csBtn.style.background = lang === 'cs' ? 'var(--surface2)' : 'transparent';
+  if (enBtn) enBtn.style.background = lang === 'en' ? 'var(--surface2)' : 'transparent';
+  applyLandingPreview();
+}
 
 function onToggleCustomLandingHtml(checked) {
   CUSTOM_LANDING_HTML.enabled = checked;
   document.getElementById('customLandingHtmlHint').style.display = checked ? 'block' : 'none';
   document.getElementById('customLandingHtml').style.display     = checked ? 'block' : 'none';
+  document.getElementById('customLandingHtmlEnWrap').style.display = checked ? 'block' : 'none';
   markDirty();
   applyLandingPreview();
 }
 
 function onCustomLandingHtmlInput(value) {
   CUSTOM_LANDING_HTML.html = value;
+  markDirty();
+  applyLandingPreview();
+}
+
+function onCustomLandingHtmlEnInput(value) {
+  CUSTOM_LANDING_HTML.htmlEn = value;
   markDirty();
   applyLandingPreview();
 }
@@ -2386,6 +2418,7 @@ function applyLandingPreview() {
   frame.contentWindow?.postMessage({
     type: 'autorion-landing-update',
     theme: collectTheme(),
+    previewLang: PREVIEW_LANG,
     event: {
       ...CURRENT_EVENT,
       landing_page: collectLandingPage()
@@ -2403,6 +2436,7 @@ function collectLandingPage() {
     sections: LANDING_SECTIONS.map(s => ({ ...s })),
     useCustomHtml: CUSTOM_LANDING_HTML.enabled,
     customHtml: CUSTOM_LANDING_HTML.html,
+    customHtmlEn: CUSTOM_LANDING_HTML.htmlEn,
   };
 }
 
@@ -2437,14 +2471,18 @@ function populateSectionsTab(landingPage) {
   }
 
   // Custom HTML layout
-  CUSTOM_LANDING_HTML = { enabled: !!lp.useCustomHtml, html: lp.customHtml || '' };
-  const useCustomCb = document.getElementById('useCustomLandingHtml');
-  const customArea  = document.getElementById('customLandingHtml');
-  const customHint  = document.getElementById('customLandingHtmlHint');
+  CUSTOM_LANDING_HTML = { enabled: !!lp.useCustomHtml, html: lp.customHtml || '', htmlEn: lp.customHtmlEn || '' };
+  const useCustomCb  = document.getElementById('useCustomLandingHtml');
+  const customArea   = document.getElementById('customLandingHtml');
+  const customHint   = document.getElementById('customLandingHtmlHint');
+  const customAreaEn = document.getElementById('customLandingHtmlEn');
+  const customEnWrap = document.getElementById('customLandingHtmlEnWrap');
   if (useCustomCb) useCustomCb.checked = CUSTOM_LANDING_HTML.enabled;
   if (customArea)  customArea.value    = CUSTOM_LANDING_HTML.html;
   if (customArea)  customArea.style.display = CUSTOM_LANDING_HTML.enabled ? 'block' : 'none';
   if (customHint)  customHint.style.display = CUSTOM_LANDING_HTML.enabled ? 'block' : 'none';
+  if (customAreaEn) customAreaEn.value  = CUSTOM_LANDING_HTML.htmlEn;
+  if (customEnWrap) customEnWrap.style.display = CUSTOM_LANDING_HTML.enabled ? 'block' : 'none';
 
   renderSectionsList();
 }
