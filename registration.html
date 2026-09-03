@@ -1250,11 +1250,14 @@ function applyInvitePrefill(prefill) {
   const lnEl = document.getElementById('lastName');
   const emEl = document.getElementById('email');
 
-  if (fnEl) { fnEl.value = prefill.first_name || ''; fnEl.readOnly = true; }
-  if (lnEl) { lnEl.value = prefill.last_name  || ''; lnEl.readOnly = true; }
-  if (emEl) { emEl.value = prefill.email      || ''; emEl.readOnly = true; }
+  // Only lock a field down when we actually have a value for it — an
+  // empty field (e.g. a contact imported with just an e-mail address)
+  // stays editable so the guest can fill in what's missing themselves.
+  if (fnEl) { fnEl.value = prefill.first_name || ''; fnEl.readOnly = !!prefill.first_name; }
+  if (lnEl) { lnEl.value = prefill.last_name  || ''; lnEl.readOnly = !!prefill.last_name; }
+  if (emEl) { emEl.value = prefill.email      || ''; emEl.readOnly = !!prefill.email; }
   [fnEl, lnEl, emEl].forEach(el => {
-    if (!el) return;
+    if (!el || !el.readOnly) return;
     el.style.background = 'var(--bg)';
     el.style.color = 'var(--muted)';
     el.style.cursor = 'not-allowed';
@@ -1783,7 +1786,11 @@ async function handleSubmit(e) {
     const submitPayload = INVITE_TOKEN
       ? { companion: companionChecked, gdpr_consent: true,
           bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
-          window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null }
+          window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null,
+          // Only sent when the field wasn't locked — i.e. it was empty on
+          // file (e.g. an e-mail-only import) and the guest filled it in.
+          first_name: document.getElementById('firstName')?.readOnly ? undefined : document.getElementById('firstName')?.value.trim(),
+          last_name:  document.getElementById('lastName')?.readOnly  ? undefined : document.getElementById('lastName')?.value.trim() }
       : payload;
 
     const res = await fetch(submitUrl, {

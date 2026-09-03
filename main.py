@@ -499,6 +499,12 @@ class InviteCompleteRequest(BaseModel):
     window_id: Optional[int] = None
     bookings: List[BookingItem] = []
     gdpr_consent: bool = False
+    # Only sent when the registration form let the guest fill these in
+    # themselves (i.e. they were empty on file — e.g. an e-mail-only
+    # import) — the frontend never sends these when the fields were
+    # already locked with an existing value.
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -1362,10 +1368,13 @@ def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
         cur.execute(f"""
             UPDATE guests
             SET phone = %s, companion = %s, window_id = %s, bookings = %s,
-                gdpr_consent = %s, status = 'confirmed'
+                gdpr_consent = %s, status = 'confirmed',
+                first_name = COALESCE(NULLIF(%s, ''), first_name),
+                last_name  = COALESCE(NULLIF(%s, ''), last_name)
             WHERE id = %s
             RETURNING {GUEST_SAFE_COLUMNS}
-        """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.gdpr_consent, guest_id))
+        """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.gdpr_consent,
+              req.first_name or '', req.last_name or '', guest_id))
         updated_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
