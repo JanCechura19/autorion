@@ -2320,7 +2320,7 @@ async function processImportFile(file) {
       if (!email) continue; // e-mail is the only strictly required field
       if (existing.has(email)) { skipped++; continue; }
       const payload = {
-        last_name: String(r[0]).trim(), first_name: String(r[1]).trim(), email,
+        last_name: String(r[0]??'').trim(), first_name: String(r[1]??'').trim(), email,
         phone: String(r[3]||'').trim(), companion: String(r[4]||'').toLowerCase()==='ano',
         company: normalizeCompanyKey(r[5]),
         status: 'pending', event_id: currentEventId, send_confirmation: sendConfirmation
