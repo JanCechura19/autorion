@@ -1272,6 +1272,18 @@ input[type="checkbox"] {
             <option value="yes">S doprovodem</option>
             <option value="no">Bez doprovodu</option>
           </select>
+          <select class="filter-select" id="filterCompany" onchange="applyFilters()">
+            <option value="">Vše — firma</option>
+            <option value="albion">Albion Cars</option>
+            <option value="cardion">Cardion Cars</option>
+            <option value="orbion">Orbion Cars</option>
+            <option value="none">Bez firmy</option>
+          </select>
+          <select class="filter-select" id="filterUnsubscribed" onchange="applyFilters()">
+            <option value="">Vše — odhlášení</option>
+            <option value="yes">Odhlásili se sami</option>
+            <option value="no">Neodhlásili se</option>
+          </select>
           <button class="btn btn-secondary btn-sm" onclick="resetFilters()">↺ Reset</button>
         </div>
 
@@ -1294,6 +1306,7 @@ input[type="checkbox"] {
                   <th onclick="sortTable('phone')">Telefon <span class="sort-arrow">↕</span></th>
                   <th onclick="sortTable('company')">Společnost <span class="sort-arrow">↕</span></th>
                   <th onclick="sortTable('status')">Odpověď <span class="sort-arrow">↕</span></th>
+                  <th onclick="sortTable('confirmed_at')">Potvrzeno <span class="sort-arrow">↕</span></th>
                   <th>Doprovod</th>
                   <th>E-mail odeslán</th>
                   <th>Jízdy</th>
@@ -1590,6 +1603,8 @@ let filterSearch   = '';
 let filterStatus   = '';
 let filterEmailSent = '';
 let filterCompanion = '';
+let filterCompany = '';
+let filterUnsub = '';
 
 // ═══════════════════════════════════════════════════════
 // AUTH
@@ -1942,17 +1957,21 @@ function applyFilters() {
   filterStatus    = document.getElementById('filterStatus')?.value || '';
   filterEmailSent = document.getElementById('filterEmail')?.value || '';
   filterCompanion = document.getElementById('filterCompanion')?.value || '';
+  filterCompany   = document.getElementById('filterCompany')?.value || '';
+  filterUnsub     = document.getElementById('filterUnsubscribed')?.value || '';
 
   filteredGuests = guests.filter(g => {
     const mQ = !filterSearch || `${g.first_name} ${g.last_name} ${g.email} ${g.phone}`.toLowerCase().includes(filterSearch);
     const mS = !filterStatus || g.status === filterStatus;
     const mE = !filterEmailSent || (filterEmailSent === 'sent' ? g.email_sent : !g.email_sent);
     const mC = !filterCompanion || (filterCompanion === 'yes' ? g.companion : !g.companion);
-    return mQ && mS && mE && mC;
+    const mCo = !filterCompany || (filterCompany === 'none' ? !g.company : g.company === filterCompany);
+    const mU = !filterUnsub || (filterUnsub === 'yes' ? !!g.unsubscribed_at : !g.unsubscribed_at);
+    return mQ && mS && mE && mC && mCo && mU;
   });
 
   filteredGuests.sort((a,b) => {
-    const keyMap = { last_name:'last_name', first_name:'first_name', email:'email', status:'status', registered_at:'registered_at' };
+    const keyMap = { last_name:'last_name', first_name:'first_name', email:'email', status:'status', registered_at:'registered_at', confirmed_at:'confirmed_at' };
     const k = keyMap[sortKey] || 'last_name';
     const va = String(a[k]||''), vb = String(b[k]||'');
     return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -1972,10 +1991,24 @@ function filterByStatus(status) {
 }
 
 function resetFilters() {
-  ['searchInput','filterStatus','filterEmail','filterCompanion'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
-  filterSearch = filterStatus = filterEmailSent = filterCompanion = '';
+  ['searchInput','filterStatus','filterEmail','filterCompanion','filterCompany','filterUnsubscribed'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+  filterSearch = filterStatus = filterEmailSent = filterCompanion = filterCompany = filterUnsub = '';
   currentPage = 1;
   applyFilters();
+}
+
+function confirmedAtCell(g) {
+  if (!g.confirmed_at) return '—';
+  const d = new Date(g.confirmed_at);
+  const dateStr = d.toLocaleDateString('cs-CZ', {day:'numeric', month:'numeric', year:'numeric'});
+  let slotStr = '';
+  if (EVENT.registration_type === 'windows' && g.window_id) {
+    const w = (EVENT.time_windows||[]).find(w => w.id === g.window_id);
+    if (w) slotStr = w.label || '';
+  } else if (g.bookings && g.bookings.length) {
+    slotStr = g.bookings.map(b => b.vehicle_name).filter(Boolean).join(', ');
+  }
+  return `${dateStr}${slotStr ? `<br><span style="color:var(--text);">${slotStr}</span>` : ''}`;
 }
 
 function renderTable() {
@@ -1984,7 +2017,7 @@ function renderTable() {
   document.getElementById('guestCount').textContent = `(${filteredGuests.length} z ${guests.length})`;
   const tbody = document.getElementById('guestTbody');
   if (!pageGuests.length) {
-    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Žádní hosté nevyhovují filtrům</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Žádní hosté nevyhovují filtrům</div></div></td></tr>`;
     document.getElementById('paginationBar').innerHTML = '';
     return;
   }
@@ -2007,7 +2040,8 @@ function renderTable() {
       <td class="email-cell">${g.email}${isDupe ? ` <span class="badge" style="background:#f8d7a8;color:#7a4a00;font-size:9px;" title="Tento e-mail se v seznamu vyskytuje vícekrát">⚠ Duplicita</span>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${g.phone||'—'}</td>
       <td>${g.company ? `<span class="badge" style="background:${g.company==='albion'?'#A6916C':g.company==='cardion'?'#8291A6':'#333'};color:#fff;text-transform:uppercase;font-size:10px">${g.company}</span>` : '<span class="badge badge-gray">—</span>'}</td>
-      <td>${statusBadge(g.status)}</td>
+      <td>${statusBadge(g.status)}${g.unsubscribed_at ? ` <span class="badge" style="background:#e0d4f7;color:#5a3d8a;font-size:9px;" title="Sám/sama se odhlásil(a) z e-mailů">✉ Odhlášen</span>` : ''}</td>
+      <td style="font-size:11px;color:var(--muted);">${confirmedAtCell(g)}</td>
       <td>${g.companion?'<span class="badge badge-blue">Ano</span>':'<span class="badge badge-gray">Ne</span>'}</td>
       <td>${g.email_sent?'<span class="badge badge-green">✓</span>':'<span class="badge badge-gray">Ne</span>'}</td>
       <td><span style="font-weight:500">${g.bookings.length}</span><span style="color:var(--muted);font-size:11px">/3</span></td>
@@ -2257,7 +2291,9 @@ async function saveGuest(id) {
       registered_at: created.created_at || new Date().toISOString(),
       notes:'', bookings: created.bookings || [],
       invite_token: created.invite_token || null,
-      unique_token:'guest-'+created.id
+      unique_token:'guest-'+created.id,
+      confirmed_at: created.confirmed_at || null,
+      unsubscribed_at: created.unsubscribed_at || null,
     });
     showToast('Host přidán','success');
   }
@@ -2337,7 +2373,9 @@ async function processImportFile(file) {
           registered_at: created.created_at || new Date().toISOString(),
           notes:'', bookings: created.bookings || [],
           invite_token: created.invite_token || null,
-          unique_token:'guest-'+created.id
+          unique_token:'guest-'+created.id,
+          confirmed_at: created.confirmed_at || null,
+          unsubscribed_at: created.unsubscribed_at || null,
         });
         existing.add(email); imported++;
       } else {
@@ -2353,7 +2391,8 @@ async function processImportFile(file) {
 
 function exportXLS(subset) {
   const data = subset || filteredGuests;
-  const rows = data.map(g=>({'Příjmení':g.last_name,'Jméno':g.first_name,'E-mail':g.email,'Telefon':g.phone||'','Odpověď':{confirmed:'Potvrzena',declined:'Odmítl',pending:'Bez odpovědi'}[g.status],'Doprovod':g.companion?'Ano':'Ne','E-mail odeslán':g.email_sent?'Ano':'Ne','Počet jízd':g.bookings.length,'Check-in':g.checked_in?'Ano':'Ne'}));
+  const companyLabels = { albion: 'Albion Cars', cardion: 'Cardion Cars', orbion: 'Orbion Cars' };
+  const rows = data.map(g=>({'Příjmení':g.last_name,'Jméno':g.first_name,'E-mail':g.email,'Telefon':g.phone||'','Společnost':companyLabels[g.company]||'','Odpověď':{confirmed:'Potvrzena',declined:'Odmítl',pending:'Bez odpovědi'}[g.status],'Potvrzeno':g.confirmed_at ? new Date(g.confirmed_at).toLocaleDateString('cs-CZ') : '','Doprovod':g.companion?'Ano':'Ne','E-mail odeslán':g.email_sent?'Ano':'Ne','Počet jízd':g.bookings.length,'Check-in':g.checked_in?'Ano':'Ne','Odhlásil se':g.unsubscribed_at?'Ano':'Ne'}));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hosté');
@@ -3868,7 +3907,7 @@ function renderSlotsDrives() {
         <tbody>
           ${slots.map(slot=>`<tr>
             <td style="font-size:12px;color:var(--muted);white-space:nowrap">${slot}</td>
-            ${VEHICLES.map(v=>{const g=bk[slot]?.[v.id];return`<td>${g?`<span class="badge badge-blue" style="cursor:pointer" onclick="openDetail(${g.id})">${g.last_name}</span>`:'<span style="color:var(--border2);font-size:12px">—</span>'}</td>`;}).join('')}
+            ${VEHICLES.map(v=>{const g=bk[slot]?.[v.id];if(!g)return'<td><span style="color:var(--border2);font-size:12px">—</span></td>';const companyColor={albion:'#A6916C',cardion:'#8291A6',orbion:'#333'}[g.company];const confirmedTitle=g.confirmed_at?`Potvrzeno: ${new Date(g.confirmed_at).toLocaleDateString('cs-CZ')}`:'';return`<td><span class="badge badge-blue" style="cursor:pointer;${companyColor?`background:${companyColor};color:#fff;`:''}" title="${confirmedTitle}" onclick="openDetail(${g.id})">${g.last_name}</span></td>`;}).join('')}
           </tr>`).join('')}
         </tbody>
       </table>
@@ -3917,11 +3956,13 @@ function renderSlotsWindows() {
         </div>
         ${w.capacity>0?`<div style="height:4px;background:var(--surface2);"><div style="width:${pct}%;height:100%;background:${full?'var(--red)':'var(--green)'};transition:width 0.4s;"></div></div>`:''}
         ${list.length
-          ? `<table style="width:100%;"><thead><tr><th>Host</th><th>E-mail</th><th>Odpověď</th></tr></thead>
+          ? `<table style="width:100%;"><thead><tr><th>Host</th><th>E-mail</th><th>Firma</th><th>Odpověď</th><th>Potvrzeno</th></tr></thead>
              <tbody>${list.map(g=>`<tr onclick="openDetail(${g.id})" style="cursor:pointer;">
                <td class="name-cell">${g.last_name} ${g.first_name}</td>
                <td class="email-cell">${g.email}</td>
+               <td>${g.company ? `<span class="badge" style="background:${g.company==='albion'?'#A6916C':g.company==='cardion'?'#8291A6':'#333'};color:#fff;text-transform:uppercase;font-size:10px">${g.company}</span>` : '<span class="badge badge-gray">—</span>'}</td>
                <td>${statusBadge(g.status)}</td>
+               <td style="font-size:11px;color:var(--muted);">${confirmedAtCell(g)}</td>
              </tr>`).join('')}</tbody></table>`
           : `<div style="padding:14px 20px;font-size:13px;color:var(--muted);">Žádní přihlášení hosté</div>`}
       </div>`;
@@ -5493,6 +5534,8 @@ async function loadGuestsFromApi(eventId) {
     company: g.company || '',
     invite_token: g.invite_token || null,
     unique_token: 'guest-' + g.id,
+    confirmed_at: g.confirmed_at || null,
+    unsubscribed_at: g.unsubscribed_at || null,
   }));
   filteredGuests = [...guests];
 }

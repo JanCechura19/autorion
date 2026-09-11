@@ -87,7 +87,7 @@ GUEST_SAFE_COLUMNS = """
     id, event_id, first_name, last_name, email, phone, company, status,
     checked_in, companion, window_id, bookings, consent_signed, consent_paper,
     consent_license, consent_signature_at, walk_in, created_at, invite_token,
-    last_email_sent_at, gdpr_consent
+    last_email_sent_at, gdpr_consent, confirmed_at, unsubscribed_at
 """
 
 DEFAULT_CONFIRMATION_TEMPLATE = {
@@ -620,6 +620,35 @@ def init_db():
     # incorrectly share the same column, making every self-registered guest
     # look like they'd already signed the on-site consent at check-in.
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS gdpr_consent BOOLEAN DEFAULT FALSE;")
+    # confirmed_at: when a guest's status became 'confirmed'. Set by a trigger
+    # (below) rather than in each individual code path (invite completion,
+    # admin edit, walk-in creation, ...) so it can never be missed by a path
+    # we forget to update by hand.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP DEFAULT NULL;")
+    # unsubscribed_at: set only by the public unsubscribe link — distinct
+    # from status='declined', which can also mean "never wanted to come" or
+    # an admin manually marking someone as not attending. This lets the
+    # admin tell apart guests who unsubscribed *after* already registering
+    # (e.g. had a booking) from those who simply never planned to attend.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMP DEFAULT NULL;")
+    cur.execute("""
+        CREATE OR REPLACE FUNCTION set_guest_confirmed_at() RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.status = 'confirmed' AND (OLD IS NULL OR OLD.status IS DISTINCT FROM 'confirmed') THEN
+                NEW.confirmed_at := NOW();
+            ELSIF NEW.status IS DISTINCT FROM 'confirmed' THEN
+                NEW.confirmed_at := NULL;
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    cur.execute("DROP TRIGGER IF EXISTS trg_guest_confirmed_at ON guests;")
+    cur.execute("""
+        CREATE TRIGGER trg_guest_confirmed_at
+        BEFORE INSERT OR UPDATE OF status ON guests
+        FOR EACH ROW EXECUTE FUNCTION set_guest_confirmed_at();
+    """)
     # Default admin user (only created if ADMIN_PASSWORD is configured)
     if ADMIN_PASSWORD:
         cur.execute("""
@@ -1321,11 +1350,13 @@ def unsubscribe_guest(token: str):
     marking their RSVP as declined ('Nemůže přijít') — reuses the existing
     status the admin already tracks, and the default recipient group for
     most templates ('Všichni kromě odmítnutých') already excludes it, so no
-    separate opt-out flag or infrastructure is needed."""
+    separate opt-out flag is needed for sending. unsubscribed_at is set
+    alongside it so the admin can still tell apart someone who unsubscribed
+    (possibly after already registering) from a plain admin-set decline."""
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        "UPDATE guests SET status = 'declined' WHERE invite_token = %s RETURNING first_name, last_name, event_id",
+        "UPDATE guests SET status = 'declined', unsubscribed_at = NOW() WHERE invite_token = %s RETURNING first_name, last_name, event_id",
         (token,)
     )
     guest = cur.fetchone()
