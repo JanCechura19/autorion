@@ -538,6 +538,26 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
+    # Global e-mail blacklist — applies across ALL events, not just one, so
+    # someone who should never be contacted again stays excluded even for
+    # future events they might otherwise get imported/invited into.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS email_blacklist (
+            email VARCHAR(255) PRIMARY KEY,
+            reason TEXT DEFAULT '',
+            added_at TIMESTAMP DEFAULT NOW(),
+            added_by VARCHAR(255) DEFAULT NULL
+        );
+    """)
+    # Small global key-value settings store — currently used for the list of
+    # test-send e-mail addresses (comma-separated string under key
+    # 'test_emails'), shared across admins/devices.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key VARCHAR(100) PRIMARY KEY,
+            value TEXT DEFAULT ''
+        );
+    """)
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS events (
@@ -1356,13 +1376,18 @@ def unsubscribe_guest(token: str):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        "UPDATE guests SET status = 'declined', unsubscribed_at = NOW() WHERE invite_token = %s RETURNING first_name, last_name, event_id",
+        "UPDATE guests SET status = 'declined', unsubscribed_at = NOW() WHERE invite_token = %s RETURNING first_name, last_name, event_id, email",
         (token,)
     )
     guest = cur.fetchone()
     if not guest:
         cur.close(); conn.close()
         raise HTTPException(status_code=404, detail="Odkaz nenalezen nebo již není platný.")
+    if guest.get("email"):
+        cur.execute(
+            "INSERT INTO email_blacklist (email, reason, added_by) VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING",
+            (guest["email"].strip().lower(), "Odhlásil se z e-mailů přes odkaz v e-mailu", "systém (unsubscribe)")
+        )
     cur.execute("SELECT name FROM events WHERE id = %s", (guest["event_id"],))
     ev = cur.fetchone()
     conn.commit()
@@ -1501,18 +1526,100 @@ def delete_guest(guest_id: int, user=Depends(get_current_user)):
 def send_bulk_email(req: BulkEmailRequest, user=Depends(get_current_user)):
     """Each item already has its per-recipient subject/HTML fully resolved
     by the frontend (merge tags substituted) — this endpoint just relays
-    each one to Ecomail and reports back how many actually went out."""
+    each one to Ecomail and reports back how many actually went out.
+    Blacklisted addresses are always excluded here too, as a backend
+    safety net independent of whatever the frontend filtered out."""
     if not ECOMAIL_API_KEY or ECOMAIL_API_KEY == "changeme":
         raise HTTPException(status_code=503, detail="Ecomail není nakonfigurovaný (chybí API klíč na serveru).")
     if not req.items:
         raise HTTPException(status_code=400, detail="Žádní příjemci k odeslání")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT email FROM email_blacklist")
+    blacklisted = {row[0].lower() for row in cur.fetchall()}
+    cur.close(); conn.close()
+
     sent = 0
+    blocked = 0
     for item in req.items:
+        if item.email.lower() in blacklisted:
+            blocked += 1
+            continue
         if send_ecomail_transactional(item.email, item.name, item.subject, item.html):
             sent += 1
             _mark_guest_emailed(item.guest_id)
-    return {"sent": sent, "failed": len(req.items) - sent, "total": len(req.items)}
+    return {"sent": sent, "failed": len(req.items) - sent - blocked, "blocked": blocked, "total": len(req.items)}
 
 @app.get("/api/health")
 def health():
     return {"status": "healthy", "time": str(datetime.now())}
+
+@app.get("/api/blacklist")
+def get_blacklist(user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT email, reason, added_at, added_by FROM email_blacklist ORDER BY added_at DESC")
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in rows]
+
+class BlacklistAddRequest(BaseModel):
+    emails: List[str]
+    reason: str = ""
+
+@app.post("/api/blacklist")
+def add_to_blacklist(req: BlacklistAddRequest, user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor()
+    added = 0
+    for raw in req.emails:
+        email = (raw or "").strip().lower()
+        if not email:
+            continue
+        cur.execute(
+            "INSERT INTO email_blacklist (email, reason, added_by) VALUES (%s, %s, %s) "
+            "ON CONFLICT (email) DO UPDATE SET reason = EXCLUDED.reason",
+            (email, req.reason, user.get("email"))
+        )
+        added += 1
+    conn.commit()
+    cur.close(); conn.close()
+    return {"added": added}
+
+@app.delete("/api/blacklist/{email}")
+def remove_from_blacklist(email: str, user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM email_blacklist WHERE email = %s", (email.strip().lower(),))
+    deleted = cur.rowcount
+    conn.commit()
+    cur.close(); conn.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="E-mail není na blacklistu")
+    return {"status": "removed", "email": email}
+
+@app.get("/api/settings/test-emails")
+def get_test_emails(user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM app_settings WHERE key = 'test_emails'")
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    return {"emails": row[0] if row else ""}
+
+class TestEmailsRequest(BaseModel):
+    emails: str
+
+@app.put("/api/settings/test-emails")
+def set_test_emails(req: TestEmailsRequest, user=Depends(get_current_user)):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO app_settings (key, value) VALUES ('test_emails', %s) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (req.emails,)
+    )
+    conn.commit()
+    cur.close(); conn.close()
+    return {"status": "saved"}

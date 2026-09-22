@@ -1373,6 +1373,11 @@ input[type="checkbox"] {
         <div id="systemSettingsContent"></div>
       </div>
 
+      <!-- BLACKLIST PAGE -->
+      <div class="page" id="page-blacklist">
+        <div id="blacklistPageContent"></div>
+      </div>
+
     </div>
   </div>
 
@@ -2743,6 +2748,7 @@ const RECIPIENT_GROUPS = [
   { key:'no_email',       label:'Dosud nekontaktovaní',             desc:'V seznamu hostů, ale nebyl jim odeslán žádný e-mail ze systému', filter: g => !g.email_sent },
   { key:'with_rides',     label:'S rezervovanými jízdami',          desc:'Mají alespoň jednu testovací jízdu',        filter: g => g.bookings && g.bookings.length > 0 },
   { key:'with_companion', label:'S doprovodem',                     desc:'Přijíždí s doprovodnou osobou',             filter: g => g.companion === true },
+  { key:'confirmed_unsubscribed', label:'Potvrzeni, ale odhlásili se', desc:'Měli potvrzenou účast a přesto se sami odhlásili z e-mailů', filter: g => !!g.confirmed_at && !!g.unsubscribed_at },
 ];
 
 function getGuestsByGroup(key) {
@@ -2847,6 +2853,7 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
   `;
 
   document.getElementById('modalFoot').innerHTML = `
+    <button class="btn btn-secondary" onclick="sendTestEmail()">🧪 Testovací e-mail</button>
     <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
     <button class="btn btn-primary" id="sendEmailBtn" onclick="sendEmailToGroup()">
       📤 Odeslat ${recip.length} e-mailům
@@ -2855,6 +2862,42 @@ function renderEmailComposerModal(tmpl, selectedGroup, customIds) {
 
   // Store state for sendEmailToGroup
   window._emailComposerState = { tmplId: tmpl.id, group: selectedGroup, customIds };
+}
+
+async function sendTestEmail() {
+  const state = window._emailComposerState;
+  if (!state) return;
+
+  const settingsResult = await apiCall('/settings/test-emails');
+  const current = settingsResult?.emails || '';
+  const input = prompt('Testovací e-mail(y), oddělené čárkou:', current);
+  if (input === null) return; // cancelled
+  const emails = input.split(',').map(e => e.trim()).filter(Boolean);
+  if (!emails.length) { showToast('Zadej alespoň jeden e-mail', 'error'); return; }
+
+  await apiCall('/settings/test-emails', 'PUT', { emails: input }); // remember for next time
+
+  // A fake guest so merge tags resolve to something sensible in the test
+  // send — it's never saved anywhere and doesn't affect any real guest.
+  const fakeGuest = {
+    id: 0, first_name: 'Testovací', last_name: 'Host', email: emails[0],
+    company: '', status: 'confirmed', window_id: null, bookings: [],
+    confirmed_at: new Date().toISOString(), unsubscribed_at: null,
+  };
+
+  const items = emails.map(email => ({
+    email, name: 'Testovací příjemce',
+    subject: '[TEST] ' + getResolvedSubject(state.tmplId, true, fakeGuest),
+    html: buildEmailHTML(state.tmplId, true, fakeGuest),
+    guest_id: null,
+  }));
+
+  const result = await apiCall('/send-bulk-email', 'POST', { items });
+  if (!result) return;
+  showToast(
+    result.sent === result.total ? `✓ Testovací e-mail odeslán (${result.sent})` : `Odesláno ${result.sent}/${result.total}`,
+    result.sent === result.total ? 'success' : 'error'
+  );
 }
 
 function buildRecipientPreview(recip) {
@@ -2873,10 +2916,13 @@ function selectRecipientGroup(key) {
 }
 
 function onEmailTmplChange(id) {
-  const tmpl       = EMAIL_TEMPLATES.find(t => t.id === id);
-  const newDefault = TEMPLATE_RECIPIENT_GROUPS[id]?.key || 'not_declined';
-  const state      = window._emailComposerState;
-  renderEmailComposerModal(tmpl, newDefault, state?.customIds || null);
+  const tmpl     = EMAIL_TEMPLATES.find(t => t.id === id);
+  const state    = window._emailComposerState;
+  // A manual selection (checked in the guest table) should survive switching
+  // templates — only fall back to the template's own default group when the
+  // admin wasn't already using a custom selection.
+  const newGroup = state?.group === 'custom' ? 'custom' : (TEMPLATE_RECIPIENT_GROUPS[id]?.key || 'not_declined');
+  renderEmailComposerModal(tmpl, newGroup, state?.customIds || null);
 }
 
 async function sendEmailToGroup() {
@@ -2888,6 +2934,17 @@ async function sendEmailToGroup() {
     : getGuestsByGroup(group);
 
   if (!recip.length) { showToast('Žádní příjemci ve vybrané skupině', 'error'); return; }
+
+  // Safety net: even when the admin explicitly picked a custom selection
+  // (which bypasses the recipient-group filters), warn before contacting
+  // anyone who declined or unsubscribed — easy to overlook in a large list.
+  const riskyCount = recip.filter(g => g.status === 'declined' || g.unsubscribed_at).length;
+  if (riskyCount > 0) {
+    const proceed = confirm(
+      `Pozor: ${riskyCount} z ${recip.length} vybraných příjemců odmítlo účast nebo se samo odhlásilo z e-mailů.\n\nOpravdu jim chceš tento e-mail poslat?`
+    );
+    if (!proceed) return;
+  }
 
   const sendBtn = document.getElementById('sendEmailBtn');
   if (sendBtn) { sendBtn.disabled = true; }
@@ -2907,7 +2964,7 @@ async function sendEmailToGroup() {
   // timeout (Ecomail is called once per recipient, synchronously, within
   // that single request) — so large sends go out in smaller batches instead.
   const BATCH_SIZE = 25;
-  let totalSent = 0, totalFailed = 0, totalAttempted = 0;
+  let totalSent = 0, totalFailed = 0, totalAttempted = 0, totalBlocked = 0;
   let stoppedEarly = false;
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
@@ -2919,6 +2976,7 @@ async function sendEmailToGroup() {
 
     totalSent      += result.sent;
     totalFailed    += result.failed;
+    totalBlocked   += result.blocked || 0;
     totalAttempted += result.total;
   }
 
@@ -2939,8 +2997,8 @@ async function sendEmailToGroup() {
   closeModal();
   if (stoppedEarly) {
     showToast(`Odesláno ${totalSent}/${items.length} — dávkové odeslání se přerušilo, zkuste to znovu pro zbytek`, 'error');
-  } else if (totalFailed > 0) {
-    showToast(`Odesláno ${totalSent}/${totalAttempted} — ${totalFailed} selhalo`, 'error');
+  } else if (totalFailed > 0 || totalBlocked > 0) {
+    showToast(`Odesláno ${totalSent}/${totalAttempted}${totalFailed?` — ${totalFailed} selhalo`:''}${totalBlocked?` — ${totalBlocked} blokováno blacklistem`:''}`, 'error');
   } else {
     showToast(`✓ E-mail „${tmpl?.name}" odeslán ${totalSent} příjemcům`, 'success');
   }
@@ -4877,6 +4935,78 @@ function loadRolePermissions() {
 
 // ── SYSTEM SETTINGS ────────────────────────────────────
 
+let BLACKLIST = [];
+
+function showBlacklistPage() {
+  currentEventId = null;
+  renderSidebarV2();
+  showPage('blacklist');
+  loadAndRenderBlacklist();
+  setTimeout(() => {
+    document.querySelectorAll('#sidebarNav .nav-item').forEach(i=>i.classList.remove('active'));
+  }, 10);
+}
+
+async function loadAndRenderBlacklist() {
+  const data = await apiCall('/blacklist');
+  BLACKLIST = data || [];
+  renderBlacklistPage();
+}
+
+function renderBlacklistPage() {
+  const el = document.getElementById('blacklistPageContent');
+  if (!el) return;
+  el.innerHTML = `
+    <h1 style="margin-bottom:4px;">🚫 Blacklist e-mailů</h1>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:20px;">Tihle lidé se nikdy neobjeví v žádném rozeslání, napříč všemi akcemi — bez ohledu na to, jakou skupinu příjemců zrovna vybereš.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;">Přidat e-maily (jeden na řádek, nebo oddělené čárkou)</label>
+      <textarea id="blacklistAddEmails" placeholder="jan.novak@example.com&#10;petr.svoboda@example.com" style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:monospace;font-size:12px;background:var(--surface2);resize:vertical;margin-bottom:8px;"></textarea>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;">Důvod (nepovinné, platí pro všechny přidané najednou)</label>
+      <input id="blacklistAddReason" placeholder="např. požádal o vymazání" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;background:var(--surface2);margin-bottom:10px;">
+      <button class="btn btn-primary" onclick="submitAddToBlacklist()">+ Přidat na blacklist</button>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:var(--surface2);">
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">E-mail</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Důvod</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Přidáno</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${BLACKLIST.length ? BLACKLIST.map(b => `
+            <tr style="border-top:1px solid var(--border);">
+              <td style="padding:10px 14px;font-size:13px;">${b.email}</td>
+              <td style="padding:10px 14px;font-size:13px;color:var(--muted);">${b.reason || '—'}</td>
+              <td style="padding:10px 14px;font-size:12px;color:var(--muted);">${formatDate(b.added_at)}</td>
+              <td style="padding:10px 14px;text-align:right;"><button class="btn btn-secondary btn-sm" onclick="removeFromBlacklist('${b.email}')">Odebrat</button></td>
+            </tr>`).join('') : `<tr><td colspan="4" style="padding:20px 14px;text-align:center;color:var(--muted);font-size:13px;">Blacklist je zatím prázdný</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function submitAddToBlacklist() {
+  const raw = document.getElementById('blacklistAddEmails')?.value || '';
+  const reason = document.getElementById('blacklistAddReason')?.value || '';
+  const emails = raw.split(/[\n,]/).map(e => e.trim()).filter(Boolean);
+  if (!emails.length) { showToast('Zadej alespoň jeden e-mail', 'error'); return; }
+  const result = await apiCall('/blacklist', 'POST', { emails, reason });
+  if (!result) return;
+  showToast(`Přidáno na blacklist: ${result.added}`, 'success');
+  loadAndRenderBlacklist();
+}
+
+async function removeFromBlacklist(email) {
+  if (!confirm(`Odebrat „${email}" z blacklistu?`)) return;
+  const result = await apiCall(`/blacklist/${encodeURIComponent(email)}`, 'DELETE');
+  if (!result) return;
+  showToast('Odebráno z blacklistu', 'success');
+  loadAndRenderBlacklist();
+}
+
 function showSystemSettings() {
   currentEventId = null;
   renderSidebarV2();
@@ -5425,6 +5555,7 @@ function renderSidebarEventList() {
     `:''}
     <div class="sidebar-section" style="padding:14px 16px 4px;margin-top:4px;">Nástroje</div>
     ${pages.includes('editor')?`<div class="nav-item" onclick="showStandaloneEditor()"><span class="nav-icon">🎨</span> Visual Editor<span class="nav-badge" style="background:rgba(200,98,42,0.5);font-size:9px;margin-left:auto;">NEW</span></div>`:''}
+    ${pages.includes('system')?`<div class="nav-item" onclick="showBlacklistPage()"><span class="nav-icon">🚫</span> Blacklist</div>`:''}
     ${pages.includes('system')?`<div class="nav-item" id="l2-system" onclick="showSystemSettings()"><span class="nav-icon">⚙️</span> Nastavení systému</div>`:''}
   `;
 }
@@ -5477,6 +5608,7 @@ function renderSidebarEventContext() {
       <div class="sidebar-section" style="padding:12px 14px 4px;margin-top:4px;">Navigace</div>
       <div class="nav-item" onclick="showEventsList()"><span class="nav-icon">⊞</span>Všechny akce</div>
       ${pages.includes('archive')?`<div class="nav-item" onclick="showPage('archive',this)"><span class="nav-icon">🗂</span>Archiv</div>`:''}
+      ${pages.includes('system')?`<div class="nav-item" onclick="showBlacklistPage()"><span class="nav-icon">🚫</span>Blacklist</div>`:''}
     </div>`;
 }
 
