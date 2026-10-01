@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informace pro účastníky</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    background: #f7f4ef;
+    color: #0e0d0b;
+    min-height: 100vh;
+  }
+  #loadingState, #errorState {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; font-size: 18px; color: #8a8070; text-align: center; padding: 40px;
+  }
+  #errorState { display: none; }
+  #customInfoContainer { display: none; }
+</style>
+</head>
+<body>
+
+<div id="loadingState">Načítám…</div>
+<div id="errorState"></div>
+<div id="customInfoContainer"></div>
+
+<script>
+const API_BASE = 'https://autorion.net/api';
+
+function getEventSlugFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('event');
+}
+
+// Same preview-language override pattern as landing.html — lets the Visual
+// Editor's live preview show either language without needing a real
+// ?lang=en URL.
+let PREVIEW_LANG_OVERRIDE = null;
+function isEnglish() {
+  if (PREVIEW_LANG_OVERRIDE) return PREVIEW_LANG_OVERRIDE === 'en';
+  const params = new URLSearchParams(window.location.search);
+  return params.get('lang') === 'en';
+}
+
+function resolveInfoMergeTags(text, event) {
+  return (text || '')
+    .replace(/{{event_name}}/g, event.name || '')
+    .replace(/{{event_location}}/g, event.location || '');
+}
+
+function showLoadError(message) {
+  document.getElementById('loadingState').style.display = 'none';
+  const err = document.getElementById('errorState');
+  err.style.display = 'flex';
+  err.textContent = message;
+}
+
+function renderPage(event) {
+  document.getElementById('loadingState').style.display = 'none';
+  const container = document.getElementById('customInfoContainer');
+  const ip = event.info_page || {};
+
+  if (!ip.useCustomHtml || !ip.customHtml) {
+    showLoadError('Informace pro tuto akci zatím nejsou připravené.');
+    return;
+  }
+
+  const activeHtml = (isEnglish() && ip.customHtmlEn) ? ip.customHtmlEn : ip.customHtml;
+  container.style.display = 'block';
+  container.innerHTML = resolveInfoMergeTags(activeHtml, event);
+}
+
+async function loadEventData() {
+  const slug = getEventSlugFromUrl();
+  if (!slug) {
+    showLoadError('Chybí parametr akce v adrese (?event=...).');
+    return;
+  }
+
+  const previewMatch = slug.match(/^__preview_(\d+)$/);
+  const isPreview = !!previewMatch;
+  const trackingParams = new URLSearchParams();
+  if (isEnglish()) trackingParams.set('lang', 'en');
+  const fetchUrl = isPreview
+    ? `${API_BASE}/events/preview/${previewMatch[1]}`
+    : `${API_BASE}/events/info/${slug}${trackingParams.toString() ? '?' + trackingParams.toString() : ''}`;
+
+  try {
+    const res = await fetch(fetchUrl);
+    if (!res.ok) {
+      showLoadError(res.status === 404 ? 'Tato akce nebyla nalezena.' : 'Nepodařilo se načíst informace. Zkuste to prosím později.');
+      return;
+    }
+    const event = await res.json();
+    renderPage(event);
+  } catch (err) {
+    showLoadError('Nepodařilo se načíst informace. Zkuste to prosím později.');
+  }
+}
+
+// Live-preview support from the Visual Editor — same postMessage pattern
+// as landing.html, so editing feels identical.
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'autorion-info-update') {
+    if (e.data.previewLang) PREVIEW_LANG_OVERRIDE = e.data.previewLang;
+    if (e.data.event) renderPage(e.data.event);
+  }
+});
+
+document.addEventListener('DOMContentLoaded', loadEventData);
+</script>
+
+</body>
+</html>

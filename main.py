@@ -171,6 +171,7 @@ def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: s
         .replace("{{event_details}}", _build_event_details_block(event, design or {}))
         .replace("{{booking_summary}}", _build_booking_summary_block(guest, event))
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
+        .replace("{{info_page_link}}", f'<a href="https://event.autorion.net/info.html?event={event.get("slug","")}">Informace pro účastníky</a>')
     )
 
 def _linkify_markdown(text: str, color: str) -> str:
@@ -471,6 +472,7 @@ class EventUpdate(BaseModel):
     consent_en: Optional[str] = None
     vehicles: Optional[list] = None
     landing_page: Optional[dict] = None
+    info_page: Optional[dict] = None
     email_templates: Optional[list] = None
     email_design: Optional[dict] = None
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
@@ -605,6 +607,7 @@ def init_db():
             theme JSONB DEFAULT '{}',
             intro_text TEXT DEFAULT '',
             landing_page JSONB DEFAULT '{}',
+            info_page JSONB DEFAULT '{}',
             created_at TIMESTAMP DEFAULT NOW()
         );
     """)
@@ -614,6 +617,7 @@ def init_db():
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS vehicles JSONB DEFAULT '[]';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_templates JSONB DEFAULT '[]';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS email_design JSONB DEFAULT '{}';")
+    cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS info_page JSONB DEFAULT '{}';")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS landing_page_views INTEGER DEFAULT 0;")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS landing_page_views_noreg INTEGER DEFAULT 0;")
     cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_page_views INTEGER DEFAULT 0;")
@@ -1052,6 +1056,33 @@ def get_event_landing(slug: str, reg: str = None, lang: str = None):
 
     return event
 
+@app.get("/api/events/info/{slug}")
+def get_event_info(slug: str, lang: str = None):
+    """Public info page for confirmed guests — venue map, vehicles on-site,
+    and other on-the-day details. Linked from e-mails via {{info_page_link}},
+    not meant to be discovered on its own, so no visit tracking here."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM events WHERE slug = %s", (slug,))
+    event = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not event:
+        raise HTTPException(status_code=404, detail="Akce nenalezena")
+    event = dict(event)
+
+    # Same language-stripping as the landing page — only the language
+    # actually being viewed is sent back, not both.
+    ip = event.get("info_page") or {}
+    if isinstance(ip, dict) and ip.get("useCustomHtml"):
+        ip = dict(ip)
+        if lang == "en" and ip.get("customHtmlEn"):
+            ip["customHtml"] = ip["customHtmlEn"]
+        ip.pop("customHtmlEn", None)
+        event["info_page"] = ip
+
+    return event
+
 @app.get("/api/events/preview/{event_id}")
 def get_event_preview(event_id: int):
     """Used by the Visual Editor preview iframe — no registration_open requirement.
@@ -1171,14 +1202,15 @@ def update_event(event_id: int, update: EventUpdate, user=Depends(get_current_us
     fields = {k: v for k, v in update.dict().items() if v is not None}
     if not fields:
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
-    json_fields = {"theme", "time_windows", "vehicles", "landing_page", "email_templates", "email_design"}
-    # landing_page is edited independently from two different screens (Visual
-    # Editor's hero/sections, and the Nastavení "show register button"
-    # toggle). A plain overwrite lets whichever one saves last silently wipe
-    # out the other's changes if its local copy is stale. A shallow JSONB
-    # merge (old || new) keeps existing top-level keys the caller didn't
-    # touch, instead of relying on the client to have a fully up-to-date copy.
-    shallow_merge_fields = {"landing_page"}
+    json_fields = {"theme", "time_windows", "vehicles", "landing_page", "info_page", "email_templates", "email_design"}
+    # landing_page (and info_page, same reasoning) is edited independently
+    # from two different screens (Visual Editor's hero/sections, and the
+    # Nastavení "show register button" toggle). A plain overwrite lets
+    # whichever one saves last silently wipe out the other's changes if its
+    # local copy is stale. A shallow JSONB merge (old || new) keeps existing
+    # top-level keys the caller didn't touch, instead of relying on the
+    # client to have a fully up-to-date copy.
+    shallow_merge_fields = {"landing_page", "info_page"}
     set_parts = []
     values = []
     for k, v in fields.items():

@@ -1337,6 +1337,11 @@ input[type="checkbox"] {
         <div id="slotsContent"></div>
       </div>
 
+      <!-- COMPANIONS (DRIVERS) -->
+      <div class="page" id="page-companions">
+        <div id="companionsContent"></div>
+      </div>
+
       <!-- SETTINGS -->
       <div class="page" id="page-settings">
         <div id="settingsContent"></div>
@@ -1447,7 +1452,7 @@ let currentEventId = null;
 // ── CO MŮŽE KTERÁ ROLE ──────────────────────────────────
 const PERMISSIONS = {
   super_admin: {
-    pages:        ['events','dashboard','guests','emails','slots','settings','editor','archive','system'],
+    pages:        ['events','dashboard','guests','emails','slots','companions','settings','editor','archive','system'],
     canEdit:      true,
     canDelete:    true,
     canImport:    true,
@@ -1463,7 +1468,7 @@ const PERMISSIONS = {
     canRestoreEvent:  true,
   },
   manager: {
-    pages:        ['events','dashboard','guests','emails','slots','settings','editor','archive','system'],
+    pages:        ['events','dashboard','guests','emails','slots','companions','settings','editor','archive','system'],
     canEdit:      true,
     canDelete:    true,
     canImport:    true,
@@ -1479,7 +1484,7 @@ const PERMISSIONS = {
     canRestoreEvent:  true,
   },
   viewer: {
-    pages:        ['events','dashboard','guests','slots','archive'],
+    pages:        ['events','dashboard','guests','slots','companions','archive'],
     canEdit:      false,
     canDelete:    false,
     canImport:    false,
@@ -1774,7 +1779,7 @@ function updateNavBadge() {
 
 function showPage(name, navEl) {
   // Permission check — 'events' and 'system' are always accessible
-  if (name !== 'events' && name !== 'system' && !canSeePage(name)) {
+  if (name !== 'events' && name !== 'system' && name !== 'blacklist' && !canSeePage(name)) {
     showToast('Nemáte oprávnění k této sekci.', 'error');
     return;
   }
@@ -1808,6 +1813,7 @@ function showPage(name, navEl) {
   if (name === 'guests')    renderGuests();
   if (name === 'emails')    renderEmails();
   if (name === 'slots')     renderSlots();
+  if (name === 'companions') renderCompanions();
   if (name === 'settings')  renderSettings();
   if (name === 'archive')   openArchivePage();
 }
@@ -1833,6 +1839,7 @@ function renderSidebar() {
     ]}] : []),
     { label:'Testovací jízdy', items:[
       { page:'slots', icon:'📊', label:'Obsazenost' },
+      { page:'companions', icon:'🚘', label:'Doprovody (řidiči)' },
     ]},
     ...(pages.includes('settings') ? [{ label:'Vzhled & Nastavení', items:[
       { page:'editor',   icon:'🎨', label:'Visual Editor' },
@@ -1871,6 +1878,13 @@ function renderDashboard() {
   const emailSent = guests.filter(g => g.email_sent).length;
   const cap = EVENT.capacity;
 
+  // Driver vs. non-driver counts — only among guests already physically
+  // checked in: every checked-in main guest is a driver, plus any
+  // companion who said they'll also drive.
+  const checkedInGuests = guests.filter(g => g.checked_in);
+  const driversCount    = checkedInGuests.length + checkedInGuests.filter(g => g.companion_will_drive).length;
+  const nonDriversCount = checkedInGuests.filter(g => g.companion && !g.companion_will_drive).length;
+
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card green"><div class="stat-label">Potvrzení hosté</div><div class="stat-value">${confirmed}</div><div class="stat-sub">${Math.round(confirmed/Math.max(guests.length,1)*100)}% z pozvaných</div></div>
     <div class="stat-card red"><div class="stat-label">Nemohou přijít</div><div class="stat-value">${declined}</div><div class="stat-sub">${pending} bez odpovědi</div></div>
@@ -1880,6 +1894,8 @@ function renderDashboard() {
     <div class="stat-card neutral"><div class="stat-label">Doprovodné osoby</div><div class="stat-value">${companions}</div><div class="stat-sub">celkem ${confirmed+companions} osob</div></div>
     <div class="stat-card neutral"><div class="stat-label">E-maily odeslány</div><div class="stat-value">${emailSent}</div><div class="stat-sub">${guests.length-emailSent} zatím neobdrželo</div></div>
     <div class="stat-card green"><div class="stat-label">Kapacita akce</div><div class="stat-value">${Math.round(confirmed/cap*100)}<span style="font-size:18px;font-weight:400">%</span></div><div class="stat-sub">${confirmed} / ${cap} míst</div></div>
+    <div class="stat-card green"><div class="stat-label">Řidiči (odbaveno)</div><div class="stat-value">${driversCount}</div><div class="stat-sub">hlavní hosté + doprovod, co bude řídit</div></div>
+    <div class="stat-card neutral"><div class="stat-label">Neřidiči (odbaveno)</div><div class="stat-value">${nonDriversCount}</div><div class="stat-sub">doprovod, co nebude řídit</div></div>
   `;
 
   const vCounts = VEHICLES.map(v => ({ name: v.name, count: guests.reduce((s,g)=>s+g.bookings.filter(b=>b.vehicle_id===v.id).length,0) }));
@@ -3657,6 +3673,7 @@ const MERGE_TAGS = [
   { tag:'{{event_details}}',     desc:'Blok Datum + Místo vedle sebe' },
   { tag:'{{booking_summary}}',   desc:'Rezervovaný čas příchodu / vůz + jízdy' },
   { tag:'{{registration_link}}', desc:'Klikací odkaz na registraci' },
+  { tag:'{{info_page_link}}',    desc:'Odkaz na stránku s info pro účastníky (mapka, auta, podrobnosti)' },
 ];
 
 function escAttr(str) {
@@ -3775,7 +3792,8 @@ function resolveMergeTags(text, guest, design) {
     .replace(/{{team_name}}/g,      getTeamName(guest))
     .replace(/{{event_details}}/g,  buildEventDetailsBlock(design))
     .replace(/{{booking_summary}}/g, buildBookingSummaryBlock(guest, design))
-    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">${emailDesign.registrationLinkText || 'Odkaz na registraci'}</a>`);
+    .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">${emailDesign.registrationLinkText || 'Odkaz na registraci'}</a>`)
+    .replace(/{{info_page_link}}/g, `<a href="https://event.autorion.net/info.html?event=${EVENT.slug}" style="color:${(design||emailDesign).accentColor}">Informace pro účastníky</a>`);
 }
 
 function getResolvedSubject(templateId, preview, guest) {
@@ -3931,6 +3949,78 @@ function copyEmailHTML() {
 // ═══════════════════════════════════════════════════════
 // SLOTS PAGE
 // ═══════════════════════════════════════════════════════
+
+// Compact "6.10. Út ráno" style label for a time window — same logic as
+// checkin.html's equivalent, kept in sync since both files display this.
+function getCompactBlockLabel(windowId) {
+  const w = (EVENT?.time_windows || []).find(w => w.id === windowId);
+  if (!w) return '';
+  const datePart = (w.label.match(/^([\d.]+\s*[A-Za-zÁ-ža-ž]+)/) || [])[1] || w.label;
+  let period = '';
+  if (/dopoledn/i.test(w.label)) period = 'ráno';
+  else if (/odpoledn/i.test(w.label)) period = 'odpoledne';
+  else if (/podvečerní|večerní/i.test(w.label)) period = 'večer';
+  return period ? `${datePart} ${period}` : w.label;
+}
+
+function renderCompanions() {
+  const el = document.getElementById('companionsContent');
+  if (!el) return;
+  const drivers = guests.filter(g => g.companion_will_drive);
+
+  el.innerHTML = `
+    <h1 style="margin-bottom:4px;">🚘 Doprovody (řidiči)</h1>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:20px;">Doprovodné osoby, které u check-inu uvedly, že budou také řídit — jejich jméno, e-mail a souhlas appka ukládá odděleně od hlavního hosta. Číslo řidičáku je šifrované; zobrazí se až po kliknutí.</p>
+    ${drivers.length ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:var(--surface2);">
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Hlavní host</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Doprovod (řidič)</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">E-mail doprovodu</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Blok</th>
+          <th style="text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;color:var(--muted);">Souhlas</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${drivers.map(g => `
+            <tr style="border-top:1px solid var(--border);" id="companionRow${g.id}">
+              <td style="padding:10px 14px;font-size:13px;">${g.last_name} ${g.first_name}</td>
+              <td style="padding:10px 14px;font-size:13px;">${g.companion_last_name} ${g.companion_first_name}</td>
+              <td style="padding:10px 14px;font-size:13px;color:var(--muted);">${g.companion_email || '—'}</td>
+              <td style="padding:10px 14px;font-size:12px;color:var(--muted);">${g.window_id ? getCompactBlockLabel(g.window_id) : ''}</td>
+              <td style="padding:10px 14px;">${g.companion_consent_signed ? '<span class="badge badge-green">Podepsán</span>' : '<span class="badge badge-gray">Chybí</span>'}</td>
+              <td style="padding:10px 14px;text-align:right;"><button class="btn btn-secondary btn-sm" onclick="viewCompanionDetail(${g.id})">🔍 Zobrazit licenci</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : `<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">Zatím žádný doprovod neuvedl, že bude řídit.</div>`}
+  `;
+}
+
+async function viewCompanionDetail(guestId) {
+  document.getElementById('modalTitle').textContent = 'Doprovod — detail';
+  document.getElementById('modalBody').innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);">Načítám…</div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">Zavřít</button>`;
+  openModal();
+
+  const result = await apiCall(`/guests/${guestId}/companion`);
+  if (!result) { closeModal(); return; } // apiCall already showed an error toast
+
+  const signedAt = result.signed_at ? new Date(result.signed_at).toLocaleString('cs-CZ') : '';
+  document.getElementById('modalTitle').textContent = `Doprovod — ${result.first_name} ${result.last_name}`;
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:13px;line-height:1.8;margin-bottom:16px;">
+      <div><strong>E-mail:</strong> ${result.email || '—'}</div>
+      <div><strong>Číslo řidičáku:</strong> ${result.license_number || '— nevyplněno'}</div>
+      ${signedAt ? `<div style="color:var(--muted);font-size:12px;margin-top:4px;">Podepsáno ${signedAt}</div>` : ''}
+    </div>
+    ${result.signature ? `
+    <div style="text-align:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <img src="${result.signature}" alt="Podpis doprovodu" style="max-width:100%;">
+    </div>` : `<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Podpis zatím chybí.</div>`}
+  `;
+}
 
 function renderSlots() {
   const type = EVENT.registration_type || 'drives';
@@ -5578,6 +5668,7 @@ function renderSidebarEventContext() {
     {page:'guests',   icon:'👥',label:'Hosté',badge:'navBadgeTotal'},
     {page:'emails',   icon:'✉️',label:'E-maily',          show:pages.includes('emails')},
     {page:'slots',    icon:'📊',label:'Obsazenost'},
+    {page:'companions',icon:'🚘',label:'Doprovody (řidiči)'},
     {page:'editor',   icon:'🎨',label:'Šablona registrace',tag:'new',show:pages.includes('editor')},
     {page:'settings', icon:'⚙️',label:'Nastavení',         show:pages.includes('settings')},
   ].filter(i=>i.show!==false);
@@ -5668,6 +5759,11 @@ async function loadGuestsFromApi(eventId) {
     unique_token: 'guest-' + g.id,
     confirmed_at: g.confirmed_at || null,
     unsubscribed_at: g.unsubscribed_at || null,
+    companion_will_drive: !!g.companion_will_drive,
+    companion_first_name: g.companion_first_name || '',
+    companion_last_name: g.companion_last_name || '',
+    companion_email: g.companion_email || '',
+    companion_consent_signed: !!g.companion_consent_signed,
   }));
   filteredGuests = [...guests];
 }

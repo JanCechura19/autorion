@@ -917,6 +917,7 @@ canvas#sigCanvas {
   </div>
   <div class="scroll-area">
     <div class="stats-row" id="guestStats"></div>
+    <div class="stats-row" id="driverStats" style="margin-top:4px;"></div>
     <div class="search-bar">
       <span class="search-icon">🔍</span>
       <input type="text" id="guestSearch" placeholder="Hledat hosta…" oninput="filterGuests()" autocomplete="off">
@@ -1341,6 +1342,27 @@ function renderGuestList() {
       <div class="stat-mini-label">Doprovodů</div>
     </div>
   `;
+
+  // Driver vs. non-driver counts — only among guests already physically
+  // checked in: every checked-in main guest is a driver, plus any
+  // companion who said they'll also drive. A companion who came along
+  // but won't drive counts as a non-driver.
+  const checkedInGuests = guests.filter(g => g.checked_in);
+  const driversCount    = checkedInGuests.length + checkedInGuests.filter(g => g.companion_will_drive).length;
+  const nonDriversCount = checkedInGuests.filter(g => g.companion && !g.companion_will_drive).length;
+  const driverStatsEl = document.getElementById('driverStats');
+  if (driverStatsEl) {
+    driverStatsEl.innerHTML = `
+      <div class="stat-mini">
+        <div class="stat-mini-val" style="color:var(--green)">${driversCount}</div>
+        <div class="stat-mini-label">Řidiči (odbaveno)</div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-mini-val">${nonDriversCount}</div>
+        <div class="stat-mini-label">Neřidiči (odbaveno)</div>
+      </div>
+    `;
+  }
 
   // Block filter — only relevant for events using time windows.
   const blockWrap = document.getElementById('guestBlockFilterWrap');

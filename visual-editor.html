@@ -606,6 +606,10 @@ iframe#previewFrame {
     style="flex:1;max-width:160px;padding:8px 16px;font-size:12px;font-family:inherit;font-weight:500;border:none;border-bottom:2px solid transparent;cursor:pointer;background:transparent;color:var(--muted);margin-bottom:-2px;transition:all 0.15s;">
     🏠 Landing page
   </button>
+  <button id="modeInfo" onclick="setEditorMode('info')"
+    style="flex:1;max-width:160px;padding:8px 16px;font-size:12px;font-family:inherit;font-weight:500;border:none;border-bottom:2px solid transparent;cursor:pointer;background:transparent;color:var(--muted);margin-bottom:-2px;transition:all 0.15s;">
+    ℹ️ Info stránka
+  </button>
 </div>
 
 <!-- EDITOR LAYOUT -->
@@ -614,7 +618,7 @@ iframe#previewFrame {
   <!-- LEFT PANEL -->
   <div class="left-panel">
 
-    <div class="panel-tabs">
+    <div class="panel-tabs" id="mainTabsRow">
       <div class="panel-tab active" onclick="switchTab('content', this)"><span class="panel-tab-icon">✎</span>Obsah</div>
       <div class="panel-tab" onclick="switchTab('design', this)"><span class="panel-tab-icon">🎨</span>Design</div>
       <div class="panel-tab" onclick="switchTab('typography', this)"><span class="panel-tab-icon">T</span>Písmo</div>
@@ -1193,6 +1197,39 @@ iframe#previewFrame {
         </div>
       </div>
 
+      <!-- INFO PAGE PANEL (only shown in 'info' mode) -->
+      <div id="infoPagePanel" style="display:none;padding:16px;">
+        <div class="ctrl-section">
+          <div class="ctrl-section-head" onclick="toggleSection(this)">
+            <div class="ctrl-section-title"><span class="icon">ℹ️</span>Info stránka pro účastníky</div>
+            <span class="chevron">⌄</span>
+          </div>
+          <div class="ctrl-section-body">
+            <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;">
+              Stránka s podrobnostmi pro potvrzené účastníky — mapka areálu, auta na místě, apod. Odkaz na ni (<code>{{info_page_link}}</code>) vložíte do textu e-mailu (např. Potvrzení registrace nebo Připomenutí). Funguje: <code>{{event_name}}</code>, <code>{{event_location}}</code>. Jde použít i moderní CSS a JavaScript — je to normální webová stránka, ne e-mail.
+            </div>
+            <textarea id="infoPageHtml" placeholder="Sem vlož kompletní HTML kód info stránky..."
+              style="width:100%;min-height:320px;font-family:monospace;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);resize:vertical;"
+              oninput="onInfoPageHtmlInput(this.value)"></textarea>
+            <div style="margin-top:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <label style="font-size:12px;font-weight:600;">Anglická verze <span style="font-weight:300;color:var(--muted);">(volitelné)</span></label>
+                <div style="display:flex;gap:4px;">
+                  <button type="button" id="infoPreviewLangCsBtn" onclick="setInfoPreviewLang('cs')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;">Náhled CZ</button>
+                  <button type="button" id="infoPreviewLangEnBtn" onclick="setInfoPreviewLang('en')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;">Náhled EN</button>
+                </div>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">
+                Zobrazí se místo české verze, když je v adrese <code>?lang=en</code>. Když necháte prázdné, appka i pro anglický odkaz zatím ukáže českou verzi.
+              </div>
+              <textarea id="infoPageHtmlEn" placeholder="Sem vlož anglickou verzi HTML kódu info stránky (nepovinné)..."
+                style="width:100%;min-height:320px;font-family:monospace;font-size:11px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);resize:vertical;"
+                oninput="onInfoPageHtmlEnInput(this.value)"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- end panel-content -->
   </div><!-- end left-panel -->
 
@@ -1303,6 +1340,7 @@ async function init() {
         CURRENT_EVENT = event;
         populateContentTab(event);
         populateSectionsTab(event.landing_page || {});
+        populateInfoTab(event.info_page || {});
         if (event.theme && Object.keys(event.theme).length) {
           restoreTheme(event.theme);
           showToast('Téma akce načteno', '');
@@ -2235,6 +2273,7 @@ function setEditorMode(mode) {
   const sectionsBtn = document.getElementById('tabSectionsBtn');
   const btnReg = document.getElementById('modeRegistration');
   const btnLand = document.getElementById('modeLanding');
+  const btnInfo = document.getElementById('modeInfo');
 
   // Update mode buttons styling
   if (btnReg) {
@@ -2247,15 +2286,27 @@ function setEditorMode(mode) {
     btnLand.style.color = mode === 'landing' ? 'var(--text)' : 'var(--muted)';
     btnLand.style.fontWeight = mode === 'landing' ? '600' : '500';
   }
+  if (btnInfo) {
+    btnInfo.style.borderBottomColor = mode === 'info' ? 'var(--text)' : 'transparent';
+    btnInfo.style.color = mode === 'info' ? 'var(--text)' : 'var(--muted)';
+    btnInfo.style.fontWeight = mode === 'info' ? '600' : '500';
+  }
 
-  // Show/hide Sections tab row
+  // Show/hide Sections tab row (landing-only) and the main tab row + its
+  // panels (hidden entirely in info mode, which has its own single panel)
   const sectionsRow = document.getElementById('sectionsTabRow');
   if (sectionsRow) sectionsRow.style.display = mode === 'landing' ? '' : 'none';
+  const mainTabsRow = document.getElementById('mainTabsRow');
+  if (mainTabsRow) mainTabsRow.style.display = mode === 'info' ? 'none' : '';
+  const infoPanel = document.getElementById('infoPagePanel');
+  if (infoPanel) infoPanel.style.display = mode === 'info' ? 'block' : 'none';
 
   // Switch preview iframe
   if (EVENT_ID) {
     if (mode === 'registration') {
       frame.src = `registration.html?event=__preview_${EVENT_ID}`;
+    } else if (mode === 'info') {
+      frame.src = `info.html?event=__preview_${EVENT_ID}`;
     } else {
       frame.src = `landing.html?event=__preview_${EVENT_ID}`;
     }
@@ -2265,6 +2316,8 @@ function setEditorMode(mode) {
   if (mode === 'landing') {
     renderSectionsList();
     switchTab('sections', document.getElementById('tabSectionsBtn'));
+  } else if (mode === 'info') {
+    setTimeout(applyInfoPreview, 150); // let the iframe finish loading first
   } else {
     switchTab('content', document.querySelector('.panel-tab'));
   }
@@ -2426,6 +2479,51 @@ function applyLandingPreview() {
   }, '*');
 }
 
+let INFO_PAGE = { html: '', htmlEn: '' };
+let INFO_PREVIEW_LANG = 'cs';
+
+function setInfoPreviewLang(lang) {
+  INFO_PREVIEW_LANG = lang;
+  const csBtn = document.getElementById('infoPreviewLangCsBtn');
+  const enBtn = document.getElementById('infoPreviewLangEnBtn');
+  if (csBtn) csBtn.style.background = lang === 'cs' ? 'var(--surface2)' : 'transparent';
+  if (enBtn) enBtn.style.background = lang === 'en' ? 'var(--surface2)' : 'transparent';
+  applyInfoPreview();
+}
+
+function onInfoPageHtmlInput(value) {
+  INFO_PAGE.html = value;
+  markDirty();
+  applyInfoPreview();
+}
+
+function onInfoPageHtmlEnInput(value) {
+  INFO_PAGE.htmlEn = value;
+  markDirty();
+  applyInfoPreview();
+}
+
+function applyInfoPreview() {
+  if (EDITOR_MODE !== 'info') return;
+  const frame = document.getElementById('previewFrame');
+  frame.contentWindow?.postMessage({
+    type: 'autorion-info-update',
+    previewLang: INFO_PREVIEW_LANG,
+    event: {
+      ...CURRENT_EVENT,
+      info_page: collectInfoPage()
+    }
+  }, '*');
+}
+
+function collectInfoPage() {
+  return {
+    useCustomHtml: true,
+    customHtml: INFO_PAGE.html,
+    customHtmlEn: INFO_PAGE.htmlEn,
+  };
+}
+
 function collectLandingPage() {
   return {
     hero: {
@@ -2438,6 +2536,15 @@ function collectLandingPage() {
     customHtml: CUSTOM_LANDING_HTML.html,
     customHtmlEn: CUSTOM_LANDING_HTML.htmlEn,
   };
+}
+
+function populateInfoTab(infoPage) {
+  const ip = infoPage || {};
+  INFO_PAGE = { html: ip.customHtml || '', htmlEn: ip.customHtmlEn || '' };
+  const area   = document.getElementById('infoPageHtml');
+  const areaEn = document.getElementById('infoPageHtmlEn');
+  if (area)   area.value   = INFO_PAGE.html;
+  if (areaEn) areaEn.value = INFO_PAGE.htmlEn;
 }
 
 function populateSectionsTab(landingPage) {
@@ -2525,6 +2632,9 @@ async function saveTheme() {
     };
     if (EDITOR_MODE === 'landing') {
       payload.landing_page = collectLandingPage();
+    }
+    if (EDITOR_MODE === 'info') {
+      payload.info_page = collectInfoPage();
     }
     try {
       const res = await fetch(`/api/events/${EVENT_ID}`, {
