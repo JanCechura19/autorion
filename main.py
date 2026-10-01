@@ -634,7 +634,7 @@ def init_db():
             bookings JSONB DEFAULT '[]',
             consent_signed BOOLEAN DEFAULT FALSE,
             consent_paper BOOLEAN DEFAULT FALSE,
-            consent_license VARCHAR(50) DEFAULT '',
+            consent_license TEXT DEFAULT '', -- holds the encrypted (Fernet) value, much longer than the raw number
             consent_signature TEXT DEFAULT NULL,
             consent_signature_at TIMESTAMP DEFAULT NULL,
             walk_in BOOLEAN DEFAULT FALSE,
@@ -682,10 +682,15 @@ def init_db():
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_first_name VARCHAR(255) DEFAULT '';")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_last_name VARCHAR(255) DEFAULT '';")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_email VARCHAR(255) DEFAULT '';")
-    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_license VARCHAR(500) DEFAULT '';")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_license TEXT DEFAULT '';")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signed BOOLEAN DEFAULT FALSE;")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signature TEXT DEFAULT NULL;")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signature_at TIMESTAMP DEFAULT NULL;")
+    # consent_license used to hold the raw (short) licence number as
+    # VARCHAR(50) — now that it's encrypted (Fernet), the ciphertext is much
+    # longer than the original number and needs a column without that limit.
+    cur.execute("ALTER TABLE guests ALTER COLUMN consent_license TYPE TEXT;")
+    cur.execute("ALTER TABLE guests ALTER COLUMN companion_license TYPE TEXT;")
     cur.execute("""
         CREATE OR REPLACE FUNCTION set_guest_confirmed_at() RETURNS TRIGGER AS $$
         BEGIN
