@@ -930,6 +930,7 @@ canvas#sigCanvas {
       <button class="filter-tab" onclick="setFilter('checked',this)">Odbavení</button>
       <button class="filter-tab" onclick="setFilter('rides',this)">S jízdami</button>
     </div>
+    <div id="guestBlockFilterWrap" style="margin-bottom:12px;"></div>
     <div id="guestList"></div>
   </div>
 </div>
@@ -968,6 +969,17 @@ canvas#sigCanvas {
   </div>
   <div class="scroll-area">
     <div class="consent-form-wrap" id="consentFormContent"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 4b: COMPANION (DRIVING) FORM ══ -->
+<div class="screen" id="screenCompanion">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goToDetail()">←</button>
+    <div class="topbar-title">Doprovod — bude řídit</div>
+  </div>
+  <div class="scroll-area">
+    <div class="consent-form-wrap" id="companionFormContent"></div>
   </div>
 </div>
 
@@ -1079,6 +1091,7 @@ let currentGuests = [];  // guests for the currently selected event
 let currentEvent  = null;
 let currentGuest  = null;
 let guestFilter   = 'all';
+let guestBlockFilter = null;
 let sigHasContent = false;
 let sigConsented  = false;
 
@@ -1093,11 +1106,13 @@ async function loadEvents() {
 
 async function loadGuestsForCurrentEvent() {
   if (!currentEvent) return;
-  const data = await apiCall(`/events/${currentEvent.id}/guests`);
-  // Guests who declined ("Nemůže přijít") aren't expected on-site, so they're
-  // excluded here — this naturally applies everywhere downstream (list,
-  // stats, occupancy view) without needing a separate filter each place.
-  currentGuests = Array.isArray(data) ? data.filter(g => g.status !== 'declined') : [];
+  const data = await apiCall(`/events/${currentEvent.id}/guests?checkin=true`);
+  // Confirmed guests, plus anyone who unsubscribed from e-mails after
+  // already having a booking/window — unsubscribing only opts them out
+  // of further e-mails, it doesn't mean they're not coming. Filtered
+  // server-side, so check-in never downloads the full (potentially huge)
+  // guest list just to discard most of it locally.
+  currentGuests = Array.isArray(data) ? data : [];
 }
 
 // ══════════════════════════════════════════════════════
@@ -1327,6 +1342,22 @@ function renderGuestList() {
     </div>
   `;
 
+  // Block filter — only relevant for events using time windows.
+  const blockWrap = document.getElementById('guestBlockFilterWrap');
+  if (blockWrap) {
+    const windows = currentEvent.time_windows || [];
+    if (windows.length) {
+      blockWrap.innerHTML = `
+        <select id="guestBlockFilterSelect" onchange="guestBlockFilter = this.value ? parseInt(this.value) : null; filterGuests();"
+          style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:var(--card-bg);color:var(--ink);">
+          <option value="">Všechny bloky</option>
+          ${windows.map(w => `<option value="${w.id}" ${guestBlockFilter === w.id ? 'selected' : ''}>${getCompactBlockLabel(w.id)}</option>`).join('')}
+        </select>`;
+    } else {
+      blockWrap.innerHTML = '';
+    }
+  }
+
   filterGuests();
 }
 
@@ -1337,6 +1368,20 @@ function setFilter(f, btn) {
   filterGuests();
 }
 
+// Compact "út 6.10. ráno" style label for a time window — derives the
+// morning/afternoon/evening word from the block's own label text, so it
+// stays correct if window labels ever change wording.
+function getCompactBlockLabel(windowId) {
+  const w = (currentEvent?.time_windows || []).find(w => w.id === windowId);
+  if (!w) return '';
+  const datePart = (w.label.match(/^([\d.]+\s*[A-Za-zÁ-ža-ž]+)/) || [])[1] || w.label;
+  let period = '';
+  if (/dopoledn/i.test(w.label)) period = 'ráno';
+  else if (/odpoledn/i.test(w.label)) period = 'odpoledne';
+  else if (/podvečerní|večerní/i.test(w.label)) period = 'večer';
+  return period ? `${datePart} ${period}` : w.label;
+}
+
 function filterGuests() {
   if (!currentEvent) return;
   const q = document.getElementById('guestSearch').value.toLowerCase();
@@ -1345,6 +1390,7 @@ function filterGuests() {
   if (guestFilter === 'pending')  guests = guests.filter(g => !g.checked_in);
   if (guestFilter === 'checked')  guests = guests.filter(g =>  g.checked_in);
   if (guestFilter === 'rides')    guests = guests.filter(g =>  (g.bookings||[]).length > 0);
+  if (guestBlockFilter) guests = guests.filter(g => g.window_id === guestBlockFilter);
   if (q) guests = guests.filter(g =>
     `${g.first_name} ${g.last_name}`.toLowerCase().includes(q) ||
     `${g.last_name} ${g.first_name}`.toLowerCase().includes(q)
@@ -1379,6 +1425,7 @@ function filterGuests() {
           <div class="guest-meta">
             ${g.companion ? `👥 s doprovodem` : '👤 bez doprovodu'}
             ${rideCount ? ` · 🚗 ${rideCount} jízd${rideCount > 1 ? 'y' : 'a'}` : ''}
+            ${g.window_id ? ` · 📅 ${getCompactBlockLabel(g.window_id)}` : ''}
           </div>
         </div>
         <div class="guest-status">${chip}</div>
@@ -1393,6 +1440,7 @@ function filterGuests() {
 function selectGuest(id) {
   currentGuest = currentGuests.find(g => g.id === id);
   if (!currentGuest) return;
+  companionWillDrive = currentGuest.companion_will_drive || false; // pick up a prior save, if any
   renderGuestDetail();
   showScreen('screenDetail');
 }
@@ -1628,6 +1676,20 @@ function openConsentForm() {
   renderConsentForm();
 }
 
+let companionWillDrive = false;
+
+function setCompanionFlag(hasCompanion) {
+  if (!currentGuest) return;
+  currentGuest.companion = hasCompanion;
+  if (!hasCompanion) companionWillDrive = false;
+  renderConsentForm();
+}
+
+function setCompanionWillDrive(willDrive) {
+  companionWillDrive = willDrive;
+  renderConsentForm();
+}
+
 function renderConsentForm() {
   const g  = currentGuest;
   const ev = currentEvent;
@@ -1662,8 +1724,23 @@ function renderConsentForm() {
       </div>
       <div class="form-field">
         <label>${ct('labelLicense')}</label>
-        <input type="text" id="licenseInput" placeholder="${ct('licensePh')}" value="${g.consent_license || ''}"
+        <input type="text" id="licenseInput" placeholder="${ct('licensePh')}" value=""
           oninput="updateSubmitBtn()" inputmode="text" autocomplete="off">
+        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="scanDriversLicense()">📷 Vyfotit řidičák</button>
+      </div>
+      <div class="form-field">
+        <label>Doprovod</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn ${g.companion ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionYesBtn" onclick="setCompanionFlag(true)" style="flex:1;">S doprovodem</button>
+          <button type="button" class="btn ${!g.companion ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionNoBtn" onclick="setCompanionFlag(false)" style="flex:1;">Bez doprovodu</button>
+        </div>
+      </div>
+      <div class="form-field" id="companionDriveWrap" style="display:${g.companion ? 'block' : 'none'};">
+        <label>Bude doprovod řídit?</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn ${companionWillDrive ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionDriveYesBtn" onclick="setCompanionWillDrive(true)" style="flex:1;">Ano, bude řídit</button>
+          <button type="button" class="btn ${!companionWillDrive ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionDriveNoBtn" onclick="setCompanionWillDrive(false)" style="flex:1;">Ne, jen doprovod</button>
+        </div>
       </div>
     </div>
 
@@ -1698,6 +1775,246 @@ function renderConsentForm() {
   `;
 
   initSignaturePad();
+  prefillLicenseIfSaved(g.id);
+}
+
+// Fetches the decrypted license number only when re-opening a guest who
+// already has one on file — the normal guest list never carries it
+// (encrypted, excluded from GUEST_SAFE_COLUMNS), so this dedicated fetch is
+// the only way to show what was already entered.
+async function prefillLicenseIfSaved(guestId) {
+  const result = await apiCall(`/guests/${guestId}/license`);
+  if (result?.license_number) {
+    const input = document.getElementById('licenseInput');
+    if (input) { input.value = result.license_number; updateSubmitBtn(); }
+  }
+}
+
+function renderCompanionForm() {
+  const g  = currentGuest;
+  const ev = currentEvent;
+  const dateLabel = ev.date_to && ev.date_to !== ev.date_from ? `${ev.date_from} – ${ev.date_to}` : ev.date_from;
+
+  // Fresh signature/consent state for the companion — the main guest's
+  // consent was already submitted and saved before we ever get here.
+  sigHasContent = false;
+  sigConsented  = false;
+
+  document.getElementById('companionFormContent').innerHTML = `
+    <div class="consent-form-header">
+      <div class="consent-form-logo">Autorion Events</div>
+      <div class="consent-form-title">${ev.name}</div>
+      <div class="consent-form-guest">Doprovod – ${g.first_name} ${g.last_name}</div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">Údaje doprovodu</div>
+      <div class="form-field">
+        <label>Jméno</label>
+        <input type="text" id="companionFirstName" placeholder="Jméno" oninput="updateCompanionSubmitBtn()">
+      </div>
+      <div class="form-field">
+        <label>Příjmení</label>
+        <input type="text" id="companionLastName" placeholder="Příjmení" oninput="updateCompanionSubmitBtn()">
+      </div>
+      <div class="form-field">
+        <label>E-mail</label>
+        <input type="email" id="companionEmailInput" placeholder="E-mail" inputmode="email" autocomplete="off" oninput="updateCompanionSubmitBtn()">
+      </div>
+      <div class="form-field">
+        <label>${ct('labelLicense')}</label>
+        <input type="text" id="companionLicenseInput" placeholder="${ct('licensePh')}" inputmode="text" autocomplete="off" oninput="updateCompanionSubmitBtn()">
+        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="scanCompanionLicense()">📷 Vyfotit řidičák</button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionConsent')}</div>
+      <div class="consent-text-box">
+        ${ct('consentBody')('doprovod', ev.name, dateLabel, ev.location)}
+      </div>
+      <div class="consent-check-row" id="consentCheckRow" onclick="toggleCompanionConsentCheck()">
+        <div class="consent-custom-cb" id="consentCb"></div>
+        <span class="consent-check-text">${ct('consentAgree')}</span>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-card-title">${ct('sectionSig')}</div>
+      <div class="signature-wrap" id="sigWrap">
+        <span class="signature-label">${ct('sigPrompt')}</span>
+        <canvas id="sigCanvas"></canvas>
+        <div class="sig-controls">
+          <button class="sig-clear-btn" onclick="clearSignature()">${ct('sigClear')}</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-consent-btn" id="submitCompanionBtn" onclick="submitCompanionConsent()" disabled>
+      Uložit a dokončit
+    </button>
+    <div id="companionSubmitHint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;"></div>
+  `;
+
+  initSignaturePad();
+}
+
+function toggleCompanionConsentCheck() {
+  sigConsented = !sigConsented;
+  const row = document.getElementById('consentCheckRow');
+  const cb  = document.getElementById('consentCb');
+  row?.classList.toggle('active', sigConsented);
+  if (cb) cb.textContent = sigConsented ? '✓' : '';
+  updateCompanionSubmitBtn();
+}
+
+function updateCompanionSubmitBtn() {
+  const btn = document.getElementById('submitCompanionBtn');
+  if (!btn) return;
+  const firstName = document.getElementById('companionFirstName')?.value.trim();
+  const lastName  = document.getElementById('companionLastName')?.value.trim();
+  const license   = document.getElementById('companionLicenseInput')?.value.trim();
+  const ok = sigHasContent && sigConsented && firstName && lastName && license;
+  btn.disabled = !ok;
+
+  const hint = document.getElementById('companionSubmitHint');
+  if (hint) {
+    if (ok) {
+      hint.textContent = '';
+    } else {
+      const missing = [];
+      if (!firstName)     missing.push('jméno');
+      if (!lastName)      missing.push('příjmení');
+      if (!license)       missing.push('číslo řidičského průkazu');
+      if (!sigConsented)  missing.push('zaškrtnutí souhlasu');
+      if (!sigHasContent) missing.push('podpis');
+      hint.textContent = 'Ještě chybí: ' + missing.join(', ');
+    }
+  }
+}
+
+// Best-effort guess at surname/given name from the raw OCR text — EU
+// driving licences list these as numbered fields ("1. Surname", "2. Given
+// name"), but OCR doesn't reliably tell which line is which field, so this
+// is only a starting suggestion; staff always reviews/corrects it.
+function guessNameFromText(rawText) {
+  const blacklistWords = /ŘIDIČSK|PRUKAZ|PRŮKAZ|PERMIS|CONDUIRE|DRIVING|LICEN[CS]E|REPUBLIC|CESKA|ČESKÁ|CZECH|DATE|BIRTH|NAROZEN|VYDÁN|PLATNOST|CATEGOR|KATEGORIE|SIGNATURE|PODPIS/i;
+  const lines = rawText.split('\n')
+    .map(l => l.trim().replace(/^\d+\.\s*/, '')) // strip leading "1. " / "2. " field numbers
+    .filter(l => l.length >= 2 && l.length <= 30)
+    .filter(l => /^[A-Za-zÀ-ž\s.-]+$/.test(l))
+    .filter(l => !blacklistWords.test(l));
+  return { lastName: lines[0] || '', firstName: lines[1] || '' };
+}
+
+function scanCompanionLicense() {
+  runLicenseOcrCapture((licenseGuess, rawText) => {
+    const licenseInput = document.getElementById('companionLicenseInput');
+    if (licenseInput) licenseInput.value = licenseGuess;
+
+    const { lastName, firstName } = guessNameFromText(rawText || '');
+    const lastNameInput  = document.getElementById('companionLastName');
+    const firstNameInput = document.getElementById('companionFirstName');
+    // Only fill in name fields that are still empty — don't overwrite
+    // something staff already typed in by hand.
+    if (lastNameInput  && !lastNameInput.value.trim()  && lastName)  lastNameInput.value  = lastName;
+    if (firstNameInput && !firstNameInput.value.trim() && firstName) firstNameInput.value = firstName;
+
+    updateCompanionSubmitBtn();
+  });
+}
+
+async function submitCompanionConsent() {
+  if (!currentGuest) return;
+  const btn = document.getElementById('submitCompanionBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Ukládám…'; }
+
+  const payload = {
+    companion_first_name: document.getElementById('companionFirstName')?.value.trim(),
+    companion_last_name:  document.getElementById('companionLastName')?.value.trim(),
+    companion_email:      document.getElementById('companionEmailInput')?.value.trim(),
+    companion_license:    document.getElementById('companionLicenseInput')?.value.trim(),
+    companion_consent_signed: true,
+  };
+  if (sigCanvas && sigHasContent) {
+    payload.companion_consent_signature = sigCanvas.toDataURL('image/png');
+  }
+
+  const result = await apiCall(`/guests/${currentGuest.id}`, 'PATCH', payload);
+
+  if (!result) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Uložit a dokončit'; }
+    return; // apiCall already showed an error toast
+  }
+
+  Object.assign(currentGuest, result);
+  const idx = currentGuests.findIndex(g => g.id === currentGuest.id);
+  if (idx >= 0) currentGuests[idx] = currentGuest;
+
+  showToast('Doprovod uložen ✓');
+  goToDetail();
+}
+
+// ── DRIVER'S LICENSE OCR ──
+// The photo is processed entirely in the browser (Tesseract.js) and never
+// uploaded anywhere — only the confirmed number gets saved, encrypted, once
+// staff reviews/corrects the suggestion. The library itself (~2MB) is only
+// fetched the first time this is actually used, not on every page load.
+let _tesseractReady = null;
+function loadTesseract() {
+  if (_tesseractReady) return _tesseractReady;
+  _tesseractReady = new Promise((resolve, reject) => {
+    if (window.Tesseract) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => { _tesseractReady = null; reject(new Error('load-failed')); };
+    document.head.appendChild(script);
+  });
+  return _tesseractReady;
+}
+
+// Picks the best-looking candidate out of the raw OCR text — driving
+// licence numbers are alphanumeric with no spaces, typically 6+ characters.
+// This is a starting suggestion, not a guarantee — staff always reviews it
+// before it gets saved.
+function guessLicenseNumber(rawText) {
+  const candidates = (rawText.match(/[A-Z0-9]{6,}/g) || []);
+  if (!candidates.length) return '';
+  return candidates.reduce((best, c) => c.length > best.length ? c : best, candidates[0]);
+}
+
+function scanDriversLicense() {
+  runLicenseOcrCapture(text => {
+    const input = document.getElementById('licenseInput');
+    if (input) { input.value = text; updateSubmitBtn(); }
+  });
+}
+
+// Shared capture+OCR flow, reused for both the main guest and (later) the
+// companion form — takes a file, runs OCR, and hands the best-guess number
+// back to the caller, which decides where it goes.
+function runLicenseOcrCapture(onResult) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    showToast('Rozpoznávám text z fotky…');
+    try {
+      await loadTesseract();
+      const { data: { text } } = await Tesseract.recognize(file, 'eng');
+      const guess = guessLicenseNumber(text);
+      if (!guess) { showToast('Číslo se nepodařilo rozpoznat, zadejte ho prosím ručně.'); return; }
+      onResult(guess, text);
+      showToast('Návrh doplněn — zkontrolujte ho prosím');
+    } catch (err) {
+      showToast('Rozpoznání se nepovedlo, zadejte prosím ručně.');
+    }
+  };
+  input.click();
 }
 
 // ── SIGNATURE PAD ──
@@ -1904,6 +2221,8 @@ async function submitConsent() {
     consent_signed: true,
     consent_paper: false,
     consent_license: license,
+    companion: !!currentGuest.companion,
+    companion_will_drive: !!currentGuest.companion && companionWillDrive,
   };
   // Export the drawn signature as a PNG data URL — this is what gets
   // encrypted and stored server-side, so it can be shown later if needed
@@ -1924,7 +2243,13 @@ async function submitConsent() {
   if (idx >= 0) currentGuests[idx] = currentGuest;
 
   showToast('Souhlas byl podepsán ✓');
-  goToDetail();
+
+  if (payload.companion_will_drive) {
+    renderCompanionForm();
+    showScreen('screenCompanion');
+  } else {
+    goToDetail();
+  }
 }
 
 // ══════════════════════════════════════════════════════

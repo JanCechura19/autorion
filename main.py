@@ -81,13 +81,30 @@ def decrypt_signature(token: str) -> str:
     except InvalidToken:
         raise HTTPException(status_code=500, detail="Podpis se nepodařilo dešifrovat (poškozená data nebo změněný klíč).")
 
+# Driver's license numbers are sensitive government-ID data too — reuse the
+# same cipher/key as signatures rather than standing up a second one.
+def encrypt_sensitive(value: str) -> str:
+    if not _signature_cipher:
+        raise HTTPException(status_code=503, detail="Šifrování není nakonfigurováno (chybí SIGNATURE_ENCRYPTION_KEY na serveru).")
+    return _signature_cipher.encrypt(value.encode()).decode()
+
+def decrypt_sensitive(token: str) -> str:
+    if not _signature_cipher:
+        raise HTTPException(status_code=503, detail="Šifrování není nakonfigurováno.")
+    try:
+        return _signature_cipher.decrypt(token.encode()).decode()
+    except InvalidToken:
+        raise HTTPException(status_code=500, detail="Údaj se nepodařilo dešifrovat (poškozená data nebo změněný klíč).")
+
 # Columns returned by every "normal" guest endpoint — consent_signature is
 # deliberately excluded so it never rides along in list/update responses.
 GUEST_SAFE_COLUMNS = """
     id, event_id, first_name, last_name, email, phone, company, status,
     checked_in, companion, window_id, bookings, consent_signed, consent_paper,
-    consent_license, consent_signature_at, walk_in, created_at, invite_token,
-    last_email_sent_at, gdpr_consent, confirmed_at, unsubscribed_at
+    consent_signature_at, walk_in, created_at, invite_token,
+    last_email_sent_at, gdpr_consent, confirmed_at, unsubscribed_at,
+    companion_will_drive, companion_first_name, companion_last_name,
+    companion_email, companion_consent_signed, companion_consent_signature_at
 """
 
 DEFAULT_CONFIRMATION_TEMPLATE = {
@@ -520,6 +537,13 @@ class GuestUpdate(BaseModel):
     consent_signature: Optional[str] = None  # base64 PNG data URL from the signature pad
     walk_in: Optional[bool] = None
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
+    companion_will_drive: Optional[bool] = None
+    companion_first_name: Optional[str] = None
+    companion_last_name: Optional[str] = None
+    companion_email: Optional[str] = None
+    companion_license: Optional[str] = None
+    companion_consent_signed: Optional[bool] = None
+    companion_consent_signature: Optional[str] = None  # base64 PNG data URL
 
 # ── INIT DB ─────────────────────────────────────────────
 
@@ -651,14 +675,28 @@ def init_db():
     # admin tell apart guests who unsubscribed *after* already registering
     # (e.g. had a booking) from those who simply never planned to attend.
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMP DEFAULT NULL;")
+    # A companion is only asked for their own details when they'll ALSO be
+    # driving — most companions never need this at all. License number and
+    # signature are encrypted the same way as the main guest's.
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_will_drive BOOLEAN DEFAULT FALSE;")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_first_name VARCHAR(255) DEFAULT '';")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_last_name VARCHAR(255) DEFAULT '';")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_email VARCHAR(255) DEFAULT '';")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_license VARCHAR(500) DEFAULT '';")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signed BOOLEAN DEFAULT FALSE;")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signature TEXT DEFAULT NULL;")
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_consent_signature_at TIMESTAMP DEFAULT NULL;")
     cur.execute("""
         CREATE OR REPLACE FUNCTION set_guest_confirmed_at() RETURNS TRIGGER AS $$
         BEGIN
             IF NEW.status = 'confirmed' AND (OLD IS NULL OR OLD.status IS DISTINCT FROM 'confirmed') THEN
                 NEW.confirmed_at := NOW();
-            ELSIF NEW.status IS DISTINCT FROM 'confirmed' THEN
-                NEW.confirmed_at := NULL;
             END IF;
+            -- Deliberately NOT clearing confirmed_at when status later moves
+            -- away from 'confirmed' (e.g. someone unsubscribes afterwards) —
+            -- it's a historical record ("they WERE confirmed at some point"),
+            -- which is exactly what's needed to tell apart "confirmed, then
+            -- unsubscribed" from "declined from the very start".
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -1242,10 +1280,28 @@ def delete_event(event_id: int, user=Depends(get_current_user)):
 # ── GUESTS ──────────────────────────────────────────────
 
 @app.get("/api/events/{event_id}/guests")
-def get_guests(event_id: int, user=Depends(get_current_user)):
+def get_guests(event_id: int, status: str = None, checkin: bool = False, user=Depends(get_current_user)):
+    """`status` optionally filters server-side (e.g. status=confirmed).
+    `checkin=true` is a purpose-built filter for check-in day: confirmed
+    guests, PLUS anyone who unsubscribed from e-mails after already having
+    a booking/window assigned — unsubscribing only opts them out of further
+    e-mails, it doesn't mean they're not coming. A guest who was declined
+    any other way (admin-set, or self-declined without ever booking) is
+    still excluded, since they're not expected on-site."""
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(f"SELECT {GUEST_SAFE_COLUMNS} FROM guests WHERE event_id = %s ORDER BY last_name", (event_id,))
+    if checkin:
+        cur.execute(
+            f"SELECT {GUEST_SAFE_COLUMNS} FROM guests WHERE event_id = %s AND ("
+            f"status = 'confirmed' OR "
+            f"(unsubscribed_at IS NOT NULL AND (window_id IS NOT NULL OR bookings != '[]'::jsonb))"
+            f") ORDER BY last_name",
+            (event_id,)
+        )
+    elif status:
+        cur.execute(f"SELECT {GUEST_SAFE_COLUMNS} FROM guests WHERE event_id = %s AND status = %s ORDER BY last_name", (event_id, status))
+    else:
+        cur.execute(f"SELECT {GUEST_SAFE_COLUMNS} FROM guests WHERE event_id = %s ORDER BY last_name", (event_id,))
     guests = cur.fetchall()
     cur.close()
     conn.close()
@@ -1458,10 +1514,15 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
     if "email" in fields:
         fields["email"] = fields["email"].lower()
 
-    # The signature is encrypted before it ever touches the database, and is
-    # timestamped separately. It's popped out of the generic fields loop so
-    # it gets special (encrypted) handling instead of being stored raw.
+    # The signature and the driver's license number are both encrypted
+    # before they ever touch the database — popped out of the generic
+    # fields loop so they get special (encrypted) handling instead of
+    # being stored raw. Same treatment for the companion's own signature
+    # and license, when the companion will also be driving.
     raw_signature = fields.pop("consent_signature", None)
+    raw_license   = fields.pop("consent_license", None)
+    raw_c_signature = fields.pop("companion_consent_signature", None)
+    raw_c_license   = fields.pop("companion_license", None)
 
     set_parts = [f"{k} = %s" for k in fields.keys()]
     values = list(fields.values())
@@ -1469,6 +1530,16 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
         set_parts.append("consent_signature = %s")
         set_parts.append("consent_signature_at = NOW()")
         values.append(encrypt_signature(raw_signature))
+    if raw_license is not None:
+        set_parts.append("consent_license = %s")
+        values.append(encrypt_sensitive(raw_license) if raw_license else "")
+    if raw_c_signature is not None:
+        set_parts.append("companion_consent_signature = %s")
+        set_parts.append("companion_consent_signature_at = NOW()")
+        values.append(encrypt_signature(raw_c_signature))
+    if raw_c_license is not None:
+        set_parts.append("companion_license = %s")
+        values.append(encrypt_sensitive(raw_c_license) if raw_c_license else "")
 
     set_clause = ", ".join(set_parts)
     values.append(guest_id)
@@ -1506,6 +1577,58 @@ def get_guest_signature(guest_id: int, user=Depends(get_current_user)):
         "last_name": row["last_name"],
         "signed_at": row["consent_signature_at"],
         "signature": decrypt_signature(row["consent_signature"]),
+    }
+
+@app.get("/api/guests/{guest_id}/license")
+def get_guest_license(guest_id: int, user=Depends(get_current_user)):
+    """Dedicated, explicit-only route for viewing a guest's driver's licence
+    number — same reasoning as the signature route: kept separate from every
+    other guest endpoint so it's never fetched by accident, and deliberately
+    left out of GUEST_SAFE_COLUMNS."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT consent_license, first_name, last_name FROM guests WHERE id = %s", (guest_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Host nenalezen")
+    if not row["consent_license"]:
+        return {"guest_id": guest_id, "first_name": row["first_name"], "last_name": row["last_name"], "license_number": ""}
+    return {
+        "guest_id": guest_id,
+        "first_name": row["first_name"],
+        "last_name": row["last_name"],
+        "license_number": decrypt_sensitive(row["consent_license"]),
+    }
+
+@app.get("/api/guests/{guest_id}/companion")
+def get_guest_companion(guest_id: int, user=Depends(get_current_user)):
+    """Dedicated, explicit-only route for viewing a companion's licence
+    number and signed consent — same reasoning as the main guest's routes."""
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT companion_will_drive, companion_first_name, companion_last_name, companion_email, "
+        "companion_license, companion_consent_signed, companion_consent_signature, companion_consent_signature_at "
+        "FROM guests WHERE id = %s",
+        (guest_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Host nenalezen")
+    return {
+        "guest_id": guest_id,
+        "will_drive": row["companion_will_drive"],
+        "first_name": row["companion_first_name"] or "",
+        "last_name": row["companion_last_name"] or "",
+        "email": row["companion_email"] or "",
+        "license_number": decrypt_sensitive(row["companion_license"]) if row["companion_license"] else "",
+        "consent_signed": row["companion_consent_signed"],
+        "signature": decrypt_signature(row["companion_consent_signature"]) if row["companion_consent_signature"] else None,
+        "signed_at": row["companion_consent_signature_at"],
     }
 
 @app.delete("/api/guests/{guest_id}")
