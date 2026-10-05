@@ -1159,6 +1159,27 @@ function renderOccupancy() {
   else renderOccupancyDrives();
 }
 
+// Who has physically arrived, for a group of guests (one block, one day, or
+// everyone). Every checked-in main guest is a driver; their companion adds
+// another driver if they'll also drive, otherwise one non-driver.
+function countArrivals(list) {
+  const ci = list.filter(g => g.checked_in);
+  const companionDrivers    = ci.filter(g => g.companion && g.companion_will_drive).length;
+  const companionNonDrivers = ci.filter(g => g.companion && !g.companion_will_drive).length;
+  const drivers = ci.length + companionDrivers;
+  return { guests: ci.length, drivers, nonDrivers: companionNonDrivers, people: drivers + companionNonDrivers };
+}
+
+function arrivalLine(a, big) {
+  if (!a.guests) {
+    return `<span style="color:var(--muted);">Zatím nikdo odbaven</span>`;
+  }
+  const size = big ? 'font-size:15px;' : '';
+  return `<span style="${size}"><strong>Odbaveno osob: ${a.people}</strong>
+    <span style="color:var(--muted);"> · </span>🚗 Řidiči: <strong>${a.drivers}</strong>
+    <span style="color:var(--muted);"> · </span>👤 Neřidiči: <strong>${a.nonDrivers}</strong></span>`;
+}
+
 function renderOccupancyWindows() {
   const windows = currentEvent.time_windows || [];
   const el = document.getElementById('occupancyContent');
@@ -1198,6 +1219,7 @@ function renderOccupancyWindows() {
           </div>
         </div>
         ${w.capacity>0?`<div style="height:4px;background:var(--bg);"><div style="width:${pct}%;height:100%;background:${full?'#c0392b':'#3a8a4a'};"></div></div>`:''}
+        <div style="padding:8px 16px;font-size:12px;border-top:1px solid var(--bg);background:#faf8f3;">${arrivalLine(countArrivals(list), false)}</div>
         ${list.length ? `<div style="padding:6px 16px 12px;">
           ${list.map(g=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--bg);font-size:13px;">
             <span>${g.last_name} ${g.first_name}</span>
@@ -1210,8 +1232,13 @@ function renderOccupancyWindows() {
   let html = '';
   if (multiDay) {
     days.forEach(day => {
-      html += `<div style="font-weight:700;font-size:14px;margin:14px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--border);">📅 ${day}</div>`;
-      windows.filter(w => w.day === day).forEach(w => { html += windowCard(w); });
+      const dayWindows = windows.filter(w => w.day === day);
+      const dayArrivals = countArrivals(dayWindows.flatMap(w => winGuests[w.id] || []));
+      html += `<div style="margin:14px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--border);">
+        <div style="font-weight:700;font-size:14px;">📅 ${day}</div>
+        <div style="font-size:12px;margin-top:3px;">${arrivalLine(dayArrivals, false)}</div>
+      </div>`;
+      dayWindows.forEach(w => { html += windowCard(w); });
     });
     const undated = windows.filter(w => !w.day);
     if (undated.length) {
@@ -1221,7 +1248,16 @@ function renderOccupancyWindows() {
   } else {
     windows.forEach(w => { html += windowCard(w); });
   }
-  el.innerHTML = html;
+  const allArrivals = countArrivals(currentGuests);
+  const inBlocks    = countArrivals(windows.flatMap(w => winGuests[w.id] || []));
+  const noBlock     = allArrivals.guests - inBlocks.guests;
+  const summaryCard = `
+    <div style="background:#fff;border:2px solid var(--ink);border-radius:12px;padding:14px 16px;margin-bottom:6px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;">Celkem odbaveno</div>
+      <div>${arrivalLine(allArrivals, true)}</div>
+      ${noBlock > 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Z toho hostů bez přiřazeného bloku: ${noBlock}</div>` : ''}
+    </div>`;
+  el.innerHTML = summaryCard + html;
 }
 
 function renderOccupancyDrives() {
