@@ -1762,6 +1762,10 @@ function setCompanionWillDrive(willDrive) {
 function renderConsentForm() {
   const g  = currentGuest;
   const ev = currentEvent;
+
+  // See renderCompanionForm(): keep element IDs unique across both forms.
+  const companionFormEl = document.getElementById('companionFormContent');
+  if (companionFormEl) companionFormEl.innerHTML = '';
   const dateLabel = ev.date_to && ev.date_to !== ev.date_from ? `${ev.date_from} – ${ev.date_to}` : ev.date_from;
 
   document.getElementById('consentFormContent').innerHTML = `
@@ -1863,6 +1867,14 @@ async function prefillLicenseIfSaved(guestId) {
 function renderCompanionForm() {
   const g  = currentGuest;
   const ev = currentEvent;
+
+  // Both forms use the same element IDs (sigCanvas, consentCheckRow,
+  // consentCb, sigWrap). The main form's markup stays in the page after it
+  // was submitted, and getElementById would find ITS elements first — so the
+  // checkbox/signature on this screen would silently act on the hidden form.
+  // Emptying the other form keeps every ID unique.
+  const mainFormEl = document.getElementById('consentFormContent');
+  if (mainFormEl) mainFormEl.innerHTML = '';
   const dateLabel = ev.date_to && ev.date_to !== ev.date_from ? `${ev.date_from} – ${ev.date_to}` : ev.date_from;
 
   // Fresh signature/consent state for the companion — the main guest's
@@ -2165,6 +2177,10 @@ function toggleConsentCheck() {
 }
 
 function updateSubmitBtn() {
+  // The signature pad calls this after every stroke. When the driving
+  // companion's form is the one on screen, its own submit button is the one
+  // that has to be unlocked — otherwise it stays disabled even once signed.
+  if (document.getElementById('submitCompanionBtn')) { updateCompanionSubmitBtn(); return; }
   const btn = document.getElementById('submitConsentBtn');
   if (!btn) return;
   const license = document.getElementById('licenseInput')?.value.trim();
@@ -2315,8 +2331,10 @@ async function submitConsent() {
   showToast('Souhlas byl podepsán ✓');
 
   if (payload.companion_will_drive) {
-    renderCompanionForm();
+    // Screen first, then render — the signature canvas is measured while
+    // rendering and would be a 0x0 surface if its screen were still hidden.
     showScreen('screenCompanion');
+    renderCompanionForm();
   } else {
     goToDetail();
   }
