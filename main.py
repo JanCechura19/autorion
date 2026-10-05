@@ -797,6 +797,14 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(HTTPBea
         raise HTTPException(status_code=401, detail="Nejste přihlášeni")
     return sessions[credentials.credentials]
 
+def get_current_user_optional(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))):
+    """Like get_current_user, but returns None instead of raising when not
+    logged in — for endpoints that are public but behave differently (or
+    restrict certain fields) when the caller IS authenticated."""
+    if not credentials or credentials.credentials not in sessions:
+        return None
+    return sessions[credentials.credentials]
+
 @app.get("/api/auth/me")
 def get_me(user=Depends(get_current_user)):
     """Lets the frontend resume a session after a page reload using just the
@@ -1344,11 +1352,18 @@ def get_guests(event_id: int, status: str = None, checkin: bool = False, user=De
     conn.close()
     return [dict(g) for g in guests]
 
-def _check_booking_and_window_availability(cur, event_id, bookings_list, window_id, exclude_guest_id=None):
+def _check_booking_and_window_availability(cur, event_id, bookings_list, window_id, exclude_guest_id=None, skip_window_capacity=False):
     """Raises HTTPException(409, ...) on a real conflict. Shared by both the
     'new guest' (create) and 'complete my invite' (update) flows so a guest
     completing their own invite doesn't collide with a slot/window that
-    only THEY already provisionally hold."""
+    only THEY already provisionally hold.
+
+    skip_window_capacity=True lets a walk-in guest added on-site bypass the
+    time-window headcount limit — staff has already physically decided to
+    let the person in, so the system shouldn't second-guess that with a
+    capacity number. The specific-vehicle/time-slot collision check below
+    still applies either way, since double-booking the same car at the same
+    time is a real scheduling conflict, not just a soft limit."""
     guest_filter = "AND id != %s" if exclude_guest_id is not None else ""
     guest_filter_params = (exclude_guest_id,) if exclude_guest_id is not None else ()
 
@@ -1371,7 +1386,7 @@ def _check_booking_and_window_availability(cur, event_id, bookings_list, window_
                     detail=f"Termín {b.get('time_slot')} pro toto vozidlo je již obsazen. Obnovte stránku a vyberte jiný."
                 )
 
-    if window_id is not None:
+    if window_id is not None and not skip_window_capacity:
         cur.execute("SELECT time_windows FROM events WHERE id = %s", (event_id,))
         ev = cur.fetchone()
         windows = ev["time_windows"] if ev else []
@@ -1386,7 +1401,13 @@ def _check_booking_and_window_availability(cur, event_id, bookings_list, window_
                 raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
 
 @app.post("/api/events/{event_id}/guests")
-def create_guest(event_id: int, guest: GuestCreate):
+def create_guest(event_id: int, guest: GuestCreate, user=Depends(get_current_user_optional)):
+    # walk_in=True both bypasses window capacity AND skips the normal
+    # confirmation flow — it must only be settable by an authenticated
+    # check-in staff member, never by an anonymous call to this otherwise
+    # public registration endpoint.
+    if guest.walk_in and not user:
+        raise HTTPException(status_code=401, detail="Přidání hosta bez registrace vyžaduje přihlášení.")
     conn = get_db()
     conn.autocommit = False
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -1395,7 +1416,7 @@ def create_guest(event_id: int, guest: GuestCreate):
         cur.execute("LOCK TABLE guests IN SHARE ROW EXCLUSIVE MODE")
 
         bookings_list = [b.dict() for b in guest.bookings]
-        _check_booking_and_window_availability(cur, event_id, bookings_list, guest.window_id)
+        _check_booking_and_window_availability(cur, event_id, bookings_list, guest.window_id, skip_window_capacity=guest.walk_in)
 
         invite_token = secrets.token_urlsafe(24)
         cur.execute(f"""

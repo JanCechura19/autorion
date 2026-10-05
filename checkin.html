@@ -6,6 +6,12 @@
 <title>Autorion Events – Check-in</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <style>
+.toggle-selected {
+  background: #fff3b0 !important;
+  border-color: #e0c13a !important;
+  color: #5c4a00 !important;
+  font-weight: 700 !important;
+}
 :root {
   --bg:       #f4f2ee;
   --surface:  #ffffff;
@@ -552,6 +558,9 @@ html, body {
   color: var(--ink);
   margin-bottom: 0;
 }
+
+.consent-list { margin: 10px 0 12px 20px; padding: 0; }
+.consent-list li { margin-bottom: 6px; }
 
 /* Canvas signature */
 .signature-wrap {
@@ -1616,11 +1625,19 @@ const CT = {
     labelLicense:  'Číslo řidičského průkazu',
     licensePh:     'např. EU123456',
     sectionConsent:'Text souhlasu',
-    consentBody:   (name, eventName, date, location) =>
-      `Tímto potvrzuji, že jsem byl(a) řádně seznámen(a) s podmínkami účasti na testovacích jízdách v rámci akce <strong>${eventName}</strong> (${date}), konané v ${location}.<br><br>
-       Prohlašuji, že jsem držitelem platného řidičského oprávnění, jsem způsobilý(á) k řízení motorového vozidla a nejsem pod vlivem alkoholu, omamných nebo psychotropních látek.<br><br>
-       Beru na vědomí, že testovací jízdy se účastním na vlastní riziko a organizátor nenese odpovědnost za škody způsobené mým zaviněním. Souhlasím s pořizováním fotografií a videozáznamů pro propagační účely pořadatele.`,
-    consentAgree:  'Souhlasím s výše uvedenými podmínkami účasti na testovacích jízdách.',
+    consentBody:   (name, eventName, date, location, withCompanionLine) =>
+      `Akce: <strong>${eventName}</strong> (${date}), ${location}.<br>
+       Vozidla poskytují společnosti Albion Cars s.r.o., Cardion Cars s.r.o. a Orbion Cars s.r.o. (dále jen „Poskytovatel“, tj. vždy ta společnost, která poskytla konkrétní vozidlo).
+       <ol class="consent-list">
+         <li>Prohlašuji, že mám platné řidičské oprávnění a jsem způsobilý/á k řízení; nejsem pod vlivem alkoholu, drog ani léků ovlivňujících řízení.</li>
+         <li>Budu respektovat pokyny organizátorů akce a zástupce Poskytovatele a vozidlo nepředám k řízení jiné osobě.</li>
+         <li>Budu dodržovat pravidla provozu na polygonu a na pozemních komunikacích pravidla silničního provozu. Za své případné přestupky odpovídám.</li>
+         <li>Pokud škodu zaviním a pojišťovna z důvodu mého jednání pojistné plnění odmítne nebo zkrátí, uhradím Poskytovateli takto neuhrazenou část škody.</li>
+         <li>Jakoukoli nehodu, poškození nebo závadu ihned oznámím zástupci Poskytovatele a poskytnu potřebnou součinnost.</li>
+         <li>Souhlasím s pořízením a použitím své podobizny / audiovizuálního záznamu z akce <strong>${eventName}</strong> pro marketing společností Albion Cars s.r.o., Cardion Cars s.r.o. a Orbion Cars s.r.o.${withCompanionLine ? `<span id="companionConsentLine" style="display:none;"> Tento souhlas uděluji i za svůj doprovod, který byl o pořizování záznamu informován a souhlasí s ním.</span>` : ''}</li>
+       </ol>
+       <strong>Ochrana osobních údajů:</strong> Uvedené údaje zpracovává Poskytovatel vozidla pro organizaci zkušební jízdy, identifikaci řidiče a případné řešení škody. Podrobné informace o zpracování osobních údajů jsou k dispozici u organizátora akce.`,
+    consentAgree:  'Podpisem potvrzuji, že jsem výše uvedené přečetl/a, rozumím tomu a souhlasím s tím.',
     sectionSig:    'Podpis',
     sigPrompt:     'Podepište se prstem nebo stylusem',
     sigClear:      'Vymazat podpis',
@@ -1636,11 +1653,19 @@ const CT = {
     labelLicense:  'Driving licence number',
     licensePh:     'e.g. EU123456',
     sectionConsent:'Consent text',
-    consentBody:   (name, eventName, date, location) =>
-      `I hereby confirm that I have been duly informed of the terms and conditions for participating in test drives at the event <strong>${eventName}</strong> (${date}), held at ${location}.<br><br>
-       I declare that I hold a valid driving licence, am fit to drive a motor vehicle and am not under the influence of alcohol, narcotics or psychotropic substances.<br><br>
-       I acknowledge that I participate in the test drives at my own risk and the organiser accepts no liability for damage caused by my actions. I consent to photographs and video recordings being taken for the organiser's promotional purposes.`,
-    consentAgree:  'I agree to the above terms and conditions for participation in test drives.',
+    consentBody:   (name, eventName, date, location, withCompanionLine) =>
+      `Event: <strong>${eventName}</strong> (${date}), ${location}.<br>
+       Vehicles are provided by Albion Cars s.r.o., Cardion Cars s.r.o. and Orbion Cars s.r.o. (the "Provider", i.e. the company that provided the particular vehicle).
+       <ol class="consent-list">
+         <li>I declare that I hold a valid driving licence and am fit to drive; I am not under the influence of alcohol, drugs or medication affecting my ability to drive.</li>
+         <li>I will follow the instructions of the event organisers and the Provider's representative and will not let any other person drive the vehicle.</li>
+         <li>I will observe the rules of the proving ground and, on public roads, the road traffic regulations. I am responsible for any offences I commit.</li>
+         <li>If I cause damage and the insurer refuses or reduces its payment due to my conduct, I will pay the Provider the uncovered part of the damage.</li>
+         <li>I will immediately report any accident, damage or defect to the Provider's representative and provide the necessary cooperation.</li>
+         <li>I consent to my likeness / audiovisual recordings from the event <strong>${eventName}</strong> being taken and used for the marketing of Albion Cars s.r.o., Cardion Cars s.r.o. and Orbion Cars s.r.o.${withCompanionLine ? `<span id="companionConsentLine" style="display:none;"> I give this consent also on behalf of my companion, who has been informed of the recording and agrees to it.</span>` : ''}</li>
+       </ol>
+       <strong>Personal data:</strong> The Provider of the vehicle processes the above data to organise the test drive, identify the driver and handle any damage. Detailed information on personal data processing is available from the event organiser.`,
+    consentAgree:  'By signing, I confirm that I have read and understood the above and agree to it.',
     sectionSig:    'Signature',
     sigPrompt:     'Sign with your finger or stylus',
     sigClear:      'Clear signature',
@@ -1700,16 +1725,38 @@ function openConsentForm() {
 
 let companionWillDrive = false;
 
+// The "I consent also on behalf of my companion" sentence only applies when
+// the companion is coming along but NOT driving — a driving companion signs
+// their own full consent on the next screen, so it would be redundant there.
+function updateCompanionConsentLine() {
+  const el = document.getElementById('companionConsentLine');
+  if (!el) return;
+  el.style.display = (currentGuest?.companion && !companionWillDrive) ? 'inline' : 'none';
+}
+
 function setCompanionFlag(hasCompanion) {
   if (!currentGuest) return;
   currentGuest.companion = hasCompanion;
   if (!hasCompanion) companionWillDrive = false;
-  renderConsentForm();
+
+  // Targeted update only — a full renderConsentForm() would wipe out
+  // whatever the staff already typed into the (unsaved) license field.
+  document.getElementById('companionYesBtn')?.classList.toggle('toggle-selected', hasCompanion);
+  document.getElementById('companionNoBtn')?.classList.toggle('toggle-selected', !hasCompanion);
+  const wrap = document.getElementById('companionDriveWrap');
+  if (wrap) wrap.style.display = hasCompanion ? 'block' : 'none';
+  if (!hasCompanion) {
+    document.getElementById('companionDriveYesBtn')?.classList.remove('toggle-selected');
+    document.getElementById('companionDriveNoBtn')?.classList.add('toggle-selected');
+  }
+  updateCompanionConsentLine();
 }
 
 function setCompanionWillDrive(willDrive) {
   companionWillDrive = willDrive;
-  renderConsentForm();
+  document.getElementById('companionDriveYesBtn')?.classList.toggle('toggle-selected', willDrive);
+  document.getElementById('companionDriveNoBtn')?.classList.toggle('toggle-selected', !willDrive);
+  updateCompanionConsentLine();
 }
 
 function renderConsentForm() {
@@ -1753,15 +1800,15 @@ function renderConsentForm() {
       <div class="form-field">
         <label>Doprovod</label>
         <div style="display:flex;gap:8px;">
-          <button type="button" class="btn ${g.companion ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionYesBtn" onclick="setCompanionFlag(true)" style="flex:1;">S doprovodem</button>
-          <button type="button" class="btn ${!g.companion ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionNoBtn" onclick="setCompanionFlag(false)" style="flex:1;">Bez doprovodu</button>
+          <button type="button" class="btn btn-secondary btn-sm ${g.companion ? 'toggle-selected' : ''}" id="companionYesBtn" onclick="setCompanionFlag(true)" style="flex:1;">S doprovodem</button>
+          <button type="button" class="btn btn-secondary btn-sm ${!g.companion ? 'toggle-selected' : ''}" id="companionNoBtn" onclick="setCompanionFlag(false)" style="flex:1;">Bez doprovodu</button>
         </div>
       </div>
       <div class="form-field" id="companionDriveWrap" style="display:${g.companion ? 'block' : 'none'};">
         <label>Bude doprovod řídit?</label>
         <div style="display:flex;gap:8px;">
-          <button type="button" class="btn ${companionWillDrive ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionDriveYesBtn" onclick="setCompanionWillDrive(true)" style="flex:1;">Ano, bude řídit</button>
-          <button type="button" class="btn ${!companionWillDrive ? 'btn-primary' : 'btn-secondary'} btn-sm" id="companionDriveNoBtn" onclick="setCompanionWillDrive(false)" style="flex:1;">Ne, jen doprovod</button>
+          <button type="button" class="btn btn-secondary btn-sm ${companionWillDrive ? 'toggle-selected' : ''}" id="companionDriveYesBtn" onclick="setCompanionWillDrive(true)" style="flex:1;">Ano, bude řídit</button>
+          <button type="button" class="btn btn-secondary btn-sm ${!companionWillDrive ? 'toggle-selected' : ''}" id="companionDriveNoBtn" onclick="setCompanionWillDrive(false)" style="flex:1;">Ne, jen doprovod</button>
         </div>
       </div>
     </div>
@@ -1770,7 +1817,7 @@ function renderConsentForm() {
     <div class="form-card">
       <div class="form-card-title">${ct('sectionConsent')}</div>
       <div class="consent-text-box">
-        ${ct('consentBody')(g.first_name + ' ' + g.last_name, ev.name, dateLabel, ev.location)}
+        ${ct('consentBody')(g.first_name + ' ' + g.last_name, ev.name, dateLabel, ev.location, true)}
       </div>
       <div class="consent-check-row" id="consentCheckRow" onclick="toggleConsentCheck()">
         <div class="consent-custom-cb" id="consentCb"></div>
@@ -1798,6 +1845,7 @@ function renderConsentForm() {
 
   initSignaturePad();
   prefillLicenseIfSaved(g.id);
+  updateCompanionConsentLine();
 }
 
 // Fetches the decrypted license number only when re-opening a guest who
@@ -1853,7 +1901,7 @@ function renderCompanionForm() {
     <div class="form-card">
       <div class="form-card-title">${ct('sectionConsent')}</div>
       <div class="consent-text-box">
-        ${ct('consentBody')('doprovod', ev.name, dateLabel, ev.location)}
+        ${ct('consentBody')('doprovod', ev.name, dateLabel, ev.location, false)}
       </div>
       <div class="consent-check-row" id="consentCheckRow" onclick="toggleCompanionConsentCheck()">
         <div class="consent-custom-cb" id="consentCb"></div>
