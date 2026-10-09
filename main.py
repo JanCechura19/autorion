@@ -104,7 +104,8 @@ GUEST_SAFE_COLUMNS = """
     consent_signature_at, walk_in, created_at, invite_token,
     last_email_sent_at, gdpr_consent, confirmed_at, unsubscribed_at,
     companion_will_drive, companion_first_name, companion_last_name,
-    companion_email, companion_consent_signed, companion_consent_signature_at
+    companion_email, companion_consent_signed, companion_consent_signature_at,
+    language
 """
 
 DEFAULT_CONFIRMATION_TEMPLATE = {
@@ -511,6 +512,7 @@ class GuestCreate(BaseModel):
     company: Optional[str] = None  # 'albion' | 'cardion' | 'orbion'
     send_confirmation: bool = True  # public registration always wants this; admin "add guest" forms can opt out
     walk_in: bool = False  # added on-site by check-in staff, without prior registration
+    language: Optional[str] = None  # 'cs' | 'en' — language the registration form was filled in
 
 class InviteCompleteRequest(BaseModel):
     phone: Optional[str] = None
@@ -524,6 +526,7 @@ class InviteCompleteRequest(BaseModel):
     # already locked with an existing value.
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    language: Optional[str] = None  # 'cs' | 'en'
 
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -546,6 +549,7 @@ class GuestUpdate(BaseModel):
     companion_license: Optional[str] = None
     companion_consent_signed: Optional[bool] = None
     companion_consent_signature: Optional[str] = None  # base64 PNG data URL
+    language: Optional[str] = None  # 'cs' | 'en'
 
 # ── INIT DB ─────────────────────────────────────────────
 
@@ -682,6 +686,8 @@ def init_db():
     # A companion is only asked for their own details when they'll ALSO be
     # driving — most companions never need this at all. License number and
     # signature are encrypted the same way as the main guest's.
+    # Language the guest registered in ('cs' / 'en'; empty = unknown, treated as Czech).
+    cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT '';")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_will_drive BOOLEAN DEFAULT FALSE;")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_first_name VARCHAR(255) DEFAULT '';")
     cur.execute("ALTER TABLE guests ADD COLUMN IF NOT EXISTS companion_last_name VARCHAR(255) DEFAULT '';")
@@ -1400,6 +1406,11 @@ def _check_booking_and_window_availability(cur, event_id, bookings_list, window_
             if cnt >= window_def["capacity"]:
                 raise HTTPException(status_code=409, detail="Tento časový blok je již plně obsazen. Obnovte stránku a vyberte jiný.")
 
+def _norm_lang(value):
+    """Only 'cs' / 'en' are stored; anything else becomes empty (= unknown)."""
+    v = (value or "").strip().lower()
+    return v if v in ("cs", "en") else ""
+
 @app.post("/api/events/{event_id}/guests")
 def create_guest(event_id: int, guest: GuestCreate, user=Depends(get_current_user_optional)):
     # walk_in=True both bypasses window capacity AND skips the normal
@@ -1420,13 +1431,14 @@ def create_guest(event_id: int, guest: GuestCreate, user=Depends(get_current_use
 
         invite_token = secrets.token_urlsafe(24)
         cur.execute(f"""
-            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, gdpr_consent, company, invite_token, walk_in)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO guests (event_id, first_name, last_name, email, phone, companion, status, window_id, bookings, gdpr_consent, company, invite_token, walk_in, language)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (
             event_id, guest.first_name, guest.last_name, guest.email.lower(), guest.phone or '',
             guest.companion, guest.status, guest.window_id,
-            json.dumps(bookings_list), guest.gdpr_consent, guest.company or '', invite_token, guest.walk_in
+            json.dumps(bookings_list), guest.gdpr_consent, guest.company or '', invite_token, guest.walk_in,
+            _norm_lang(guest.language)
         ))
         new_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
@@ -1540,11 +1552,12 @@ def complete_invite(slug: str, token: str, req: InviteCompleteRequest):
             SET phone = %s, companion = %s, window_id = %s, bookings = %s,
                 gdpr_consent = %s, status = 'confirmed',
                 first_name = COALESCE(NULLIF(%s, ''), first_name),
-                last_name  = COALESCE(NULLIF(%s, ''), last_name)
+                last_name  = COALESCE(NULLIF(%s, ''), last_name),
+                language   = COALESCE(NULLIF(%s, ''), language)
             WHERE id = %s
             RETURNING {GUEST_SAFE_COLUMNS}
         """, (req.phone or '', req.companion, req.window_id, json.dumps(bookings_list), req.gdpr_consent,
-              req.first_name or '', req.last_name or '', guest_id))
+              req.first_name or '', req.last_name or '', _norm_lang(req.language), guest_id))
         updated_guest = cur.fetchone()
         cur.execute("SELECT name, date_from, date_to, location, registration_type, time_windows, slug, email_templates, email_design FROM events WHERE id = %s", (event_id,))
         event_row = cur.fetchone()
@@ -1571,6 +1584,8 @@ def update_guest(guest_id: int, update: GuestUpdate, user=Depends(get_current_us
         raise HTTPException(status_code=400, detail="Zadna data k aktualizaci")
     if "email" in fields:
         fields["email"] = fields["email"].lower()
+    if "language" in fields:
+        fields["language"] = _norm_lang(fields["language"])
 
     # The signature and the driver's license number are both encrypted
     # before they ever touch the database — popped out of the generic

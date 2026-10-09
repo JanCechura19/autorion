@@ -63,14 +63,29 @@
     letter-spacing: 0.02em;
   }
   .error { color: #a33f2e; }
+  .btn {
+    margin-top: 28px;
+    background: var(--color-primary);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .btn:hover { background: #2a2722; }
 </style>
 </head>
 <body>
 
 <div class="card" id="card">
-  <div class="icon">⏳</div>
-  <h1>Zpracováváme...</h1>
-  <p>Chvilku strpení.</p>
+  <div class="icon">✉</div>
+  <h1>Odhlášení z <em>e-mailů</em></h1>
+  <p>Opravdu už nechcete dostávat e-maily k této akci? Odhlášení potvrďte tlačítkem níže.</p>
+  <button class="btn" id="confirmBtn" type="button">Potvrdit odhlášení</button>
+  <div class="muted">Pokud jste na odkaz klikli omylem, stačí okno zavřít.</div>
 </div>
 
 <script>
@@ -81,20 +96,31 @@ function getTokenFromUrl() {
   return params.get('token');
 }
 
-async function run() {
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showMissingToken() {
+  document.getElementById('card').innerHTML = `
+    <div class="icon">✕</div>
+    <h1>Chybí odkaz</h1>
+    <p class="error">V adrese chybí potřebný identifikátor. Zkontrolujte prosím, že jste odkaz otevřeli celý, přímo z e-mailu.</p>`;
+}
+
+// Odhlášení se provede až po kliknutí na tlačítko. Pouhé otevření odkazu
+// (např. automatická kontrola odkazů v e-mailové schránce) nikoho neodhlásí.
+async function unsubscribe() {
   const card  = document.getElementById('card');
   const token = getTokenFromUrl();
+  if (!token) { showMissingToken(); return; }
 
-  if (!token) {
-    card.innerHTML = `
-      <div class="icon">✕</div>
-      <h1>Chybí odkaz</h1>
-      <p class="error">V adrese chybí potřebný identifikátor. Zkontrolujte prosím, že jste odkaz otevřeli celý, přímo z e-mailu.</p>`;
-    return;
-  }
+  card.innerHTML = `
+    <div class="icon">⏳</div>
+    <h1>Zpracováváme...</h1>
+    <p>Chvilku strpení.</p>`;
 
   try {
-    const res = await fetch(`${API_BASE}/guests/unsubscribe/${token}`);
+    const res = await fetch(`${API_BASE}/guests/unsubscribe/${encodeURIComponent(token)}`);
     if (!res.ok) {
       card.innerHTML = `
         <div class="icon">✕</div>
@@ -106,7 +132,7 @@ async function run() {
     card.innerHTML = `
       <div class="icon">✓</div>
       <h1>Odhlášeno</h1>
-      <p>Zaznamenali jsme, že se akce${data.event_name ? ` <em>${data.event_name}</em>` : ''} nezúčastníte, a nebudeme vám k ní dál posílat e-maily.</p>
+      <p>Hotovo, k akci${data.event_name ? ` <em>${escapeHtml(data.event_name)}</em>` : ''} vám už nebudeme posílat další e-maily.</p>
       <div class="muted">Tým Autorion</div>`;
   } catch (err) {
     card.innerHTML = `
@@ -116,7 +142,10 @@ async function run() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', run);
+document.addEventListener('DOMContentLoaded', () => {
+  if (!getTokenFromUrl()) { showMissingToken(); return; }
+  document.getElementById('confirmBtn').addEventListener('click', unsubscribe);
+});
 </script>
 
 </body>

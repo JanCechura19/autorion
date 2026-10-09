@@ -1766,7 +1766,8 @@ async function handleSubmit(e) {
     gdpr_consent: true,
     bookings: REGISTRATION_TYPE === 'drives' ? bookings : [],
     window_id: REGISTRATION_TYPE === 'windows' ? selectedWindowId : null,
-    company: DEALER || ''
+    company: DEALER || '',
+    language: currentLang
   };
 
   const submitBtn = document.querySelector('.submit-btn');
@@ -1790,7 +1791,8 @@ async function handleSubmit(e) {
           // Only sent when the field wasn't locked — i.e. it was empty on
           // file (e.g. an e-mail-only import) and the guest filled it in.
           first_name: document.getElementById('firstName')?.readOnly ? undefined : document.getElementById('firstName')?.value.trim(),
-          last_name:  document.getElementById('lastName')?.readOnly  ? undefined : document.getElementById('lastName')?.value.trim() }
+          last_name:  document.getElementById('lastName')?.readOnly  ? undefined : document.getElementById('lastName')?.value.trim(),
+          language: currentLang }
       : payload;
 
     const res = await fetch(submitUrl, {

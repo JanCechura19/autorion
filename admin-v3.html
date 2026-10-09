@@ -1247,6 +1247,8 @@ input[type="checkbox"] {
           <span class="bulk-count" id="bulkCount">0 vybráno</span>
           <button class="bulk-btn" onclick="bulkEmail()">✉️ Odeslat e-mail</button>
           <button class="bulk-btn" onclick="bulkExport()">⬇️ Exportovat</button>
+          <button class="bulk-btn" onclick="bulkSetLanguage('cs')">🇨🇿 Nastavit česky</button>
+          <button class="bulk-btn" onclick="bulkSetLanguage('en')">🇬🇧 Nastavit anglicky</button>
           <button class="bulk-btn danger" onclick="bulkDelete()">🗑 Smazat</button>
           <button class="bulk-btn" onclick="clearSelection()">✕ Zrušit výběr</button>
         </div>
@@ -2056,7 +2058,7 @@ function renderTable() {
     return `
     <tr class="${selectedIds.has(g.id)?'selected':''}" onclick="openDetail(${g.id})">
       <td class="cb-cell" onclick="event.stopPropagation()">${can('canEdit')?`<input type="checkbox" ${selectedIds.has(g.id)?'checked':''} onchange="toggleSelect(${g.id},this)">`:''}</td>
-      <td class="name-cell">${g.last_name}</td>
+      <td class="name-cell">${g.last_name}${g.language==='en' ? ' <span style="font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:var(--blue-bg);color:var(--blue);vertical-align:middle;">EN</span>' : ''}</td>
       <td>${g.first_name}</td>
       <td class="email-cell">${g.email}${isDupe ? ` <span class="badge" style="background:#f8d7a8;color:#7a4a00;font-size:9px;" title="Tento e-mail se v seznamu vyskytuje vícekrát">⚠ Duplicita</span>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${g.phone||'—'}</td>
@@ -2125,6 +2127,20 @@ async function bulkDelete() {
 }
 function bulkEmail()  { openEmailComposer([...selectedIds]); }
 function bulkExport() { exportXLS(guests.filter(g=>selectedIds.has(g.id))); }
+async function bulkSetLanguage(lang) {
+  if (!requirePermission('canEdit')) return;
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  const label = lang === 'en' ? 'anglicky' : 'česky';
+  if (!confirm(`Nastavit jazyk e-mailů „${label}“ u ${ids.length} hostů?`)) return;
+  const results = await Promise.all(ids.map(id => apiCall(`/guests/${id}`, 'PATCH', { language: lang })));
+  let ok = 0;
+  ids.forEach((id, i) => {
+    if (results[i]) { const g = guests.find(x => x.id === id); if (g) g.language = lang; ok++; }
+  });
+  selectedIds.clear(); updateBulkBar(); applyFilters();
+  showToast(ok === ids.length ? `Jazyk nastaven (${label}) u ${ok} hostů` : `Nastaveno ${ok} z ${ids.length} hostů`, ok === ids.length ? 'success' : 'error');
+}
 
 // ═══════════════════════════════════════════════════════
 // DETAIL PANEL
@@ -2261,6 +2277,12 @@ function openGuestForm(g) {
         <option value="orbion"  ${g?.company==='orbion' ?'selected':''}>Orbion Cars</option>
       </select>
     </div>
+    <div class="form-row"><label>Jazyk e-mailů</label>
+      <select id="fLanguage">
+        <option value="" ${!g?.language?'selected':''}>Česky (výchozí)</option>
+        <option value="en" ${g?.language==='en'?'selected':''}>Anglicky</option>
+      </select>
+    </div>
     <div class="form-grid">
       <div class="form-row"><label>Doprovod</label>
         <select id="fCompanion"><option value="false" ${!g?.companion?'selected':''}>Ne</option><option value="true" ${g?.companion?'selected':''}>Ano</option></select>
@@ -2290,7 +2312,7 @@ async function saveGuest(id) {
   const ln = document.getElementById('fLastName').value.trim();
   const em = document.getElementById('fEmail').value.trim();
   if (!fn||!ln||!em) { showToast('Vyplňte jméno, příjmení a e-mail','error'); return; }
-  const payload = { first_name:fn, last_name:ln, email:em, phone:document.getElementById('fPhone').value, companion:document.getElementById('fCompanion').value==='true', status:document.getElementById('fStatus').value, company:document.getElementById('fCompany')?.value||'' };
+  const payload = { first_name:fn, last_name:ln, email:em, phone:document.getElementById('fPhone').value, companion:document.getElementById('fCompanion').value==='true', status:document.getElementById('fStatus').value, company:document.getElementById('fCompany')?.value||'', language:document.getElementById('fLanguage')?.value||'' };
 
   if (id) {
     const updated = await apiCall(`/guests/${id}`, 'PATCH', payload);
@@ -2308,6 +2330,7 @@ async function saveGuest(id) {
       email: created.email, phone: created.phone || '',
       status: created.status, companion: created.companion,
       company: created.company || '',
+      language: created.language || '',
       email_sent: sendConfirmation, checked_in: !!created.checked_in,
       registered_at: created.created_at || new Date().toISOString(),
       notes:'', bookings: created.bookings || [],
@@ -2430,7 +2453,8 @@ const DEFAULT_EMAIL_TEMPLATES = [
   { id:'invitation', name:'Pozvánka',      icon:'✉️', subject:'Pozvánka — {{event_name}}',          body:'Vážený pane/paní {{last_name}},\n\nse potěšením Vás zveme na exkluzivní akci {{event_name}}, která se koná {{event_date}} v {{event_location}}.\n\nPro potvrzení Vaší účasti prosím klikněte na odkaz:\n{{registration_link}}\n\nTěšíme se na setkání s Vámi.', design:null },
   { id:'reminder',   name:'Připomenutí',   icon:'🔔', subject:'Připomenutí — {{event_name}} se blíží', body:'Vážený pane/paní {{last_name}},\n\npřipomínáme, že akce {{event_name}} se koná {{event_date}} v {{event_location}}.\n\nPotvrďte prosím svou účast:\n{{registration_link}}', design:null },
   { id:'ticket',     name:'Vstupenka',     icon:'🎫', subject:'Vaše vstupenka — {{event_name}}',      body:'Vážený pane/paní {{last_name}},\n\nv příloze zasíláme Vaši vstupenku na akci {{event_name}} ({{event_date}}).\n\nPro vstup předložte QR kód z přiložené vstupenky.\n\nTěšíme se na Vás!', design:null },
-  { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast — {{event_name}}',   body:'Vážený pane/paní {{last_name}},\n\ndíky za Vaši účast na akci {{event_name}}. Byl(a) jste pro nás velmi cenným hostem.\n\nBudeme rádi, pokud se s námi podělíte o svůj dojem.', design:null },
+  { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast na {{event_name}}',   body:'Dobrý den,\n\nděkujeme, že jste přijeli na {{event_name}} a vyzkoušeli s námi naše vozy. Doufáme, že se Vám jízdy líbily.\n\nPokud Vás některý vůz zaujal nebo máte jakýkoli dotaz, ozvěte se nám, rádi pomůžeme.\n\nTěšíme se na další setkání.\nTým Autorion', design:null },
+  { id:'thanks_en',  name:'Poděkování (EN)', icon:'🙏', subject:'Thank you for joining {{event_name}}',   body:'Hello,\n\nthank you for coming to {{event_name}} and trying our cars with us. We hope you enjoyed the drives.\n\nIf any of the cars caught your eye, or if you have any questions, feel free to get in touch, we will be happy to help.\n\nWe look forward to seeing you again.\nThe Autorion team', design:null },
   { id:'registration_confirmation', name:'Potvrzení registrace', icon:'✅', subject:'Potvrzení registrace – {{event_name}}', body:'Dobrý den {{last_name}},\n\nděkujeme za registraci na akci {{event_name}}. Těšíme se na vás!\n\nNa místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.', design:null },
 ];
 
@@ -2749,7 +2773,8 @@ const TEMPLATE_RECIPIENT_GROUPS = {
   invitation: { key:'all',         label:'Všichni pozvaní' },
   reminder:   { key:'pending',     label:'Bez odpovědi' },
   ticket:     { key:'confirmed',   label:'Potvrzení hosté' },
-  thanks:     { key:'checked_in',  label:'Zúčastnili se (check-in)' },
+  thanks:     { key:'checked_in_cs', label:'Zúčastnili se – česky' },
+  thanks_en:  { key:'checked_in_en', label:'Zúčastnili se – anglicky' },
 };
 
 // Definice skupin — co filtrují a popis
@@ -2760,6 +2785,8 @@ const RECIPIENT_GROUPS = [
   { key:'pending',        label:'Bez odpovědi',                     desc:'Neodpověděli na pozvánku',                  filter: g => g.status === 'pending' },
   { key:'declined',       label:'Nemohou přijít',                   desc:'Odmítli pozvání',                           filter: g => g.status === 'declined' },
   { key:'checked_in',     label:'Zúčastnili se (check-in)',         desc:'Fyzicky přišli na akci',                    filter: g => g.checked_in === true },
+  { key:'checked_in_cs',  label:'Zúčastnili se – česky',            desc:'Přišli na akci, jazyk čeština (nebo neuvedeno)', filter: g => g.checked_in === true && g.language !== 'en' },
+  { key:'checked_in_en',  label:'Zúčastnili se – anglicky',         desc:'Přišli na akci, jazyk angličtina',          filter: g => g.checked_in === true && g.language === 'en' },
   { key:'not_checked_in', label:'Neodbavenní (potvrzeni, ale chybí)',desc:'Potvrdili, ale nebyli odbaveni',            filter: g => g.status === 'confirmed' && !g.checked_in },
   { key:'no_email',       label:'Dosud nekontaktovaní',             desc:'V seznamu hostů, ale nebyl jim odeslán žádný e-mail ze systému', filter: g => !g.email_sent },
   { key:'with_rides',     label:'S rezervovanými jízdami',          desc:'Mají alespoň jednu testovací jízdu',        filter: g => g.bookings && g.bookings.length > 0 },
@@ -5764,6 +5791,7 @@ async function loadGuestsFromApi(eventId) {
     companion_last_name: g.companion_last_name || '',
     companion_email: g.companion_email || '',
     companion_consent_signed: !!g.companion_consent_signed,
+    language: g.language || '',
   }));
   filteredGuests = [...guests];
 }
