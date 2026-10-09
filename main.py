@@ -195,6 +195,18 @@ def _get_social_links(guest: dict) -> str:
     follow = "Please follow the social media of" if en else "Sledujte prosím sociální sítě"
     return f"{intro}<br>{follow} {brands}."
 
+# {{event_photos}} — photo of the guest's own dealer, or the general Autorion photo
+# for guests without a company. Files live in /opt/autorion/static/img/.
+EVENT_PHOTO_BASE = "https://registration.autorion.net/img"
+DEALER_PHOTO_ALT = {"albion": "Albion Cars", "cardion": "Cardion Cars", "orbion": "Orbion Cars"}
+
+def _get_event_photos(guest: dict) -> str:
+    company = (guest.get("company") or "").strip().lower()
+    key = company if company in DEALER_PHOTO_ALT else "autorion"
+    alt = DEALER_PHOTO_ALT.get(key, "Autorion Days 2026")
+    return (f'<img src="{EVENT_PHOTO_BASE}/foto-{key}.jpg" width="560" alt="{alt}" '
+            f'style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:18px 0;">')
+
 def _build_event_details_block(event: dict, design: dict) -> str:
     accent = design.get("accentColor") or "#b8924a"
     body   = design.get("bodyColor") or "#1a1816"
@@ -222,6 +234,7 @@ def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: s
         .replace("{{team_name}}", _get_team_name(guest))
         .replace("{{contact_link}}", _get_contact_link(guest))
         .replace("{{social_links}}", _get_social_links(guest))
+        .replace("{{event_photos}}", _get_event_photos(guest))
         .replace("{{event_details}}", _build_event_details_block(event, design or {}))
         .replace("{{booking_summary}}", _build_booking_summary_block(guest, event))
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')
