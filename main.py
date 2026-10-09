@@ -144,6 +144,57 @@ def _get_team_name(guest: dict) -> str:
     company = (guest.get("company") or "").strip().lower()
     return DEALER_TEAM_NAMES.get(company, "Autorion Events")
 
+# {{contact_link}} — page with sales contacts, per dealer. Guests without a
+# company get the general Autorion site.
+DEALER_CONTACT_URLS = {
+    "albion":  "https://www.albioncars.cz/showroomy/albion-cars-praha",
+    "cardion": "https://www.volvista.cz/kontakt",
+    "orbion":  "https://www.lynkac.cz/kontakt",
+}
+DEFAULT_CONTACT_URL = "https://www.autorion.cz"
+
+# {{social_links}} — "Sledujte nás: Facebook · Instagram · LinkedIn" per dealer.
+# Guests without a company (Autorion has no profiles) get nothing.
+DEALER_SOCIAL_URLS = {
+    "albion": {
+        "Facebook":  "https://www.facebook.com/albioncarscz",
+        "Instagram": "https://www.instagram.com/albioncarscz/",
+        "LinkedIn":  "https://www.linkedin.com/company/albion-cars-s-r-o/",
+    },
+    "cardion": {
+        "Facebook":  "https://www.facebook.com/volvista.cz/",
+        "Instagram": "https://www.instagram.com/volvista.cz/",
+        "LinkedIn":  "https://www.linkedin.com/company/cardion-cars/",
+    },
+    "orbion": {
+        "Facebook":  "https://www.facebook.com/lynkacczech/",
+        "Instagram": "https://www.instagram.com/lynkac_cz/",
+        "LinkedIn":  "https://www.linkedin.com/company/orbion-cars/",
+    },
+}
+
+def _get_social_links(guest: dict) -> str:
+    """Whole social-media block: a sentence about photos/videos, then either the
+    dealer's own Facebook · Instagram · LinkedIn links, or (guests without a
+    company) a sentence naming the three brands."""
+    company = (guest.get("company") or "").strip().lower()
+    en = (guest.get("language") or "").lower() == "en"
+    intro = ("In the coming weeks, we will have photos and videos from the event on our social media."
+             if en else
+             "V následujících týdnech budeme mít na našich sociálních sítích fotografie a videa z akce.")
+    links = DEALER_SOCIAL_URLS.get(company)
+    if links:
+        label = "Follow us" if en else "Sledujte nás"
+        parts = " · ".join(f'<a href="{url}">{name}</a>' for name, url in links.items())
+        return f"{intro}<br>{label}: {parts}"
+    fb = lambda key: DEALER_SOCIAL_URLS[key]["Facebook"]
+    brands = (f'<a href="{fb("albion")}">Albion Cars</a>, '
+              f'<a href="{fb("cardion")}">Volvista.cz</a> '
+              f'{"and" if en else "a"} '
+              f'<a href="{fb("orbion")}">{"Lynkáč" if not en else "Lynkáč"}</a>')
+    follow = "Please follow the social media of" if en else "Sledujte prosím sociální sítě"
+    return f"{intro}<br>{follow} {brands}."
+
 def _build_event_details_block(event: dict, design: dict) -> str:
     accent = design.get("accentColor") or "#b8924a"
     body   = design.get("bodyColor") or "#1a1816"
@@ -169,6 +220,8 @@ def _resolve_merge_tags(text: str, guest: dict, event: dict, registration_url: s
         .replace("{{event_date}}", _format_event_date(event))
         .replace("{{event_location}}", event.get("location") or "")
         .replace("{{team_name}}", _get_team_name(guest))
+        .replace("{{contact_link}}", _get_contact_link(guest))
+        .replace("{{social_links}}", _get_social_links(guest))
         .replace("{{event_details}}", _build_event_details_block(event, design or {}))
         .replace("{{booking_summary}}", _build_booking_summary_block(guest, event))
         .replace("{{registration_link}}", f'<a href="{registration_url}">Odkaz na registraci</a>')

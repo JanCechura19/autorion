@@ -2453,8 +2453,8 @@ const DEFAULT_EMAIL_TEMPLATES = [
   { id:'invitation', name:'Pozvánka',      icon:'✉️', subject:'Pozvánka — {{event_name}}',          body:'Vážený pane/paní {{last_name}},\n\nse potěšením Vás zveme na exkluzivní akci {{event_name}}, která se koná {{event_date}} v {{event_location}}.\n\nPro potvrzení Vaší účasti prosím klikněte na odkaz:\n{{registration_link}}\n\nTěšíme se na setkání s Vámi.', design:null },
   { id:'reminder',   name:'Připomenutí',   icon:'🔔', subject:'Připomenutí — {{event_name}} se blíží', body:'Vážený pane/paní {{last_name}},\n\npřipomínáme, že akce {{event_name}} se koná {{event_date}} v {{event_location}}.\n\nPotvrďte prosím svou účast:\n{{registration_link}}', design:null },
   { id:'ticket',     name:'Vstupenka',     icon:'🎫', subject:'Vaše vstupenka — {{event_name}}',      body:'Vážený pane/paní {{last_name}},\n\nv příloze zasíláme Vaši vstupenku na akci {{event_name}} ({{event_date}}).\n\nPro vstup předložte QR kód z přiložené vstupenky.\n\nTěšíme se na Vás!', design:null },
-  { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast na {{event_name}}',   body:'Dobrý den,\n\nděkujeme, že jste přijeli na {{event_name}} a vyzkoušeli s námi naše vozy. Doufáme, že se Vám jízdy líbily.\n\nPokud Vás některý vůz zaujal nebo máte jakýkoli dotaz, ozvěte se nám, rádi pomůžeme.\n\nTěšíme se na další setkání.\nTým Autorion', design:null },
-  { id:'thanks_en',  name:'Poděkování (EN)', icon:'🙏', subject:'Thank you for joining {{event_name}}',   body:'Hello,\n\nthank you for coming to {{event_name}} and trying our cars with us. We hope you enjoyed the drives.\n\nIf any of the cars caught your eye, or if you have any questions, feel free to get in touch, we will be happy to help.\n\nWe look forward to seeing you again.\nThe Autorion team', design:null },
+  { id:'thanks',     name:'Poděkování',    icon:'🙏', subject:'Děkujeme za účast na {{event_name}}',   body:'Vážený pane, vážená paní,\n\ntímto Vám chceme poděkovat za účast na {{event_name}}. Doufáme, že akce splnila Vaše očekávání a budeme se na Vaši přítomnost těšit i na dalších našich eventech.\n\nV případě Vašeho zájmu o jakýkoliv vůz z naší nabídky či další testovací jízdu se neváhejte obrátit na kohokoliv z našich prodejců – {{contact_link}}.\n\nBudeme také rádi za jakoukoli Vaši zpětnou vazbu na akci.\n\nS přátelským pozdravem\n\nVáš tým {{team_name}}\n\n{{social_links}}', design:null },
+  { id:'thanks_en',  name:'Poděkování (EN)', icon:'🙏', subject:'Thank you for joining {{event_name}}',   body:'Dear Sir or Madam,\n\nwe would like to thank you for attending {{event_name}}. We hope the event met your expectations and we look forward to seeing you at our future events.\n\nIf you are interested in any vehicle from our range or another test drive, please do not hesitate to contact any of our sales representatives – {{contact_link}}.\n\nWe would also appreciate any feedback you may have on the event.\n\nKind regards,\n\nYour {{team_name}} team\n\n{{social_links}}', design:null },
   { id:'registration_confirmation', name:'Potvrzení registrace', icon:'✅', subject:'Potvrzení registrace – {{event_name}}', body:'Dobrý den {{last_name}},\n\nděkujeme za registraci na akci {{event_name}}. Těšíme se na vás!\n\nNa místě se prosím prokažte tímto e-mailem nebo jménem u check-in stánku.', design:null },
 ];
 
@@ -3691,12 +3691,63 @@ function getTeamName(guest) {
   return dealer ? dealer.label : 'Autorion Events';
 }
 
+// {{contact_link}} — stránka s kontakty na prodejce podle firmy hosta.
+// Hostům bez firmy se použije obecný web Autorionu.
+const DEALER_CONTACT_URLS = {
+  albion:  'https://www.albioncars.cz/showroomy/albion-cars-praha',
+  cardion: 'https://www.volvista.cz/kontakt',
+  orbion:  'https://www.lynkac.cz/kontakt',
+};
+const DEFAULT_CONTACT_URL = 'https://www.autorion.cz';
+
+// {{social_links}} — "Sledujte nás: Facebook · Instagram · LinkedIn" podle firmy hosta.
+// Hostům bez firmy (Autorion sítě nemá) se nevloží nic.
+const DEALER_SOCIAL_URLS = {
+  albion: [
+    ['Facebook',  'https://www.facebook.com/albioncarscz'],
+    ['Instagram', 'https://www.instagram.com/albioncarscz/'],
+    ['LinkedIn',  'https://www.linkedin.com/company/albion-cars-s-r-o/'],
+  ],
+  cardion: [
+    ['Facebook',  'https://www.facebook.com/volvista.cz/'],
+    ['Instagram', 'https://www.instagram.com/volvista.cz/'],
+    ['LinkedIn',  'https://www.linkedin.com/company/cardion-cars/'],
+  ],
+  orbion: [
+    ['Facebook',  'https://www.facebook.com/lynkacczech/'],
+    ['Instagram', 'https://www.instagram.com/lynkac_cz/'],
+    ['LinkedIn',  'https://www.linkedin.com/company/orbion-cars/'],
+  ],
+};
+function getSocialLinksHtml(guest, color) {
+  const en = guest?.language === 'en';
+  const intro = en
+    ? 'In the coming weeks, we will have photos and videos from the event on our social media.'
+    : 'V následujících týdnech budeme mít na našich sociálních sítích fotografie a videa z akce.';
+  const a = (url, text) => `<a href="${url}" style="color:${color}">${text}</a>`;
+  const links = DEALER_SOCIAL_URLS[guest?.company];
+  if (links) {
+    return `${intro}<br>${en ? 'Follow us' : 'Sledujte nás'}: ` + links.map(([name, url]) => a(url, name)).join(' · ');
+  }
+  // Hosté bez firmy: věta se jmény všech tří značek (odkaz na jejich Facebook)
+  const fb = key => DEALER_SOCIAL_URLS[key][0][1];
+  const brands = `${a(fb('albion'), 'Albion Cars')}, ${a(fb('cardion'), 'Volvista.cz')} ${en ? 'and' : 'a'} ${a(fb('orbion'), 'Lynkáč')}`;
+  return `${intro}<br>${en ? 'Please follow the social media of' : 'Sledujte prosím sociální sítě'} ${brands}.`;
+}
+function getContactLinkHtml(guest, color) {
+  const url  = DEALER_CONTACT_URLS[guest?.company] || DEFAULT_CONTACT_URL;
+  const text = guest?.language === 'en' ? 'our contacts on the web' : 'kontakty na našem webu';
+  return `<a href="${url}" style="color:${color}">${text}</a>`;
+}
+
 const MERGE_TAGS = [
   { tag:'{{last_name}}',         desc:'Příjmení hosta' },
   { tag:'{{event_name}}',        desc:'Název akce' },
   { tag:'{{event_date}}',        desc:'Datum akce' },
   { tag:'{{event_location}}',    desc:'Místo konání' },
   { tag:'{{team_name}}',         desc:'Tým podle firmy hosta' },
+  { tag:'{{contact_link}}',      desc:'Odkaz na kontakty prodejců podle firmy hosta' },
+  { tag:'{{social_links}}',      desc:'Věta o fotkách a videích z akce + sítě podle firmy hosta' },
   { tag:'{{event_details}}',     desc:'Blok Datum + Místo vedle sebe' },
   { tag:'{{booking_summary}}',   desc:'Rezervovaný čas příchodu / vůz + jízdy' },
   { tag:'{{registration_link}}', desc:'Klikací odkaz na registraci' },
@@ -3817,6 +3868,8 @@ function resolveMergeTags(text, guest, design) {
     .replace(/{{event_date}}/g,     getEventDateRange())
     .replace(/{{event_location}}/g, EVENT.location)
     .replace(/{{team_name}}/g,      getTeamName(guest))
+    .replace(/{{contact_link}}/g,   getContactLinkHtml(guest, (design||emailDesign).accentColor))
+    .replace(/{{social_links}}/g,   getSocialLinksHtml(guest, (design||emailDesign).accentColor))
     .replace(/{{event_details}}/g,  buildEventDetailsBlock(design))
     .replace(/{{booking_summary}}/g, buildBookingSummaryBlock(guest, design))
     .replace(/{{registration_link}}/g, `<a href="${registrationUrl}" style="color:${(design||emailDesign).accentColor}">${emailDesign.registrationLinkText || 'Odkaz na registraci'}</a>`)
