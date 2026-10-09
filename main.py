@@ -187,7 +187,7 @@ def _get_social_links(guest: dict) -> str:
         label = "Follow us" if en else "Sledujte nás"
         parts = " · ".join(f'<a href="{url}">{name}</a>' for name, url in links.items())
         return f"{intro}<br>{label}: {parts}"
-    fb = lambda key: DEALER_SOCIAL_URLS[key]["Facebook"]
+    fb = lambda key: DEALER_SOCIAL_URLS[key]["Instagram"]
     brands = (f'<a href="{fb("albion")}">Albion Cars</a>, '
               f'<a href="{fb("cardion")}">Volvista.cz</a> '
               f'{"and" if en else "a"} '

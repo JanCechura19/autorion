@@ -3737,8 +3737,8 @@ function getSocialLinksHtml(guest, color) {
   if (links) {
     return `${intro}<br>${en ? 'Follow us' : 'Sledujte nás'}: ` + links.map(([name, url]) => a(url, name)).join(' · ');
   }
-  // Hosté bez firmy: věta se jmény všech tří značek (odkaz na jejich Facebook)
-  const fb = key => DEALER_SOCIAL_URLS[key][0][1];
+  // Hosté bez firmy: věta se jmény všech tří značek (odkaz na jejich Instagram)
+  const fb = key => DEALER_SOCIAL_URLS[key][1][1];
   const brands = `${a(fb('albion'), 'Albion Cars')}, ${a(fb('cardion'), 'Volvista.cz')} ${en ? 'and' : 'a'} ${a(fb('orbion'), 'Lynkáč')}`;
   return `${intro}<br>${en ? 'Please follow the social media of' : 'Sledujte prosím sociální sítě'} ${brands}.`;
 }
